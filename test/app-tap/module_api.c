@@ -576,7 +576,15 @@ test_tuple_validate(lua_State *L)
 		valid = box_tuple_validate(tuple, format) == 0;
 	}
 	lua_pushboolean(L, valid);
+	return 1;
+}
 
+static int
+test_iscallable(lua_State *L)
+{
+	int exp = lua_toboolean(L, 2);
+	int res = luaL_iscallable(L, 1);
+	lua_pushboolean(L, res == exp);
 	return 1;
 }
 
@@ -610,6 +618,7 @@ luaopen_module_api(lua_State *L)
 		{"test_tostring", test_tostring},
 		{"test_luaT_tuple_encode", test_luaT_tuple_encode},
 		{"tuple_validate", test_tuple_validate},
+		{"iscallable", test_iscallable},
 		{NULL, NULL}
 	};
 	luaL_register(L, "module_api", lib);
