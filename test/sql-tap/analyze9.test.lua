@@ -1,6 +1,7 @@
 #!/usr/bin/env tarantool
+msgpack = require('msgpack')
 test = require("sqltester")
-test:plan(121)
+test:plan(120)
 
 testprefix = "analyze9"
 
@@ -19,6 +20,8 @@ testprefix = "analyze9"
 -- This file contains automated tests used to verify that the sql_stat4
 -- functionality is working.
 --
+
+test.create_stat_view()
 
 -- SQL Analyze is working correctly only with memtx now.
 test:do_execsql_test(
@@ -47,21 +50,30 @@ test:do_execsql_test(
     })
 
 msgpack_decode_sample = function(txt)
-    msgpack = require('msgpack')
-    local i = 1
-    local decoded_str = ''
-    while msgpack.decode(txt)[i] ~= nil do
-        if i == 1 then
-            decoded_str = msgpack.decode(txt)[i]
-        else 
-            decoded_str = decoded_str.." "..msgpack.decode(txt)[i]
+    local arr = msgpack.decode(txt)
+    if type(arr) ~= 'table' then
+        return tostring(arr)
+    end
+    local result = {}
+    local function flatten(arr)
+        for _, v in ipairs(arr) do
+            if type(v) == "table" then
+                flatten(v)
+            else
+                table.insert(result, v)
+            end
         end
-        i = i+1
     end
-    if type(decoded_str) == "number" then
-        return tostring(decoded_str)
+    flatten(arr)
+    local str = ''
+    for k, v in pairs(result) do
+        if k == 1 then
+            str = tostring(v)
+        else
+            str = str .. ' ' .. tostring(v)
+        end
     end
-    return decoded_str
+    return str
 end
 
 box.internal.sql_create_function("msgpack_decode_sample", "TEXT", msgpack_decode_sample)
@@ -69,25 +81,30 @@ box.internal.sql_create_function("msgpack_decode_sample", "TEXT", msgpack_decode
 test:do_execsql_test(
     1.2,
     [[
-        SELECT "tbl","idx","neq","nlt","ndlt",msgpack_decode_sample("sample") FROM "_sql_stat4" where "idx" = 'I1';
+        SELECT tbl,idx,neq,nlt,ndlt,sample FROM stat_view where idx = 'I1';
     ]], {
         -- <1.2>
-        "T1", "I1", "1 1", "0 0", "0 0", "(0) (0)", "T1", "I1", "1 1", "1 1", "1 1", "(1) (1)", 
-        "T1", "I1", "1 1", "2 2", "2 2", "(2) (2)", "T1", "I1", "1 1", "3 3", "3 3", "(3) (3)", 
-        "T1", "I1", "1 1", "4 4", "4 4", "(4) (4)"
+        "T1",
+        "I1",
+        "1 1","1 1","1 1","1 1","1 1",
+        "0 0","1 1","2 2","3 3","4 4",
+        "0 0","1 1","2 2","3 3","4 4",
+        "(0)","(0)","(1)","(1)","(2)","(2)","(3)","(3)","(4)","(4)"
         -- </1.2>
     })
 
 test:do_execsql_test(
     1.3,
     [[
-        SELECT "tbl","idx","neq","nlt","ndlt",msgpack_decode_sample("sample") FROM "_sql_stat4" where "idx" = 'T1';
-
+        SELECT tbl,idx,neq,nlt,ndlt,sample FROM stat_view where idx = 'pk_unnamed_T1_1';
     ]], {
         -- <1.3>
-        'T1', 'T1', '1', '0', '0', '(0)', 'T1', 'T1', '1', '1', '1', '(1)', 
-        'T1', 'T1', '1', '2', '2', '(2)', 'T1', 'T1', '1', '3', '3', '(3)', 
-        'T1', 'T1', '1', '4', '4', '(4)'
+        "T1",
+        "pk_unnamed_T1_1",
+        "1","1","1","1","1",
+        "0","1","2","3","4",
+        "0","1","2","3","4",
+        "(0)","(1)","(2)","(3)","(4)"
         -- </1.3>
     })
 
@@ -104,10 +121,10 @@ test:do_execsql_test(
         INSERT INTO t1 VALUES('text', 12);
         CREATE INDEX i1 ON t1(a, b);
         ANALYZE;
-        SELECT msgpack_decode_sample("sample") FROM "_sql_stat4";
+        SELECT sample FROM stat_view;
     ]], {
         -- <2.1>
-        "text 12","some text 14","text","some text"
+        "some text","text","some text",14,"text",12
         -- </2.1>
     })
 
@@ -185,12 +202,18 @@ test:do_execsql_test(
 
 -- The first element in the "nEq" list of all samples should therefore be 10.
 --      
-test:do_execsql_test(
+test:do_test(
     "3.3.2",
-    [[
-        ANALYZE;
-        SELECT lrange("neq", 1, 1) FROM "_sql_stat4" WHERE "idx" = 'I2';
-    ]], generate_tens_str(24))
+    function()
+        result = test:execsql(    [[
+            ANALYZE;
+            SELECT neq FROM stat_view WHERE idx = 'I2';
+        ]])
+        for k,v in pairs(result) do
+            result[k] = lrange(v, 1, 1)
+        end
+        return result;
+    end, generate_tens_str(24))
 
 ---------------------------------------------------------------------------
 -- 
@@ -252,7 +275,7 @@ test:do_test(
     function()
         insert_filler_rows_n(0, 10, 19)
         insert_filler_rows_n(20, 1, 100)
-        return test:execsql([[
+        return #test:execsql([[
             INSERT INTO t1(id, c, b, a) VALUES(null, 200, 1, 'a');
             INSERT INTO t1(id, c, b, a) VALUES(null, 200, 1, 'b');
             INSERT INTO t1(id, c, b, a) VALUES(null, 200, 1, 'c');
@@ -264,14 +287,14 @@ test:do_test(
             INSERT INTO t1(id, c, b, a) VALUES(null, 201, 4, 'h');
 
             ANALYZE;
-            SELECT count(*) FROM "_sql_stat4";
+            SELECT neq FROM stat_view;
 
         ]])
-        end, {
+        end,
             -- <4.1>
             48
             -- </4.1>
-        })
+        )
 
 test:do_execsql_test(
     4.2,
@@ -286,29 +309,31 @@ test:do_execsql_test(
 test:do_execsql_test(
     4.3,
     [[
-        SELECT "neq", lrange("nlt", 1, 3), lrange("ndlt", 1, 3), lrange(msgpack_decode_sample("sample"), 1, 3) 
-            FROM "_sql_stat4" WHERE "idx" = 'I1' ORDER BY "sample" LIMIT 16;
+        SELECT neq, nlt, ndlt, sample FROM stat_view WHERE idx = 'I1';
     ]], {
         -- <4.3>
-        "10 10 10","0 0 0","0 0 0","0 0 0","10 10 10","10 10 10","1 1 1","1 1 1","10 10 10","20 20 20",
-        "2 2 2","2 2 2","10 10 10","30 30 30","3 3 3","3 3 3","10 10 10","40 40 40","4 4 4","4 4 4",
-        "10 10 10","50 50 50","5 5 5","5 5 5","10 10 10","60 60 60","6 6 6","6 6 6","10 10 10","70 70 70",
-        "7 7 7","7 7 7","10 10 10","80 80 80","8 8 8","8 8 8","10 10 10","90 90 90","9 9 9","9 9 9",
-        "10 10 10","100 100 100","10 10 10","10 10 10","10 10 10","110 110 110","11 11 11","11 11 11",
-        "10 10 10","120 120 120","12 12 12","12 12 12","10 10 10","130 130 130","13 13 13","13 13 13",
-        "10 10 10","140 140 140","14 14 14","14 14 14","10 10 10","150 150 150","15 15 15","15 15 15"
+         -- neq
+         "10 10 10","10 10 10","10 10 10","10 10 10","10 10 10","10 10 10",
+         "10 10 10","10 10 10","10 10 10","10 10 10","10 10 10","10 10 10",
+         "10 10 10","10 10 10","10 10 10","10 10 10","10 10 10","10 10 10",
+         "10 10 10","1 1 1","1 1 1","1 1 1","5 3 1","2 1 1",
+         -- ntl
+         "0 0 0","10 10 10","20 20 20","30 30 30","40 40 40","50 50 50",
+         "60 60 60","70 70 70","80 80 80","90 90 90","100 100 100","110 110 110",
+         "120 120 120","130 130 130","140 140 140","150 150 150",
+         "160 160 160","170 170 170","180 180 180","203 203 203",
+         "237 237 237","271 271 271","290 290 291","295 296 296",
+         -- ndlt
+         "0 0 0","1 1 1","2 2 2","3 3 3","4 4 4","5 5 5","6 6 6","7 7 7","8 8 8",
+         "9 9 9","10 10 10","11 11 11","12 12 12","13 13 13","14 14 14",
+         "15 15 15","16 16 16","17 17 17","18 18 18","32 32 32","66 66 66",
+         "100 100 100","119 119 120","120 122 125",
+         -- sample
+         0,0,"0",1,1,"1",2,2,"2",3,3,"3",4,4,"4",5,5,"5",6,6,"6",7,7,"7",8,8,"8",
+         9,9,"9",10,10,"10",11,11,"11",12,12,"12",13,13,"13",14,14,"14",
+         15,15,"15",16,16,"16",17,17,"17",18,18,"18",33,33,"33",67,67,"67",
+         101,101,"101",200,1,"b",201,4,"h"
         -- </4.3>
-    })
-
-test:do_execsql_test(
-    4.4,
-    [[
-        SELECT "neq", lrange("nlt", 1, 3), lrange("ndlt", 1, 3), lrange(msgpack_decode_sample("sample"), 1, 3) 
-        FROM "_sql_stat4" WHERE "idx" = 'I1' ORDER BY "sample" DESC LIMIT 2;
-    ]], {
-        -- <4.4>
-        "2 1 1","295 296 296","120 122 125","201 4 h","5 3 1","290 290 291","119 119 120","200 1 b"
-        -- </4.4>
     })
 
 test:do_execsql_test(
@@ -331,16 +356,26 @@ test:do_execsql_test(
         -- </4.6>
     })
 
--- Check that the perioidic samples are present.
-test:do_execsql_test(
+-- Check that the periodic samples are present.
+test:do_test(
     4.7,
-    [[
-        SELECT count(*) FROM "_sql_stat4" WHERE lrange(msgpack_decode_sample("sample"), 1, 1) IN ('34', '68', '102', '136', '170', '204', '238', '272');
-    ]], {
-        -- <4.7>
-        8
-        -- </4.7>
-    })
+    function()
+        periodic = {34, 68, 102, 136, 170, 204, 238, 272}
+        samples = test:execsql("SELECT sample FROM stat_view WHERE idx = 'pk_unnamed_T1_1';")
+         result = {}
+         for _,v in pairs(periodic) do
+             for _,u in pairs(samples) do
+                 if (v == u) then
+                     table.insert(result, u)
+                 end
+             end
+         end
+         return #result;
+     end,
+          -- <4.7>
+          8
+          -- </4.7>
+     )
 
 -- reset_db()
 test:do_test(
@@ -354,24 +389,24 @@ test:do_test(
         for i = 0, 9999, 10 do
             test:execsql(" INSERT INTO t1 VALUES('x', "..i..") ")
         end
-        return test:execsql([[
+        return #test:execsql([[
             ANALYZE;
-            SELECT count(*) FROM "_sql_stat4";
+            SELECT neq FROM stat_view;
         ]])
-        end, {
+        end,
             -- <4.8>
             25
             -- </4.8>
-        })
+        )
 
 test:do_execsql_test(
     4.9,
     [[
-        SELECT msgpack_decode_sample("sample") FROM "_sql_stat4";
+        SELECT sample FROM stat_view;
     ]], {
         -- <4.9>
-        "x", "1110", "2230", "2750", "3350", "4090", "4470", "4980", "5240", "5280", "5290", "5590", "5920",
-        "5930", "6220", "6710", "7000", "7710", "7830", "7970", "8890", "8950", "9240", "9250", "9680"
+        1110,2230,2750,3350,4090,4470,4980,5240,5280,5290,5590,5920,
+        5930,6220,6710,7000,7710,7830,7970,8890,8950,9240,9250,9680,"x"
         -- </4.9>
     })
 
@@ -417,13 +452,13 @@ local get_pk = function (space, record)
 end
 
 local inject_stat_error_func = function (space_name)
-    local space = box.space[space_name]
-    local record = space:select({"T1", "I1", nil}, {limit = 1})[1]
-    space:delete(get_pk(space, record))
+    local space_id = box.space[space_name].id
+    local record = box.space._sql_stat:select({space_id, 1})[1]
+    box.space._sql_stat:delete({space_id, 1})
     local record_new = {}
     for i = 1,#record-1 do record_new[i] = record[i] end
-    record_new[#record] = ''
-    space:insert(record_new)
+    record_new[#record] = record[#record - 1]
+    box.space._sql_stat:insert(record_new)
     return 0
 end
 
@@ -441,7 +476,7 @@ test:do_execsql_test(
         INSERT INTO t1 VALUES(null, 4, 4);
         INSERT INTO t1 VALUES(null, 5, 5);
         ANALYZE;
-        SELECT inject_stat_error('_sql_stat4');
+        SELECT inject_stat_error('T1');
         ANALYZE;
     ]])
 
@@ -1237,12 +1272,12 @@ test:do_test(
             test:execsql(string.format("INSERT INTO t1 VALUES(%s, 0);", i))
         end
         test:execsql("ANALYZE")
-        return test:execsql([[ SELECT count(*) FROM "_sql_stat4" WHERE "idx" = 'I1'; ]])
-    end, {
+        return #test:execsql([[ SELECT neq FROM stat_view WHERE idx = 'I1'; ]])
+    end,
         -- <18.1>
         9
         -- </18.1>
-    })
+    )
 
 ---------------------------------------------------------------------------
 
@@ -1283,11 +1318,17 @@ for i = 0, 15 do
     test:do_test(
         "20.3."..i,
         function()
-            return test:execsql(string.format(
-                [[SELECT count(*) FROM "_sql_stat4" WHERE "idx" = 'I1' AND lrange(msgpack_decode_sample("sample"), 1, 1) = '%s']], i))
-        end, {
+            local result = box.sql.execute([[SELECT sample FROM stat_view WHERE idx = 'I1']])[1][1]
+            local counter = 0
+            for k,v in pairs(result) do
+                if v[1] == i then
+                    counter = counter + 1;
+                end
+            end
+            return counter
+        end,
             1
-        })
+        )
 end
 
 ---------------------------------------------------------------------------
