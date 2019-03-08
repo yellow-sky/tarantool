@@ -1,5 +1,6 @@
 uuid = require('uuid')
 test_run = require('test_run').new()
+replica_set = require('fast_replica')
 
 box.schema.user.grant('guest', 'replication')
 
@@ -23,47 +24,45 @@ box.cfg{replication_timeout = replication_timeout, replication_connect_timeout =
 
 -- gh-3111 - Allow to rebootstrap a replica from a read-only master
 replica_uuid = uuid.new()
-test_run:cmd('create server test with rpl_master=default, script="replication/replica_uuid.lua"')
-test_run:cmd(string.format('start server test with args="%s"', replica_uuid))
-test_run:cmd('stop server test')
-test_run:cmd('cleanup server test')
+replica_set.create(test_run, 'misc_gh3111', 'replica_uuid')
+test_run:cmd(string.format('start server misc_gh3111 with args="%s"', replica_uuid))
+replica_set.hibernate(test_run, 'misc_gh3111')
 box.cfg{read_only = true}
-test_run:cmd(string.format('start server test with args="%s"', replica_uuid))
-test_run:cmd('stop server test')
-test_run:cmd('cleanup server test')
+test_run:cmd(string.format('start server misc_gh3111 with args="%s"', replica_uuid))
+replica_set.hibernate(test_run, 'misc_gh3111')
 box.cfg{read_only = false}
-test_run:cmd('delete server test')
+test_run:cmd('delete server misc_gh3111')
 test_run:cleanup_cluster()
 
 -- gh-3160 - Send heartbeats if there are changes from a remote master only
-SERVERS = { 'autobootstrap1', 'autobootstrap2', 'autobootstrap3' }
+SERVERS = { 'misc1', 'misc2', 'misc3' }
 
 -- Deploy a cluster.
 test_run:create_cluster(SERVERS, "replication", {args="0.1"})
 test_run:wait_fullmesh(SERVERS)
-test_run:cmd("switch autobootstrap1")
+test_run:cmd("switch misc1")
 test_run = require('test_run').new()
-box.cfg{replication_timeout = 0.01, replication_connect_timeout=0.01}
-test_run:cmd("switch autobootstrap2")
+box.cfg{replication_timeout = 0.03, replication_connect_timeout=0.03}
+test_run:cmd("switch misc2")
 test_run = require('test_run').new()
-box.cfg{replication_timeout = 0.01, replication_connect_timeout=0.01}
-test_run:cmd("switch autobootstrap3")
+box.cfg{replication_timeout = 0.03, replication_connect_timeout=0.03}
+test_run:cmd("switch misc3")
 test_run = require('test_run').new()
 fiber=require('fiber')
-box.cfg{replication_timeout = 0.01, replication_connect_timeout=0.01}
+box.cfg{replication_timeout = 0.03, replication_connect_timeout=0.03}
 _ = box.schema.space.create('test_timeout'):create_index('pk')
 test_run:cmd("setopt delimiter ';'")
 function wait_follow(replicaA, replicaB)
     return test_run:wait_cond(function()
         return replicaA.status ~= 'follow' or replicaB.status ~= 'follow'
-    end, 0.01)
+    end, 0.1)
 end ;
 function test_timeout()
     local replicaA = box.info.replication[1].upstream or box.info.replication[2].upstream
     local replicaB = box.info.replication[3].upstream or box.info.replication[2].upstream
     local follows = test_run:wait_cond(function()
         return replicaA.status == 'follow' or replicaB.status == 'follow'
-    end, 0.1)
+    end, 1)
     if not follows then error('replicas not in follow status') end
     for i = 0, 99 do 
         box.space.test_timeout:replace({1})
@@ -78,7 +77,7 @@ test_timeout()
 
 -- gh-3247 - Sequence-generated value is not replicated in case
 -- the request was sent via iproto.
-test_run:cmd("switch autobootstrap1")
+test_run:cmd("switch misc1")
 net_box = require('net.box')
 _ = box.schema.space.create('space1')
 _ = box.schema.sequence.create('seq')
@@ -89,11 +88,11 @@ c = net_box.connect(box.cfg.listen)
 c.space.space1:insert{box.NULL, "data"} -- fails, but bumps sequence value
 c.space.space1:insert{box.NULL, 1, "data"}
 box.space.space1:select{}
-vclock = test_run:get_vclock("autobootstrap1")
-_ = test_run:wait_vclock("autobootstrap2", vclock)
-test_run:cmd("switch autobootstrap2")
+vclock = test_run:get_vclock("misc1")
+_ = test_run:wait_vclock("misc2", vclock)
+test_run:cmd("switch misc2")
 box.space.space1:select{}
-test_run:cmd("switch autobootstrap1")
+test_run:cmd("switch misc1")
 box.space.space1:drop()
 
 test_run:cmd("switch default")
@@ -109,9 +108,9 @@ old_fno = lim.rlim_cur
 lim.rlim_cur = 64
 rlimit.setrlimit(rlimit.RLIMIT_NOFILE, lim)
 
-test_run:cmd('create server sock with rpl_master=default, script="replication/replica.lua"')
-test_run:cmd('start server sock')
-test_run:cmd('switch sock')
+replica_set.create(test_run, 'misc_gh3642')
+test_run:cmd('start server misc_gh3642')
+test_run:cmd('switch misc_gh3642')
 test_run = require('test_run').new()
 fiber = require('fiber')
 test_run:cmd("setopt delimiter ';'")
@@ -132,26 +131,24 @@ test_run:cmd('switch default')
 lim.rlim_cur = old_fno
 rlimit.setrlimit(rlimit.RLIMIT_NOFILE, lim)
 
-test_run:cmd("stop server sock")
-test_run:cmd("cleanup server sock")
-test_run:cmd("delete server sock")
+replica_set.drop(test_run, 'misc_gh3642')
 test_run:cleanup_cluster()
 
 box.schema.user.revoke('guest', 'replication')
 
 -- gh-3510 assertion failure in replica_on_applier_disconnect()
-test_run:cmd('create server er_load1 with script="replication/er_load1.lua"')
-test_run:cmd('create server er_load2 with script="replication/er_load2.lua"')
-test_run:cmd('start server er_load1 with wait=False, wait_load=False')
--- instance er_load2 will fail with error ER_READONLY. this is ok.
--- We only test here that er_load1 doesn't assert.
-test_run:cmd('start server er_load2 with wait=True, wait_load=True, crash_expected = True')
-test_run:cmd('stop server er_load1')
--- er_load2 exits automatically.
-test_run:cmd('cleanup server er_load1')
-test_run:cmd('cleanup server er_load2')
-test_run:cmd('delete server er_load1')
-test_run:cmd('delete server er_load2')
+replica_set.create(test_run, 'misc_gh3510_1', 'er_load1')
+replica_set.create(test_run, 'misc_gh3510_2', 'er_load2')
+test_run:cmd('start server misc_gh3510_1 with wait=False, wait_load=False')
+-- instance misc_gh3510_2 will fail with error ER_READONLY. this is ok.
+-- We only test here that misc_gh3510_1 doesn't assert.
+test_run:cmd('start server misc_gh3510_2 with wait=True, wait_load=True, crash_expected = True')
+test_run:cmd('stop server misc_gh3510_1')
+-- misc_gh3510_2 exits automatically.
+test_run:cmd('cleanup server misc_gh3510_1')
+test_run:cmd('cleanup server misc_gh3510_2')
+test_run:cmd('delete server misc_gh3510_1')
+test_run:cmd('delete server misc_gh3510_2')
 test_run:cleanup_cluster()
 
 --
@@ -159,20 +156,18 @@ test_run:cleanup_cluster()
 -- an error. Now check that we don't hang and successfully connect.
 --
 fiber = require('fiber')
-test_run:cmd("create server replica_auth with rpl_master=default, script='replication/replica_auth.lua'")
-test_run:cmd("start server replica_auth with wait=False, wait_load=False, args='cluster:pass 0.05'")
+replica_set.create(test_run, 'misc_gh3637', 'replica_auth')
+test_run:cmd("start server misc_gh3637 with wait=False, wait_load=False, args='cluster:pass 0.05'")
 -- Wait a bit to make sure replica waits till user is created.
 fiber.sleep(0.1)
 box.schema.user.create('cluster', {password='pass'})
 box.schema.user.grant('cluster', 'replication')
 
-while box.info.replication[2] == nil do fiber.sleep(0.01) end
+while box.info.replication[2] == nil do fiber.sleep(0.03) end
 vclock = test_run:get_vclock('default')
-_ = test_run:wait_vclock('replica_auth', vclock)
+_ = test_run:wait_vclock('misc_gh3637', vclock)
 
-test_run:cmd("stop server replica_auth")
-test_run:cmd("cleanup server replica_auth")
-test_run:cmd("delete server replica_auth")
+replica_set.drop(test_run, 'misc_gh3637')
 test_run:cleanup_cluster()
 
 box.schema.user.drop('cluster')
@@ -182,9 +177,9 @@ box.schema.user.drop('cluster')
 -- when trying to connect to the same master twice.
 --
 box.schema.user.grant('guest', 'replication')
-test_run:cmd("create server replica with rpl_master=default, script='replication/replica.lua'")
-test_run:cmd("start server replica")
-test_run:cmd("switch replica")
+replica_set.create(test_run, 'misc_gh3610')
+test_run:cmd("start server misc_gh3610")
+test_run:cmd("switch misc_gh3610")
 replication = box.cfg.replication[1]
 box.cfg{replication = {replication, replication}}
 
@@ -193,17 +188,15 @@ test_run:cmd("switch default")
 listen = box.cfg.listen
 box.cfg{listen = ''}
 
-test_run:cmd("switch replica")
-box.cfg{replication_connect_quorum = 0, replication_connect_timeout = 0.01}
+test_run:cmd("switch misc_gh3610")
+box.cfg{replication_connect_quorum = 0, replication_connect_timeout = 0.03}
 box.cfg{replication = {replication, replication}}
 
 test_run:cmd("switch default")
 box.cfg{listen = listen}
-while test_run:grep_log('replica', 'duplicate connection') == nil do fiber.sleep(0.01) end
+while test_run:grep_log('misc_gh3610', 'duplicate connection') == nil do fiber.sleep(0.03) end
 
-test_run:cmd("stop server replica")
-test_run:cmd("cleanup server replica")
-test_run:cmd("delete server replica")
+replica_set.drop(test_run, 'misc_gh3610')
 test_run:cleanup_cluster()
 box.schema.user.revoke('guest', 'replication')
 
@@ -212,14 +205,14 @@ box.schema.user.revoke('guest', 'replication')
 -- configuration didn't change.
 --
 box.schema.user.grant('guest', 'replication')
-test_run:cmd("create server replica with rpl_master=default, script='replication/replica.lua'")
-test_run:cmd("start server replica")
+replica_set.create(test_run, 'misc_gh3711')
+test_run:cmd("start server misc_gh3711")
 
 -- Access rights are checked only during reconnect. If the new
 -- and old configurations are equivalent, no reconnect will be
 -- issued and replication should continue working.
 box.schema.user.revoke('guest', 'replication')
-test_run:cmd("switch replica")
+test_run:cmd("switch misc_gh3711")
 replication = box.cfg.replication[1]
 box.cfg{replication = {replication}}
 box.info.status == 'running'
@@ -229,39 +222,35 @@ box.info.status == 'running'
 -- Check that comparison of tables works as expected as well.
 test_run:cmd("switch default")
 box.schema.user.grant('guest', 'replication')
-test_run:cmd("switch replica")
+test_run:cmd("switch misc_gh3711")
 replication = box.cfg.replication
 table.insert(replication, box.cfg.listen)
 test_run:cmd("switch default")
 box.schema.user.revoke('guest', 'replication')
-test_run:cmd("switch replica")
+test_run:cmd("switch misc_gh3711")
 box.cfg{replication = replication}
 box.info.status == 'running'
 
 test_run:cmd("switch default")
-test_run:cmd("stop server replica")
-test_run:cmd("cleanup server replica")
-test_run:cmd("delete server replica")
+replica_set.drop(test_run, 'misc_gh3711')
 test_run:cleanup_cluster()
 
 --
 -- gh-3704 move cluster id check to replica
 --
-test_run:cmd("create server replica with rpl_master=default, script='replication/replica.lua'")
+replica_set.create(test_run, 'misc_gh3704')
 box.schema.user.grant("guest", "replication")
-test_run:cmd("start server replica")
-test_run:grep_log("replica", "REPLICASET_UUID_MISMATCH")
+test_run:cmd("start server misc_gh3704")
+test_run:grep_log("misc_gh3704", "REPLICASET_UUID_MISMATCH")
 box.info.replication[2].downstream.status
 -- change master's cluster uuid and check that replica doesn't connect.
-test_run:cmd("stop server replica")
+test_run:cmd("stop server misc_gh3704")
 _ = box.space._schema:replace{'cluster', tostring(uuid.new())}
 -- master believes replica is in cluster, but their cluster UUIDs differ.
-test_run:cmd("start server replica")
-test_run:wait_log("replica", "REPLICASET_UUID_MISMATCH", nil, 1.0)
-box.info.replication[2].downstream.status
+test_run:cmd("start server misc_gh3704")
+test_run:wait_log("misc_gh3704", "REPLICASET_UUID_MISMATCH", nil, 1.0)
+test_run:wait_cond(function() return box.info.replication[2].downstream.status == 'stopped' end) or box.info.replication[2].downstream.status
 
-test_run:cmd("stop server replica")
-test_run:cmd("cleanup server replica")
-test_run:cmd("delete server replica")
+replica_set.drop(test_run, 'misc_gh3704')
 test_run:cleanup_cluster()
 box.schema.user.revoke('guest', 'replication')

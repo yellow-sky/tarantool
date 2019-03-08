@@ -11,18 +11,20 @@ fio = require('fio')
 errinj = box.error.injection
 
 test_run:cmd("setopt delimiter ';'")
-function check_file_count(dir, glob, count)
-    local files = fio.glob(fio.pathjoin(dir, glob))
-    if #files == count then
-        return true
-    end
-    return false, files
+function wait_file_count(dir, glob, count)
+    return test_run:wait_cond(function()
+        local files = fio.glob(fio.pathjoin(dir, glob))
+        if #files == count then
+            return true
+        end
+        return false, files
+    end)
 end;
 function check_wal_count(count)
-    return check_file_count(box.cfg.wal_dir, '*.xlog', count)
+    return wait_file_count(box.cfg.wal_dir, '*.xlog', count)
 end;
 function check_snap_count(count)
-    return check_file_count(box.cfg.memtx_dir, '*.snap', count)
+    return wait_file_count(box.cfg.memtx_dir, '*.snap', count)
 end;
 test_run:cmd("setopt delimiter ''");
 
@@ -37,25 +39,21 @@ box.snapshot()
 --
 -- Create a few dead replicas to pin WAL files.
 --
-test_run:cmd("create server replica with rpl_master=default, script='replication/replica.lua'")
-test_run:cmd("start server replica")
-test_run:cmd("stop server replica")
-test_run:cmd("cleanup server replica")
+replica_set = require('fast_replica')
+replica_set.join(test_run, 'gc_no_space')
+replica_set.hibernate(test_run, 'gc_no_space')
 
 s:auto_increment{}
 box.snapshot()
 
-test_run:cmd("start server replica")
-test_run:cmd("stop server replica")
-test_run:cmd("cleanup server replica")
+replica_set.start(test_run, 'gc_no_space')
+replica_set.hibernate(test_run, 'gc_no_space')
 
 s:auto_increment{}
 box.snapshot()
 
-test_run:cmd("start server replica")
-test_run:cmd("stop server replica")
-test_run:cmd("cleanup server replica")
-test_run:cmd("delete server replica")
+replica_set.start(test_run, 'gc_no_space')
+replica_set.drop(test_run, 'gc_no_space')
 
 --
 -- Make a few checkpoints and check that old WAL files are not

@@ -1,13 +1,13 @@
 --
 -- Check that replication applier invokes on_replace triggers
 --
-env = require('test_run')
----
-...
-test_run = env.new()
+test_run = require('test_run').new()
 ---
 ...
 fiber = require('fiber')
+---
+...
+replica_set = require('fast_replica')
 ---
 ...
 _ = box.schema.space.create('test')
@@ -19,15 +19,14 @@ _ = box.space.test:create_index('primary')
 box.schema.user.grant('guest', 'replication')
 ---
 ...
-test_run:cmd("create server replica with rpl_master=default, script='replication/replica.lua'")
+replica_set.create(test_run, 'on_replace')
+---
+...
+test_run:cmd("start server on_replace")
 ---
 - true
 ...
-test_run:cmd("start server replica")
----
-- true
-...
-test_run:cmd("switch replica")
+test_run:cmd("switch on_replace")
 ---
 - true
 ...
@@ -59,7 +58,7 @@ box.space.test:insert{2}
 ---
 - [2]
 ...
-test_run:cmd("switch replica")
+test_run:cmd("switch on_replace")
 ---
 - true
 ...
@@ -83,15 +82,7 @@ test_run:cmd("switch default")
 --
 -- cleanup
 --
-test_run:cmd("stop server replica")
----
-- true
-...
-test_run:cmd("cleanup server replica")
----
-- true
-...
-test_run:cmd("delete server replica")
+replica_set.drop(test_run, 'on_replace')
 ---
 - true
 ...
@@ -108,7 +99,7 @@ box.schema.user.revoke('guest', 'replication')
 SERVERS = { 'on_replace1', 'on_replace2' }
 ---
 ...
-test_run:create_cluster(SERVERS, "replication", {args="0.2"})
+test_run:create_cluster(SERVERS, "replication", {args="0.1"})
 ---
 ...
 test_run:wait_fullmesh(SERVERS)
