@@ -530,20 +530,20 @@ checkpoint_write_row(struct xlog *l, struct xrow_header *row)
 }
 
 static int
-checkpoint_write_tuple(struct xlog *l, struct space *space,
+checkpoint_write_tuple(struct xlog *l, uint32_t space_id, uint32_t group_id,
 		       const char *data, uint32_t size)
 {
 	struct request_replace_body body;
 	body.m_body = 0x82; /* map of two elements. */
 	body.k_space_id = IPROTO_SPACE_ID;
 	body.m_space_id = 0xce; /* uint32 */
-	body.v_space_id = mp_bswap_u32(space_id(space));
+	body.v_space_id = mp_bswap_u32(space_id);
 	body.k_tuple = IPROTO_TUPLE;
 
 	struct xrow_header row;
 	memset(&row, 0, sizeof(struct xrow_header));
 	row.type = IPROTO_INSERT;
-	row.group_id = space_group_id(space);
+	row.group_id = group_id;
 
 	row.bodycnt = 2;
 	row.body[0].iov_base = &body;
@@ -554,7 +554,9 @@ checkpoint_write_tuple(struct xlog *l, struct space *space,
 }
 
 struct checkpoint_entry {
-	struct space *space;
+	uint32_t space_id;
+	uint32_t group_id;
+	struct index *index;
 	struct snapshot_iterator *iterator;
 	struct rlist link;
 };
@@ -604,6 +606,7 @@ checkpoint_delete(struct checkpoint *ckpt)
 	struct checkpoint_entry *entry, *tmp;
 	rlist_foreach_entry_safe(entry, &ckpt->entries, link, tmp) {
 		entry->iterator->free(entry->iterator);
+		index_unref(entry->index);
 		free(entry);
 	}
 	xdir_destroy(&ckpt->dir);
@@ -644,7 +647,10 @@ checkpoint_add_space(struct space *sp, void *data)
 	}
 	rlist_add_tail_entry(&ckpt->entries, entry, link);
 
-	entry->space = sp;
+	entry->space_id = space_id(sp);
+	entry->group_id = space_group_id(sp);
+	entry->index = pk;
+	index_ref(entry->index);
 	entry->iterator = index_create_snapshot_iterator(pk);
 	if (entry->iterator == NULL)
 		return -1;
@@ -679,8 +685,9 @@ checkpoint_f(va_list ap)
 		struct snapshot_iterator *it = entry->iterator;
 		for (data = it->next(it, &size); data != NULL;
 		     data = it->next(it, &size)) {
-			if (checkpoint_write_tuple(&snap, entry->space,
-					data, size) != 0) {
+			if (checkpoint_write_tuple(&snap, entry->space_id,
+						   entry->group_id,
+						   data, size) != 0) {
 				xlog_close(&snap, false);
 				return -1;
 			}

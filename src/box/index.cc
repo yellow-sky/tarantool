@@ -487,6 +487,7 @@ index_create(struct index *index, struct engine *engine,
 	index->engine = engine;
 	index->def = def;
 	index->space_cache_version = space_cache_version;
+	index->ref_count = 1;
 	return 0;
 }
 
@@ -498,6 +499,7 @@ index_delete(struct index *index)
 	 * engine might still need it, e.g. to check if
 	 * the index is primary or secondary.
 	 */
+	assert(index->ref_count == 0);
 	struct index_def *def = index->def;
 	index->vtab->destroy(index);
 	index_def_delete(def);

@@ -456,6 +456,8 @@ struct index {
 	struct index_def *def;
 	/* Space cache version at the time of construction. */
 	uint32_t space_cache_version;
+	/* Index refernece count. */
+	uint32_t ref_count;
 };
 
 /**
@@ -498,9 +500,24 @@ int
 index_create(struct index *index, struct engine *engine,
 	     const struct index_vtab *vtab, struct index_def *def);
 
+static inline void
+index_ref(struct index *index) {
+	assert(index->ref_count > 0);
+	++index->ref_count;
+}
+
 /** Free an index instance. */
 void
 index_delete(struct index *index);
+
+static inline void
+index_unref(struct index *index)
+{
+	assert(index->ref_count > 0);
+	--index->ref_count;
+	if (index->ref_count == 0)
+		index_delete(index);
+}
 
 /** Build this index based on the contents of another index. */
 int

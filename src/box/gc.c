@@ -369,12 +369,6 @@ gc_do_checkpoint(void)
 	gc.checkpoint_is_in_progress = true;
 
 	/*
-	 * We don't support DDL operations while making a checkpoint.
-	 * Lock them out.
-	 */
-	latch_lock(&schema_lock);
-
-	/*
 	 * Rotate WAL and call engine callbacks to create a checkpoint
 	 * on disk for each registered engine.
 	 */
@@ -398,7 +392,6 @@ out:
 	if (rc != 0)
 		engine_abort_checkpoint();
 
-	latch_unlock(&schema_lock);
 	gc.checkpoint_is_in_progress = false;
 	return rc;
 }
