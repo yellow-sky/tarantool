@@ -996,7 +996,7 @@ vdbe_emit_analyze_space(struct Parse *parse, struct space *space)
 					     FIELD_TYPE_STRING,
 					     FIELD_TYPE_STRING,
 					     field_type_MAX };
-		sqlVdbeAddOp4(v, OP_MakeRecord, tab_name_reg, 4, tmp_reg,
+		sqlVdbeAddOp4(v, OP_MakeRecord, tab_name_reg, 3, tmp_reg,
 				  (char *)types, sizeof(types));
 		sqlVdbeAddOp4(v, OP_IdxInsert, tmp_reg, 0, 0,
 				  (char *)stat1, P4_SPACEPTR);
