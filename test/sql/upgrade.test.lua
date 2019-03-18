@@ -53,3 +53,16 @@ box.sql.execute("DROP TABLE T_OUT;")
 test_run:switch('default')
 test_run:cmd('stop server upgrade')
 test_run:cmd('cleanup server upgrade')
+
+work_dir = 'sql/upgrade/2.1.0/'
+test_run:cmd('create server upgrade210 with script="sql/upgrade/upgrade.lua", workdir="' .. work_dir .. '"')
+test_run:cmd('start server upgrade210')
+
+test_run:switch('upgrade210')
+
+box.space._sql_stat1.field_count
+box.space._sql_stat4.field_count
+
+test_run:switch('default')
+test_run:cmd('stop server upgrade210')
+test_run:cmd('cleanup server upgrade210')

@@ -30,12 +30,12 @@ box.space._space.index['name']:get('_trigger')
 ...
 box.space._space.index['name']:get('_sql_stat1')
 ---
-- [348, 1, '_sql_stat1', 'memtx', 0, {}, [{'name': 'tbl', 'type': 'string'}, {'name': 'idx',
+- [348, 1, '_sql_stat1', 'memtx', 3, {}, [{'name': 'tbl', 'type': 'string'}, {'name': 'idx',
       'type': 'string'}, {'name': 'stat', 'type': 'string'}]]
 ...
 box.space._space.index['name']:get('_sql_stat4')
 ---
-- [349, 1, '_sql_stat4', 'memtx', 0, {}, [{'name': 'tbl', 'type': 'string'}, {'name': 'idx',
+- [349, 1, '_sql_stat4', 'memtx', 6, {}, [{'name': 'tbl', 'type': 'string'}, {'name': 'idx',
       'type': 'string'}, {'name': 'neq', 'type': 'string'}, {'name': 'nlt', 'type': 'string'},
     {'name': 'ndlt', 'type': 'string'}, {'name': 'sample', 'type': 'scalar'}]]
 ...
@@ -155,6 +155,41 @@ test_run:cmd('stop server upgrade')
 - true
 ...
 test_run:cmd('cleanup server upgrade')
+---
+- true
+...
+work_dir = 'sql/upgrade/2.1.0/'
+---
+...
+test_run:cmd('create server upgrade210 with script="sql/upgrade/upgrade.lua", workdir="' .. work_dir .. '"')
+---
+- true
+...
+test_run:cmd('start server upgrade210')
+---
+- true
+...
+test_run:switch('upgrade210')
+---
+- true
+...
+box.space._sql_stat1.field_count
+---
+- 3
+...
+box.space._sql_stat4.field_count
+---
+- 6
+...
+test_run:switch('default')
+---
+- true
+...
+test_run:cmd('stop server upgrade210')
+---
+- true
+...
+test_run:cmd('cleanup server upgrade210')
 ---
 - true
 ...
