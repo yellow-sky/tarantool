@@ -1,10 +1,10 @@
-env = require('test_run')
----
-...
-test_run = env.new()
+test_run = require('test_run').new()
 ---
 ...
 engine = test_run:get_cfg('engine')
+---
+...
+replica_set = require('fast_replica')
 ---
 ...
 box.schema.user.grant('guest', 'replication')
@@ -16,19 +16,21 @@ space = box.schema.space.create('test', {engine = engine});
 index = box.space.test:create_index('primary')
 ---
 ...
-test_run:cmd("create server replica with rpl_master=default, script='replication/replica.lua'")
+replica_set.create(test_run, 'skip_conflict_row')
+---
+...
+test_run:cmd("start server skip_conflict_row")
 ---
 - true
 ...
-test_run:cmd("start server replica")
----
-- true
-...
-test_run:cmd("switch replica")
+test_run:cmd("switch skip_conflict_row")
 ---
 - true
 ...
 box.cfg{replication_skip_conflict = true}
+---
+...
+box.ctl.wait_rw() -- success
 ---
 ...
 box.space.test:insert{1}
@@ -47,17 +49,17 @@ space:insert{2}
 ---
 - [2]
 ...
-box.info.status
+test_run:wait_cond(function() return box.info.status == 'running' end) or box.info.status
 ---
-- running
+- true
 ...
 vclock = test_run:get_vclock('default')
 ---
 ...
-_ = test_run:wait_vclock("replica", vclock)
+_ = test_run:wait_vclock("skip_conflict_row", vclock)
 ---
 ...
-test_run:cmd("switch replica")
+test_run:cmd("switch skip_conflict_row")
 ---
 - true
 ...
@@ -65,9 +67,9 @@ box.info.replication[1].upstream.message
 ---
 - null
 ...
-box.info.replication[1].upstream.status
+test_run:wait_cond(function() return box.info.replication[1].upstream.status == 'follow' end) or box.info.replication[1].upstream.status
 ---
-- follow
+- true
 ...
 box.space.test:select()
 ---
@@ -78,17 +80,17 @@ test_run:cmd("switch default")
 ---
 - true
 ...
-box.info.status
----
-- running
-...
--- gh-2283: test that if replication_skip_conflict is off vclock
--- is not advanced on errors.
-test_run:cmd("restart server replica")
+test_run:wait_cond(function() return box.info.status == 'running' end) or box.info.status
 ---
 - true
 ...
-test_run:cmd("switch replica")
+-- gh-2283: test that if replication_skip_conflict is off vclock
+-- is not advanced on errors.
+test_run:cmd("restart server skip_conflict_row")
+---
+- true
+...
+test_run:cmd("switch skip_conflict_row")
 ---
 - true
 ...
@@ -111,7 +113,7 @@ box.space.test:insert{4}
 ---
 - [4]
 ...
-test_run:cmd("switch replica")
+test_run:cmd("switch skip_conflict_row")
 ---
 - true
 ...
@@ -120,19 +122,19 @@ lsn1 == box.info.vclock[1]
 ---
 - true
 ...
-box.info.replication[1].upstream.message
+test_run:wait_cond(function() return box.info.replication[1].upstream.message == "Duplicate key exists in unique index 'primary' in space 'test'" end) or box.info.replication[1].upstream.message
 ---
-- Duplicate key exists in unique index 'primary' in space 'test'
+- true
 ...
-box.info.replication[1].upstream.status
+test_run:wait_cond(function() return box.info.replication[1].upstream.status == 'stopped' end) or box.info.replication[1].upstream.status
 ---
-- stopped
+- true
 ...
 test_run:cmd("switch default")
 ---
 - true
 ...
-test_run:cmd("restart server replica")
+test_run:cmd("restart server skip_conflict_row")
 ---
 - true
 ...
@@ -161,17 +163,17 @@ test_run:cmd("switch default")
 box.space.test:truncate()
 ---
 ...
-test_run:cmd("restart server replica")
+test_run:cmd("restart server skip_conflict_row")
 ---
 - true
 ...
-test_run:cmd("switch replica")
+test_run:cmd("switch skip_conflict_row")
 ---
 - true
 ...
-box.info.replication[1].upstream.status
+test_run:wait_cond(function() return box.info.replication[1].upstream.status == 'follow' end) or box.info.replication[1].upstream.status
 ---
-- follow
+- true
 ...
 -- write some conflicting records on slave
 for i = 1, 10 do box.space.test:insert({i, 'r'}) end
@@ -191,43 +193,46 @@ test_run:cmd("switch default")
 for i = 1, 10 do box.space.test:insert({i, 'm'}) end
 ---
 ...
-test_run:cmd("switch replica")
+test_run:cmd("switch skip_conflict_row")
+---
+- true
+...
+test_run:wait_cond(function() return box.info.replication[1].upstream.status == 'follow' end) or box.info.replication[1].upstream.status
 ---
 - true
 ...
 -- lsn should be incremented
-v1 == box.info.vclock[1] - 10
+test_run:wait_cond(function() return v1 == box.info.vclock[1] - 10 end) or box.info.vclock[1]
 ---
 - true
 ...
--- and state is follow
-box.info.replication[1].upstream.status
+test_run:wait_cond(function() return box.info.replication[1].upstream.status == 'follow' end) or box.info.replication[1].upstream.status
 ---
-- follow
+- true
 ...
 -- restart server and check replication continues from nop-ed vclock
 test_run:cmd("switch default")
 ---
 - true
 ...
-test_run:cmd("stop server replica")
+test_run:cmd("stop server skip_conflict_row")
 ---
 - true
 ...
 for i = 11, 20 do box.space.test:insert({i, 'm'}) end
 ---
 ...
-test_run:cmd("start server replica")
+test_run:cmd("start server skip_conflict_row")
 ---
 - true
 ...
-test_run:cmd("switch replica")
+test_run:cmd("switch skip_conflict_row")
 ---
 - true
 ...
-box.info.replication[1].upstream.status
+test_run:wait_cond(function() return box.info.replication[1].upstream.status == 'follow' end) or box.info.replication[1].upstream.status
 ---
-- follow
+- true
 ...
 box.space.test:select({11}, {iterator = "GE"})
 ---
@@ -247,15 +252,7 @@ test_run:cmd("switch default")
 - true
 ...
 -- cleanup
-test_run:cmd("stop server replica")
----
-- true
-...
-test_run:cmd("cleanup server replica")
----
-- true
-...
-test_run:cmd("delete server replica")
+replica_set.drop(test_run, 'skip_conflict_row')
 ---
 - true
 ...

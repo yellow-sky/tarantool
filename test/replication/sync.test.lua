@@ -1,6 +1,7 @@
-fiber = require('fiber')
 test_run = require('test_run').new()
+fiber = require('fiber')
 engine = test_run:get_cfg('engine')
+replica_set = require('fast_replica')
 
 test_run:cleanup_cluster()
 
@@ -35,7 +36,7 @@ function fill()
             local r = box.info.replication[2]
             return r ~= nil and r.downstream ~= nil and
                    r.downstream.status ~= 'stopped'
-        end, 10)
+        end)
         for i = count + 101, count + 200 do
             box.space.test:replace{i}
         end
@@ -46,9 +47,9 @@ end;
 test_run:cmd("setopt delimiter ''");
 
 -- Deploy a replica.
-test_run:cmd("create server replica with rpl_master=default, script='replication/replica.lua'")
-test_run:cmd("start server replica")
-test_run:cmd("switch replica")
+replica_set.create(test_run, 'sync')
+test_run:cmd("start server sync")
+test_run:cmd("switch sync")
 
 -- Stop replication.
 replication = box.cfg.replication
@@ -57,8 +58,9 @@ box.cfg{replication = {}}
 -- Fill the space.
 test_run:cmd("switch default")
 fill()
-test_run:cmd("switch replica")
+test_run:cmd("switch sync")
 
+-----------------------------------------------------------------------------------------------------
 -- Resume replication.
 --
 -- Since max allowed lag is small, all records should arrive
@@ -66,8 +68,8 @@ test_run:cmd("switch replica")
 --
 box.cfg{replication_sync_lag = 0.001}
 box.cfg{replication = replication}
+test_run:wait_cond(function() return box.info.status == 'running' end) or box.info.status
 box.space.test:count()
-box.info.status -- running
 box.info.ro -- false
 
 -- Stop replication.
@@ -77,8 +79,9 @@ box.cfg{replication = {}}
 -- Fill the space.
 test_run:cmd("switch default")
 fill()
-test_run:cmd("switch replica")
+test_run:cmd("switch sync")
 
+-----------------------------------------------------------------------------------------------------
 -- Resume replication
 --
 -- Since max allowed lag is big, not all records will arrive
@@ -87,12 +90,10 @@ test_run:cmd("switch replica")
 --
 box.cfg{replication_sync_lag = 1}
 box.cfg{replication = replication}
-box.space.test:count() < 400
-box.info.status -- running
-box.info.ro -- false
+test_run:wait_cond(function() return box.space.test:count() == 400 or (box.space.test:count() < 400 and box.info.status == 'running' and box.info.ro) end) or box.info.status
 
 -- Wait for remaining rows to arrive.
-test_run:wait_cond(function() return box.space.test:count() == 400 end, 10)
+test_run:wait_cond(function() return box.space.test:count() == 400 end) or box.space.test:count()
 
 -- Stop replication.
 replication = box.cfg.replication
@@ -101,8 +102,9 @@ box.cfg{replication = {}}
 -- Fill the space.
 test_run:cmd("switch default")
 fill()
-test_run:cmd("switch replica")
+test_run:cmd("switch sync")
 
+-----------------------------------------------------------------------------------------------------
 -- Resume replication
 --
 -- Although max allowed lag is small, box.cfg() will fail to
@@ -111,16 +113,14 @@ test_run:cmd("switch replica")
 --
 box.cfg{replication_sync_lag = 0.001, replication_sync_timeout = 0.001}
 box.cfg{replication = replication}
-box.space.test:count() < 600
-box.info.status -- orphan
-box.info.ro -- true
+test_run:wait_cond(function() return box.space.test:count() == 600 or (box.space.test:count() < 600 and box.info.status == 'orphan' and box.info.ro) end) or box.info.status
 
 -- Wait for remaining rows to arrive.
-test_run:wait_cond(function() return box.space.test:count() == 600 end, 10)
+test_run:wait_cond(function() return box.space.test:count() == 600 end) or box.space.test:count()
 
 -- Make sure replica leaves oprhan state.
-test_run:wait_cond(function() return box.info.status ~= 'orphan' end, 10)
-box.info.status -- running
+test_run:wait_cond(function() return box.info.status ~= 'orphan' end)
+test_run:wait_cond(function() return box.info.status == 'running' end) or box.info.status
 box.info.ro -- false
 
 -- gh-3636: Check that replica set sync doesn't stop on cfg errors.
@@ -131,9 +131,9 @@ box.info.ro -- false
 -- ER_CFG "duplicate connection with the same replica UUID" error.
 -- It should print it to the log, but keep trying to synchronize.
 -- Eventually, it should leave box.cfg() following the master.
-box.cfg{replication_timeout = 0.1}
-box.cfg{replication_sync_lag = 1}
-box.cfg{replication_sync_timeout = 10}
+box.cfg{replication_timeout = 0.01}
+box.cfg{replication_sync_lag = 0.1}
+box.cfg{replication_sync_timeout = 50}
 
 test_run:cmd("switch default")
 box.error.injection.set('ERRINJ_WAL_DELAY', true)
@@ -146,32 +146,30 @@ _ = fiber.create(function()
     box.error.injection.set('ERRINJ_WAL_DELAY', false)
 end);
 test_run:cmd("setopt delimiter ''");
-test_run:cmd("switch replica")
+test_run:cmd("switch sync")
 
 replication = box.cfg.replication
 box.cfg{replication = {}}
 box.cfg{replication = replication}
-box.info.status -- running
+test_run:wait_cond(function() return box.info.status ~= 'orphan' end)
 box.info.ro -- false
-box.info.replication[1].upstream.status -- follow
-test_run:grep_log('replica', 'ER_CFG.*')
+test_run:wait_cond(function() return box.info.replication[1].upstream.status == 'follow' end) or box.info.replication[1].upstream.status
+test_run:wait_log("sync", "ER_CFG.*", nil, 200)
 
 test_run:cmd("switch default")
-test_run:cmd("stop server replica")
+test_run:cmd("stop server sync")
 
 -- gh-3830: Sync fails if there's a gap at the end of the master's WAL.
 box.error.injection.set('ERRINJ_WAL_WRITE_DISK', true)
 box.space.test:replace{123456789}
 box.error.injection.set('ERRINJ_WAL_WRITE_DISK', false)
-test_run:cmd("start server replica")
-test_run:cmd("switch replica")
-box.info.status -- running
+test_run:cmd("start server sync")
+test_run:cmd("switch sync")
+test_run:wait_cond(function() return box.info.status == 'running' end) or box.info.status
 box.info.ro -- false
 
 test_run:cmd("switch default")
-test_run:cmd("stop server replica")
-test_run:cmd("cleanup server replica")
-test_run:cmd("delete server replica")
+replica_set.drop(test_run, 'sync')
 test_run:cleanup_cluster()
 
 box.space.test:drop()

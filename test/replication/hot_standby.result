@@ -1,10 +1,10 @@
-env = require('test_run')
----
-...
-test_run = env.new()
+test_run = require('test_run').new()
 ---
 ...
 engine = test_run:get_cfg('engine')
+---
+...
+replica_set = require('fast_replica')
 ---
 ...
 box.schema.user.grant('guest', 'replication')
@@ -16,19 +16,17 @@ box.schema.func.create('_set_pri_lsn')
 box.schema.user.grant('guest', 'execute', 'function', '_set_pri_lsn')
 ---
 ...
-test_run:cmd("create server hot_standby with script='replication/hot_standby.lua', rpl_master=default")
+replica_set.create(test_run, 'hot_standby', 'hot_standby')
 ---
-- true
 ...
-test_run:cmd("create server replica with rpl_master=default, script='replication/replica.lua'")
+replica_set.create(test_run, 'hot_standby_replica')
 ---
-- true
 ...
 test_run:cmd("start server hot_standby")
 ---
 - true
 ...
-test_run:cmd("start server replica")
+test_run:cmd("start server hot_standby_replica")
 ---
 - true
 ...
@@ -36,7 +34,7 @@ test_run:cmd("setopt delimiter ';'")
 ---
 - true
 ...
-test_run:cmd("set connection default, hot_standby, replica")
+test_run:cmd("set connection default, hot_standby, hot_standby_replica")
 fiber = require('fiber');
 ---
 ...
@@ -95,7 +93,7 @@ test_run:cmd("setopt delimiter ''");
 ---
 - true
 ...
-test_run:cmd("switch replica")
+test_run:cmd("switch hot_standby_replica")
 ---
 - true
 ...
@@ -131,7 +129,7 @@ index = space:create_index('primary', {type = 'tree'})
 ---
 ...
 -- set begin lsn on master, replica and hot_standby.
-test_run:cmd("set variable replica_port to 'replica.listen'")
+test_run:cmd("set variable replica_port to 'hot_standby_replica.listen'")
 ---
 - true
 ...
@@ -203,7 +201,7 @@ test_run:cmd("switch hot_standby")
 _wait_lsn(10)
 ---
 ...
-test_run:cmd("switch replica")
+test_run:cmd("switch hot_standby_replica")
 ---
 - true
 ...
@@ -234,7 +232,7 @@ test_run:cmd("switch hot_standby")
 while box.info.status ~= 'running' do fiber.sleep(0.001) end
 ---
 ...
-test_run:cmd("switch replica")
+test_run:cmd("switch hot_standby_replica")
 ---
 - true
 ...
@@ -290,7 +288,7 @@ _select(11, 20)
   - [19, 'the tuple 19']
   - [20, 'the tuple 20']
 ...
-test_run:cmd("switch replica")
+test_run:cmd("switch hot_standby_replica")
 ---
 - true
 ...
@@ -310,15 +308,10 @@ _select(11, 20)
   - [19, 'the tuple 19']
   - [20, 'the tuple 20']
 ...
-test_run:cmd("stop server hot_standby")
+replica_set = require('fast_replica')
 ---
-- true
 ...
-test_run:cmd("cleanup server hot_standby")
----
-- true
-...
-test_run:cmd("delete server hot_standby")
+replica_set.drop(test_run, 'hot_standby')
 ---
 - true
 ...
@@ -334,15 +327,10 @@ test_run:cmd("switch default")
 ---
 - true
 ...
-test_run:cmd("stop server replica")
+replica_set = require('fast_replica')
 ---
-- true
 ...
-test_run:cmd("cleanup server replica")
----
-- true
-...
-test_run:cmd("delete server replica")
+replica_set.drop(test_run, 'hot_standby_replica')
 ---
 - true
 ...

@@ -1,5 +1,5 @@
-env = require('test_run')
-test_run = env.new()
+test_run = require('test_run').new()
+
 test_run:cmd('restart server default with cleanup=1')
 test_run:cmd('switch default')
 
@@ -32,8 +32,9 @@ master.upstream == nil
 master.downstream == nil
 
 -- Start Master -> Slave replication
-test_run:cmd("create server replica with rpl_master=default, script='replication/replica.lua'")
-test_run:cmd("start server replica")
+replica_set = require('fast_replica')
+replica_set.create(test_run, 'status')
+test_run:cmd("start server status")
 
 --
 -- Master
@@ -56,7 +57,7 @@ master.upstream == nil
 master.downstream == nil
 
 -- replica's status
-replica_id = test_run:get_server_id('replica')
+replica_id = test_run:get_server_id('status')
 box.info.vclock[replica_id] == nil
 replica = box.info.replication[replica_id]
 replica.id == replica_id
@@ -71,7 +72,7 @@ replica.downstream.vclock[replica_id] == box.info.vclock[replica_id]
 --
 -- Replica
 --
-test_run:cmd('switch replica')
+test_run:cmd('switch status')
 
 #box.info.vclock == 1 -- box.info.vclock[replica_id] is nil
 #box.info.replication == 2
@@ -83,10 +84,10 @@ box.info.vclock[master_id] == 2
 master = box.info.replication[master_id]
 master.id == master_id
 master.uuid == box.space._cluster:get(master_id)[2]
-master.upstream.status == "follow"
+test_run:wait_cond(function() return master.upstream.status == 'follow' end) or master.upstream.status
 master.upstream.lag < 1
 master.upstream.idle < 1
-master.upstream.peer:match("localhost")
+master.upstream.peer:match("unix/")
 master.downstream == nil
 
 -- replica's status
@@ -105,34 +106,32 @@ replica.downstream == nil
 --
 -- ClientError during replication
 --
-test_run:cmd('switch replica')
+test_run:cmd('switch status')
 box.space._schema:insert({'dup'})
 test_run:cmd('switch default')
 box.space._schema:insert({'dup'})
-test_run:cmd('switch replica')
-r = box.info.replication[1]
-r.upstream.status == "stopped"
-r.upstream.message:match('Duplicate') ~= nil
+test_run:cmd('switch status')
+test_run:wait_cond(function() return box.info.replication[1].upstream.status == 'stopped' and box.info.replication[1].upstream.message:match('Duplicate') ~= nil end)
 test_run:cmd('switch default')
 box.space._schema:delete({'dup'})
 test_run:cmd("push filter ', lsn: [0-9]+' to ', lsn: <number>'")
-test_run:grep_log('replica', 'error applying row: .*')
+test_run:grep_log('status', 'error applying row: .*')
 test_run:cmd("clear filter")
 
 --
 -- Check box.info.replication login
 --
-test_run:cmd('switch replica')
-test_run:cmd("set variable master_port to 'replica.master'")
+test_run:cmd('switch status')
+test_run:cmd("set variable master_port to 'status.master'")
 replica_uri = os.getenv("LISTEN")
-box.cfg{replication = {"guest@localhost:" .. master_port, replica_uri}}
+box.cfg{replication = {"guest@unix/:" .. master_port, replica_uri}}
 
 master_id = test_run:get_server_id('default')
 master = box.info.replication[master_id]
 master.id == master_id
 master.upstream.status == "follow"
 master.upstream.peer:match("guest")
-master.upstream.peer:match("localhost")
+master.upstream.peer:match("unix/")
 master.downstream == nil
 
 test_run:cmd('switch default')
@@ -141,7 +140,5 @@ test_run:cmd('switch default')
 -- Cleanup
 --
 box.schema.user.revoke('guest', 'replication')
-test_run:cmd("stop server replica")
-test_run:cmd("cleanup server replica")
-test_run:cmd("delete server replica")
+replica_set.drop(test_run, 'status')
 test_run:cleanup_cluster()

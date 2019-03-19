@@ -1,6 +1,6 @@
-env = require('test_run')
-test_run = env.new()
+test_run = require('test_run').new()
 engine = test_run:get_cfg('engine')
+replica_set = require('fast_replica')
 
 --
 -- gh-3443: Check that changes done to spaces marked as local
@@ -42,10 +42,10 @@ _ = s2:insert{2}
 _ = s3:insert{2}
 
 box.schema.user.grant('guest', 'replication')
-test_run:cmd("create server replica with rpl_master=default, script='replication/replica.lua'")
-test_run:cmd("start server replica")
+replica_set.create(test_run, 'local_spaces')
+test_run:cmd("start server local_spaces")
 
-test_run:cmd("switch replica")
+test_run:cmd("switch local_spaces")
 box.space.test1.is_local
 box.space.test2.is_local
 box.space.test3.is_local
@@ -62,21 +62,19 @@ _ = s1:insert{3}
 _ = s2:insert{3}
 _ = s3:insert{3}
 vclock = test_run:get_vclock('default')
-_ = test_run:wait_vclock('replica', vclock)
+_ = test_run:wait_vclock('local_spaces', vclock)
 
-test_run:cmd("switch replica")
+test_run:cmd("switch local_spaces")
 box.space.test1:select()
 box.space.test2:select()
 box.space.test3:select()
-test_run:cmd("restart server replica")
+test_run:cmd("restart server local_spaces")
 box.space.test1:select()
 box.space.test2:select()
 box.space.test3:select()
 
 test_run:cmd("switch default")
-test_run:cmd("stop server replica")
-test_run:cmd("cleanup server replica")
-test_run:cmd("delete server replica")
+replica_set.drop(test_run, 'local_spaces')
 test_run:cleanup_cluster()
 box.schema.user.revoke('guest', 'replication')
 

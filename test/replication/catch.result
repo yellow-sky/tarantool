@@ -16,15 +16,16 @@ errinj = box.error.injection
 box.schema.user.grant('guest', 'replication')
 ---
 ...
-test_run:cmd("create server replica with rpl_master=default, script='replication/replica_timeout.lua'")
+replica_set = require('fast_replica')
 ---
-- true
 ...
-test_run:cmd("start server replica with args='0.1'")
+replica_set.join(test_run, 'catch', 1, 'replica_timeout')
 ---
-- true
 ...
-test_run:cmd("switch replica")
+box.cfg({replication_timeout = 0.1})
+---
+...
+test_run:cmd("switch catch")
 ---
 - true
 ...
@@ -39,7 +40,7 @@ s = box.schema.space.create('test', {engine = engine});
 index = s:create_index('primary', {type = (engine == 'vinyl' and 'tree' or 'hash') })
 ---
 ...
-test_run:cmd("switch replica")
+test_run:cmd("switch catch")
 ---
 - true
 ...
@@ -53,7 +54,7 @@ test_run:cmd("switch default")
 ---
 - true
 ...
-test_run:cmd("stop server replica")
+test_run:cmd("stop server catch")
 ---
 - true
 ...
@@ -66,11 +67,11 @@ errinj.set('ERRINJ_RELAY_SEND_DELAY', true)
 for i = 1, 100 do s:insert{i, 'this is test message12345'} end
 ---
 ...
-test_run:cmd("start server replica with args='0.01'")
+test_run:cmd("start server catch with args='0.01'")
 ---
 - true
 ...
-test_run:cmd("switch replica")
+test_run:cmd("switch catch")
 ---
 - true
 ...
@@ -99,7 +100,7 @@ test_run:cmd("switch default")
 ---
 - true
 ...
-test_run:cmd("set variable r_uri to 'replica.listen'")
+test_run:cmd("set variable r_uri to 'catch.listen'")
 ---
 - true
 ...
@@ -116,17 +117,8 @@ errinj.set('ERRINJ_RELAY_SEND_DELAY', false)
 - ok
 ...
 -- Cleanup.
-test_run:cmd("stop server replica")
+test_run:drop_cluster({'catch'})
 ---
-- true
-...
-test_run:cmd("cleanup server replica")
----
-- true
-...
-test_run:cmd("delete server replica")
----
-- true
 ...
 test_run:cleanup_cluster()
 ---
