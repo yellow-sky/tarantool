@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(38)
+test:plan(39)
 
 --!./tcltestrunner.lua
 -- 2005 July 22
@@ -543,6 +543,23 @@ test:do_execsql_test(
     ]], {
     -- <analyze-6.1.4>
     "T1", "I1", "221 221 221 1", "0 0 0 99", "0 0 0 99"
+    -- </analyze-6.1.4>
+})
+
+-- This test show that index with 1000 identical index values and
+-- 25 distinct ones gives max number of samples.
+test:do_test(
+    "analyze-7.1",
+    function()
+        test:execsql("CREATE TABLE t7(i INTEGER PRIMARY KEY, a INTEGER);")
+        test:execsql("CREATE INDEX i7 ON t7(a);")
+        for i = 0, 999 do test:execsql("INSERT INTO t7 VALUES("..i..", 0) ") end
+        for i = 1, 24 do test:execsql("INSERT INTO t7 VALUES(".. i + 999 .. ", ".. i ..") ") end
+        test:execsql("ANALYZE;")
+        return test:execsql([[SELECT count(*) FROM "_sql_stat4" WHERE "idx" = 'I7';]])
+    end, {
+    -- <analyze-6.1.4>
+    24
     -- </analyze-6.1.4>
 })
 

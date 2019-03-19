@@ -180,6 +180,13 @@ struct Stat4Accum {
 	int iGet;		/* Index of current sample accessed by stat_get() */
 	Stat4Sample *a;		/* Array of mxSample Stat4Sample objects */
 	sql *db;		/* Database connection, for malloc() */
+	/*
+	 * Count of rows with index value identical current
+	 * index value.
+	 */
+	uint64_t identical_index_value;
+	/* Row number of previous periodic sample. */
+	uint64_t previous_psample;
 };
 
 /* Reclaim memory used by a Stat4Sample
@@ -307,6 +314,8 @@ statInit(sql_context * context, int argc, sql_value ** argv)
 	p->nKeyCol = nKeyCol;
 	p->current.anDLt = (tRowcnt *) & p[1];
 	p->current.anEq = &p->current.anDLt[nColUp];
+	p->identical_index_value = 0;
+	p->previous_psample = 0;
 
 	{
 		u8 *pSpace;	/* Allocated space not yet assigned */
@@ -477,7 +486,9 @@ sampleInsert(Stat4Accum * p, Stat4Sample * pNew, int nEqZero)
 	/* Insert the new sample */
 	pSample = &p->a[p->nSample];
 	sampleCopy(p, pSample, pNew);
-	p->nSample++;
+	if (pNew->isPSample == 0 || p->previous_psample == 0 ||
+	    p->nRow - p->previous_psample > p->identical_index_value)
+		p->nSample++;
 
 	/* Zero the first nEqZero entries in the anEq[] array. */
 	memset(pSample->anEq, 0, sizeof(tRowcnt) * nEqZero);
@@ -559,6 +570,10 @@ statPush(sql_context * context, int argc, sql_value ** argv)
 	assert(p->nCol > 0);
 	/* iChng == p->nCol means that the current and previous rows are identical */
 	assert(iChng <= p->nCol);
+	if (iChng == p->nCol)
+		++p->identical_index_value;
+	else
+		p->identical_index_value = 0;
 	if (p->nRow == 0) {
 		/* This is the first call to this function. Do initialization. */
 		for (i = 0; i < p->nCol + 1; i++)
@@ -592,6 +607,7 @@ statPush(sql_context * context, int argc, sql_value ** argv)
 			p->current.iCol = 0;
 			sampleInsert(p, &p->current, p->nCol);
 			p->current.isPSample = 0;
+			p->previous_psample = p->nRow;
 		}
 		/* Update the aBest[] array. */
 		for (i = 0; i < p->nCol; i++) {
