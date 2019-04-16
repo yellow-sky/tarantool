@@ -92,7 +92,7 @@ box.info.status -- running
 box.info.ro -- false
 
 -- Wait for remaining rows to arrive.
-test_run:wait_cond(function() return box.space.test:count() == 400 end, 10)
+test_run:wait_cond(function() return box.space.test:count() == 400 end)
 
 -- Stop replication.
 replication = box.cfg.replication
@@ -116,10 +116,10 @@ box.info.status -- orphan
 box.info.ro -- true
 
 -- Wait for remaining rows to arrive.
-test_run:wait_cond(function() return box.space.test:count() == 600 end, 10)
+test_run:wait_cond(function() return box.space.test:count() == 600 end)
 
 -- Make sure replica leaves oprhan state.
-test_run:wait_cond(function() return box.info.status ~= 'orphan' end, 10)
+test_run:wait_cond(function() return box.info.status ~= 'orphan' end)
 box.info.status -- running
 box.info.ro -- false
 
