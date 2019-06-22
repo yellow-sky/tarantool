@@ -14,6 +14,14 @@ yaml.cfg{
 
 local ffi = require('ffi') -- for iscdata
 
+-- Prevent using global string functions, because a user can
+-- clobber them.
+local string_format = string.format
+local string_gmatch = string.gmatch
+local string_match = string.match
+local string_rep = string.rep
+local string_sub = string.sub
+
 local function traceback(level)
     local trace = {}
     level = level or 3
@@ -27,8 +35,8 @@ local function traceback(level)
             what = info.what;
             name = info.name;
             namewhat = info.namewhat;
-            filename = info.source:sub(1, 1) == "@" and info.source:sub(2) or
-                'eval'
+            filename = string_sub(info.source, 1, 1) == "@" and
+                string_sub(info.source, 2) or 'eval'
         }
         table.insert(trace, frame)
         level = level + 1
@@ -37,20 +45,20 @@ local function traceback(level)
 end
 
 local function diag(test, fmt, ...)
-    io.write(string.rep(' ', 4 * test.level), "# ", string.format(fmt, ...),
+    io.write(string_rep(' ', 4 * test.level), "# ", string_format(fmt, ...),
         "\n")
 end
 
 local function ok(test, cond, message, extra)
     test.total = test.total + 1
-    io.write(string.rep(' ', 4 * test.level))
+    io.write(string_rep(' ', 4 * test.level))
     if cond then
-        io.write(string.format("ok - %s\n", message))
+        io.write(string_format("ok - %s\n", message))
         return true
     end
 
     test.failed = test.failed + 1
-    io.write(string.format("not ok - %s\n", message))
+    io.write(string_format("not ok - %s\n", message))
     extra = extra or {}
     if test.trace then
         local frame = debug.getinfo(3, "Sl")
@@ -62,8 +70,8 @@ local function ok(test, cond, message, extra)
         return false -- don't have extra information
     end
     -- print aligned yaml output
-    for line in yaml.encode(extra):gmatch("[^\n]+") do
-        io.write(string.rep(' ', 2 + 4 * test.level), line, "\n")
+    for line in string_gmatch(yaml.encode(extra), "[^\n]+") do
+        io.write(string_rep(' ', 2 + 4 * test.level), line, "\n")
     end
     return false
 end
@@ -133,14 +141,14 @@ local function like(test, got, pattern, message, extra)
     extra = extra or {}
     extra.got = got
     extra.expected = pattern
-    return ok(test, string.match(tostring(got), pattern) ~= nil, message, extra)
+    return ok(test, string_match(tostring(got), pattern) ~= nil, message, extra)
 end
 
 local function unlike(test, got, pattern, message, extra)
     extra = extra or {}
     extra.got = got
     extra.expected = pattern
-    return ok(test, string.match(tostring(got), pattern) == nil, message, extra)
+    return ok(test, string_match(tostring(got), pattern) == nil, message, extra)
 end
 
 local function is(test, got, expected, message, extra)
@@ -243,7 +251,7 @@ end
 
 local function plan(test, planned)
     test.planned = planned
-    io.write(string.rep(' ', 4 * test.level), string.format("1..%d\n", planned))
+    io.write(string_rep(' ', 4 * test.level), string_format("1..%d\n", planned))
 end
 
 local function check(test)
@@ -256,7 +264,7 @@ local function check(test)
             ok(test.parent, false, "bad plan", { planned = test.planned;
                 run = test.total})
         else
-            diag(test, string.format("bad plan: planned %d run %d",
+            diag(test, string_format("bad plan: planned %d run %d",
                 test.planned, test.total))
         end
     elseif test.failed > 0 then

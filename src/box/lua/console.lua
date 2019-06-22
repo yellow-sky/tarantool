@@ -10,6 +10,16 @@ local urilib = require('uri')
 local yaml = require('yaml')
 local net_box = require('net.box')
 
+-- Prevent using global string functions, because a user can
+-- clobber them.
+local string_find = string.find
+local string_format = string.format
+local string_gmatch = string.gmatch
+local string_match = string.match
+local string_rep = string.rep
+local string_sub = string.sub
+local loadstring = loadstring
+
 local YAML_TERM = '\n...\n'
 local PUSH_TAG_HANDLE = '!push!'
 
@@ -65,7 +75,7 @@ local function set_language(storage, value)
     end
     if value ~= 'lua' and value ~= 'sql' then
         local msg = 'Invalid language "%s", supported languages: lua and sql.'
-        return error(msg:format(value))
+        return error(string_format(msg, value))
     end
     storage.language = value
     return true
@@ -111,7 +121,7 @@ local operators = {
 
 local function preprocess(storage, line)
     local items = {}
-    for item in string.gmatch(line, '([^%s]+)') do
+    for item in string_gmatch(line, '([^%s]+)') do
         items[#items + 1] = item
     end
     if #items == 0 then
@@ -119,7 +129,7 @@ local function preprocess(storage, line)
     end
     if operators[items[1]] == nil then
         local msg = "Invalid command \\%s. Type \\help for help."
-        return format(false, msg:format(items[1]))
+        return format(false, string_format(msg, items[1]))
     end
     return operators[items[1]](storage, unpack(items))
 end
@@ -131,8 +141,8 @@ local function local_eval(storage, line)
     if not line then
         return nil
     end
-    if line:sub(1, 1) == '\\' then
-        return preprocess(storage, line:sub(2))
+    if string_sub(line, 1, 1) == '\\' then
+        return preprocess(storage, string_sub(line, 2))
     end
     if storage.language == 'sql' then
         return format(pcall(box.execute, line))
@@ -273,7 +283,7 @@ end
 
 local function local_check_lua(buf)
     local fn, err = loadstring(buf)
-    if fn ~= nil or not string.find(err, " near '<eof>'$") then
+    if fn ~= nil or not string_find(err, " near '<eof>'$") then
         -- valid Lua code or a syntax error not due to
         -- an incomplete input
         return true
@@ -302,7 +312,7 @@ local function local_read(self)
             return nil
         end
         buf = buf..line
-        if buf:sub(1, 1) == '\\' then
+        if string_sub(buf, 1, 1) == '\\' then
             break
         end
         if delim == "" then
@@ -315,12 +325,12 @@ local function local_read(self)
             else
                 break
             end
-        elseif #buf >= #delim and buf:sub(#buf - #delim + 1) == delim then
-            buf = buf:sub(0, #buf - #delim)
+        elseif #buf >= #delim and string_sub(buf, #buf - #delim + 1) == delim then
+            buf = string_sub(buf, 0, #buf - #delim)
             break
         end
         buf = buf.."\n"
-        prompt = string.rep(' ', #self.prompt)
+        prompt = string_rep(' ', #self.prompt)
     end
     internal.add_history(buf)
     if self.history_file then
@@ -361,7 +371,7 @@ local function client_read(self)
         return nil
     end
     -- remove trailing delimiter
-    return buf:sub(1, -#self.delimiter-2)
+    return string_sub(buf, 1, -#self.delimiter-2)
 end
 
 --
@@ -515,9 +525,9 @@ local function connect(uri, opts)
     -- override methods
     self.remote = remote
     self.eval = remote_eval
-    self.prompt = string.format("%s:%s", self.remote.host, self.remote.port)
+    self.prompt = string_format("%s:%s", self.remote.host, self.remote.port)
     self.completion = function (str, pos1, pos2)
-        local c = string.format(
+        local c = string_format(
             'return require("console").completion_handler(%q, %d, %d)',
             str, pos1, pos2)
         return yaml.decode(remote:eval(c))[1]
@@ -536,8 +546,8 @@ local function client_handler(client, peer)
         print = client_print;
         client = client;
     }, repl_mt)
-    local version = _TARANTOOL:match("([^-]+)-")
-    state:print(string.format("%-63s\n%-63s\n",
+    local version = string_match(_TARANTOOL, "([^-]+)-")
+    state:print(string_format("%-63s\n%-63s\n",
         "Tarantool ".. version.." (Lua console)",
         "type 'help' for interactive help"))
     repl(state)
@@ -563,7 +573,7 @@ local function listen(uri)
     local s, addr = socket.tcp_server(host, port, { handler = client_handler,
         name = 'console'})
     if not s then
-        error(string.format('failed to create server %s:%s: %s',
+        error(string_format('failed to create server %s:%s: %s',
             host, port, errno.strerror()))
     end
     return s

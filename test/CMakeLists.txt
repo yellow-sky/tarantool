@@ -57,3 +57,11 @@ endif()
 
 # Disable connector_c for 1.6
 #add_subdirectory(connector_c)
+
+# Build a library with isatty() that always returns 1.
+#
+# It is needed to test the local tarantool console. Consider an
+# example:
+#
+# echo 42 | LD_PRELOAD=test/libisatty.so ./src/tarantool
+add_library(isatty SHARED isatty.c)

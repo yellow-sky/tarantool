@@ -21,7 +21,7 @@ local EOL = "\n...\n"
 
 test = tap.test("console")
 
-test:plan(72)
+test:plan(73)
 
 -- Start console and connect to it
 local server = console.listen(CONSOLE_SOCKET)
@@ -291,6 +291,138 @@ _ = client:read(128)
 client:write("box.session.type();\n")
 test:is(yaml.decode(client:read(EOL))[1], "console", "session type")
 client:close()
+
+--
+-- gh-4154: console exits when 'string' module is clobbered
+--
+
+test:test('gh-4151: clobbered string functions', function(test)
+    local cases = {}
+    for name in pairs(_G.string) do
+        local saved_field = _G.string[name]
+        table.insert(cases, {
+            ('clobbered string.%s'):format(name),
+            clobber = function()
+                rawset(_G.string, name, nil)
+            end,
+            clobber_cmd = ('rawset(_G.string, "%s", nil)'):format(name),
+            resurrect = function()
+                rawset(_G.string, name, saved_field)
+            end,
+        })
+    end
+
+    local saved_string = _G.string
+    table.insert(cases, {
+        'clobbered string module',
+        clobber = function()
+            rawset(_G, 'string', nil)
+        end,
+        clobber_cmd = 'rawset(_G, "string", nil)',
+        resurrect = function()
+            rawset(_G, 'string', saved_string)
+        end,
+    })
+
+    local saved_loadstring = _G.loadstring
+    table.insert(cases, {
+        'clobbered loadstring',
+        clobber = function()
+            rawset(_G, 'loadstring', nil)
+        end,
+        clobber_cmd = 'rawset(_G, "loadstring", nil)',
+        resurrect = function()
+            rawset(_G, 'loadstring', saved_loadstring)
+        end,
+    })
+
+    test:plan(jit.os == 'OSX' and #cases or #cases * 2)
+
+    -- Verify remote console.
+    for _, case in ipairs(cases) do
+        local case_name = ('remote console: %s'):format(case[1])
+        -- We need to connect each time again, because an internal
+        -- console error leads to exit from an REPL loop for a
+        -- current client.
+        local client = socket.tcp_connect('unix/', CONSOLE_SOCKET)
+        client:read(128)
+
+        case.clobber()
+        client:write('"Hello, World!"\n')
+        local response = yaml.decode(client:read(EOL))
+        if response == nil then
+            test:fail(case_name)
+        else
+            test:is(response[1], 'Hello, World!', case_name)
+        end
+        client:close()
+        case.resurrect()
+    end
+
+    -- The following cases use LD_PRELOAD, so will not work under
+    -- Mac OS X.
+    if jit.os == 'OSX' then return end
+
+    -- Allow to run the test from the repository root without
+    -- test-run:
+    --
+    -- $ ./src/tarantool test/app-tap/console.test.lua
+    --
+    -- It works at least for in-source build.
+    local is_under_test_run = pcall(require, 'test_run')
+    local isatty_lib_dir = is_under_test_run and '../..' or 'test'
+    local isatty_lib_path = fio.pathjoin(isatty_lib_dir, 'libisatty.so')
+    local saved_path = os.getenv('PATH')
+    if not is_under_test_run then
+        os.setenv('PATH', './src:', saved_path)
+    end
+
+    -- Verify local console.
+    for _, case in ipairs(cases) do
+        local case_name = ('local console: %s'):format(case[1])
+
+        -- Commands to send to a tarantool console.
+        local tarantool_commands = {
+            ('_ = %s'):format(case.clobber_cmd),
+            '"Hello, World!"',
+            'os.exit()',
+        }
+        -- Format them for shell's printf command.
+        local tarantool_commands_str = table.concat(
+            tarantool_commands, '\\n')
+
+        -- Results expected from tarantool console.
+        local tarantool_results = {
+            '---\n...',
+            yaml.encode({'Hello, World!'}):rstrip('\n'),
+            '',
+        }
+        -- Format them to match actual output format.
+        local prompt = 'tarantool> '
+        local tarantool_results_str = table.concat({
+            prompt .. tarantool_commands[1] .. '\n' .. tarantool_results[1],
+            prompt .. tarantool_commands[2] .. '\n' .. tarantool_results[2],
+            prompt .. tarantool_commands[3] .. '\n' .. tarantool_results[3],
+        }, '\n\n')
+
+        -- Run tarantool, give our commands as a console input,
+        -- catch results.
+        local cmd = ([[printf '%s\n' | LD_PRELOAD='%s' tarantool ]] ..
+            [[2>/dev/null]]):format(tarantool_commands_str, isatty_lib_path)
+        local fh = io.popen(cmd, 'r')
+        -- Readline on CentOS 7 produces \e[?1034h escape
+        -- sequence before tarantool> prompt, remove it.
+        local result = fh:read('*a'):gsub('\x1b%[%?1034h', '')
+        fh:close()
+
+        test:is(result, tarantool_results_str, case_name)
+    end
+
+    -- Restore the original PATH.
+    if not is_under_test_run then
+        os.setenv('PATH', saved_path)
+    end
+end)
 
 server:close()
 
