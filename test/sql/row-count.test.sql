@@ -1,0 +1,77 @@
+-- Test cases concerning row count calculations.
+--
+CREATE TABLE t1 (s1 VARCHAR(10) PRIMARY KEY)
+SELECT ROW_COUNT()
+SELECT ROW_COUNT()
+CREATE TABLE t2 (s1 VARCHAR(10) PRIMARY KEY, s2 VARCHAR(10) REFERENCES t1 \
+    ON DELETE CASCADE)
+SELECT ROW_COUNT()
+CREATE TABLE t3 (i1 INT UNIQUE, i2 INT, i3 INT PRIMARY KEY)
+INSERT INTO t3 VALUES (0, 0, 0)
+SELECT ROW_COUNT()
+CREATE TRIGGER x AFTER DELETE ON t1 FOR EACH ROW \
+BEGIN                                            \
+    UPDATE t3 SET i1 = i1 + ROW_COUNT();         \
+END
+SELECT ROW_COUNT()
+INSERT INTO t1 VALUES ('a')
+SELECT ROW_COUNT()
+INSERT INTO t2 VALUES ('a','a')
+SELECT ROW_COUNT()
+INSERT INTO t1 VALUES ('b'), ('c'), ('d')
+SELECT ROW_COUNT()
+-- REPLACE is accounted for two operations: DELETE + INSERT.
+REPLACE INTO t2 VALUES('a', 'c')
+SELECT ROW_COUNT()
+DELETE FROM t1
+SELECT ROW_COUNT()
+INSERT INTO t3 VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3)
+TRUNCATE TABLE t3
+SELECT ROW_COUNT()
+INSERT INTO t3 VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3)
+UPDATE t3 SET i2 = 666
+SELECT ROW_COUNT()
+-- gh-3816: DELETE optimization returns valid number of
+-- deleted tuples.
+--
+DELETE FROM t3 WHERE 0 = 0
+SELECT ROW_COUNT()
+INSERT INTO t3 VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3)
+DELETE FROM t3
+SELECT ROW_COUNT()
+-- But triggers still should't be accounted.
+--
+CREATE TABLE tt1 (id INT PRIMARY KEY)
+CREATE TABLE tt2 (id INT PRIMARY KEY)
+CREATE TRIGGER tr1 AFTER DELETE ON tt1 FOR EACH ROW \
+BEGIN                                               \
+    DELETE FROM tt2;                                \
+END
+INSERT INTO tt1 VALUES (1), (2), (3)
+INSERT INTO tt2 VALUES (1), (2), (3)
+DELETE FROM tt1 WHERE id = 2
+SELECT ROW_COUNT()
+SELECT * FROM tt2
+DROP TABLE tt1
+DROP TABLE tt2
+
+-- All statements which are not accounted as DML should
+-- return 0 (zero) as a row count.
+--
+START TRANSACTION
+SELECT ROW_COUNT()
+COMMIT
+SELECT ROW_COUNT()
+COMMIT
+SELECT ROW_COUNT()
+-- ANALYZE
+SELECT ROW_COUNT()
+EXPLAIN QUERY PLAN INSERT INTO t1 VALUES ('b'), ('c'), ('d')
+SELECT ROW_COUNT()
+PRAGMA recursive_triggers
+
+-- Clean-up.
+--
+DROP TABLE t2
+DROP TABLE t3
+DROP TABLE t1

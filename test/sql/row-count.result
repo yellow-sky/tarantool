@@ -1,20 +1,10 @@
-test_run = require('test_run').new()
----
-...
-engine = test_run:get_cfg('engine')
----
-...
-box.execute('pragma sql_default_engine=\''..engine..'\'')
----
-- row_count: 0
-...
 -- Test cases concerning row count calculations.
 --
-box.execute("CREATE TABLE t1 (s1 VARCHAR(10) PRIMARY KEY);")
+CREATE TABLE t1 (s1 VARCHAR(10) PRIMARY KEY)
 ---
 - row_count: 1
 ...
-box.execute("SELECT ROW_COUNT();")
+SELECT ROW_COUNT()
 ---
 - metadata:
   - name: ROW_COUNT()
@@ -22,7 +12,7 @@ box.execute("SELECT ROW_COUNT();")
   rows:
   - [1]
 ...
-box.execute("SELECT ROW_COUNT();")
+SELECT ROW_COUNT()
 ---
 - metadata:
   - name: ROW_COUNT()
@@ -30,11 +20,12 @@ box.execute("SELECT ROW_COUNT();")
   rows:
   - [0]
 ...
-box.execute("CREATE TABLE t2 (s1 VARCHAR(10) PRIMARY KEY, s2 VARCHAR(10) REFERENCES t1 ON DELETE CASCADE);")
+CREATE TABLE t2 (s1 VARCHAR(10) PRIMARY KEY, s2 VARCHAR(10) REFERENCES t1 \
+    ON DELETE CASCADE)
 ---
 - row_count: 1
 ...
-box.execute("SELECT ROW_COUNT();")
+SELECT ROW_COUNT()
 ---
 - metadata:
   - name: ROW_COUNT()
@@ -42,15 +33,15 @@ box.execute("SELECT ROW_COUNT();")
   rows:
   - [1]
 ...
-box.execute("CREATE TABLE t3 (i1 INT UNIQUE, i2 INT, i3 INT PRIMARY KEY);")
+CREATE TABLE t3 (i1 INT UNIQUE, i2 INT, i3 INT PRIMARY KEY)
 ---
 - row_count: 1
 ...
-box.execute("INSERT INTO t3 VALUES (0, 0, 0);")
+INSERT INTO t3 VALUES (0, 0, 0)
 ---
 - row_count: 1
 ...
-box.execute("SELECT ROW_COUNT();")
+SELECT ROW_COUNT()
 ---
 - metadata:
   - name: ROW_COUNT()
@@ -58,11 +49,14 @@ box.execute("SELECT ROW_COUNT();")
   rows:
   - [1]
 ...
-box.execute("CREATE TRIGGER x AFTER DELETE ON t1 FOR EACH ROW BEGIN UPDATE t3 SET i1 = i1 + ROW_COUNT(); END;")
+CREATE TRIGGER x AFTER DELETE ON t1 FOR EACH ROW \
+BEGIN                                            \
+    UPDATE t3 SET i1 = i1 + ROW_COUNT();         \
+END
 ---
 - row_count: 1
 ...
-box.execute("SELECT ROW_COUNT();")
+SELECT ROW_COUNT()
 ---
 - metadata:
   - name: ROW_COUNT()
@@ -70,11 +64,11 @@ box.execute("SELECT ROW_COUNT();")
   rows:
   - [1]
 ...
-box.execute("INSERT INTO t1 VALUES ('a');")
+INSERT INTO t1 VALUES ('a')
 ---
 - row_count: 1
 ...
-box.execute("SELECT ROW_COUNT();")
+SELECT ROW_COUNT()
 ---
 - metadata:
   - name: ROW_COUNT()
@@ -82,11 +76,11 @@ box.execute("SELECT ROW_COUNT();")
   rows:
   - [1]
 ...
-box.execute("INSERT INTO t2 VALUES ('a','a');")
+INSERT INTO t2 VALUES ('a','a')
 ---
 - row_count: 1
 ...
-box.execute("SELECT ROW_COUNT();")
+SELECT ROW_COUNT()
 ---
 - metadata:
   - name: ROW_COUNT()
@@ -94,11 +88,11 @@ box.execute("SELECT ROW_COUNT();")
   rows:
   - [1]
 ...
-box.execute("INSERT INTO t1 VALUES ('b'), ('c'), ('d');")
+INSERT INTO t1 VALUES ('b'), ('c'), ('d')
 ---
 - row_count: 3
 ...
-box.execute("SELECT ROW_COUNT();")
+SELECT ROW_COUNT()
 ---
 - metadata:
   - name: ROW_COUNT()
@@ -107,11 +101,11 @@ box.execute("SELECT ROW_COUNT();")
   - [3]
 ...
 -- REPLACE is accounted for two operations: DELETE + INSERT.
-box.execute("REPLACE INTO t2 VALUES('a', 'c');")
+REPLACE INTO t2 VALUES('a', 'c')
 ---
 - row_count: 2
 ...
-box.execute("SELECT ROW_COUNT();")
+SELECT ROW_COUNT()
 ---
 - metadata:
   - name: ROW_COUNT()
@@ -119,11 +113,11 @@ box.execute("SELECT ROW_COUNT();")
   rows:
   - [2]
 ...
-box.execute("DELETE FROM t1;")
+DELETE FROM t1
 ---
 - row_count: 4
 ...
-box.execute("SELECT ROW_COUNT();")
+SELECT ROW_COUNT()
 ---
 - metadata:
   - name: ROW_COUNT()
@@ -131,15 +125,15 @@ box.execute("SELECT ROW_COUNT();")
   rows:
   - [4]
 ...
-box.execute("INSERT INTO t3 VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);")
+INSERT INTO t3 VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3)
 ---
 - row_count: 3
 ...
-box.execute("TRUNCATE TABLE t3;")
+TRUNCATE TABLE t3
 ---
 - row_count: 0
 ...
-box.execute("SELECT ROW_COUNT();")
+SELECT ROW_COUNT()
 ---
 - metadata:
   - name: ROW_COUNT()
@@ -147,15 +141,15 @@ box.execute("SELECT ROW_COUNT();")
   rows:
   - [0]
 ...
-box.execute("INSERT INTO t3 VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);")
+INSERT INTO t3 VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3)
 ---
 - row_count: 3
 ...
-box.execute("UPDATE t3 SET i2 = 666;")
+UPDATE t3 SET i2 = 666
 ---
 - row_count: 3
 ...
-box.execute("SELECT ROW_COUNT();")
+SELECT ROW_COUNT()
 ---
 - metadata:
   - name: ROW_COUNT()
@@ -166,11 +160,11 @@ box.execute("SELECT ROW_COUNT();")
 -- gh-3816: DELETE optimization returns valid number of
 -- deleted tuples.
 --
-box.execute("DELETE FROM t3 WHERE 0 = 0;")
+DELETE FROM t3 WHERE 0 = 0
 ---
 - row_count: 3
 ...
-box.execute("SELECT ROW_COUNT();")
+SELECT ROW_COUNT()
 ---
 - metadata:
   - name: ROW_COUNT()
@@ -178,15 +172,15 @@ box.execute("SELECT ROW_COUNT();")
   rows:
   - [3]
 ...
-box.execute("INSERT INTO t3 VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);")
+INSERT INTO t3 VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3)
 ---
 - row_count: 3
 ...
-box.execute("DELETE FROM t3")
+DELETE FROM t3
 ---
 - row_count: 3
 ...
-box.execute("SELECT ROW_COUNT();")
+SELECT ROW_COUNT()
 ---
 - metadata:
   - name: ROW_COUNT()
@@ -196,31 +190,34 @@ box.execute("SELECT ROW_COUNT();")
 ...
 -- But triggers still should't be accounted.
 --
-box.execute("CREATE TABLE tt1 (id INT PRIMARY KEY);")
+CREATE TABLE tt1 (id INT PRIMARY KEY)
 ---
 - row_count: 1
 ...
-box.execute("CREATE TABLE tt2 (id INT PRIMARY KEY);")
+CREATE TABLE tt2 (id INT PRIMARY KEY)
 ---
 - row_count: 1
 ...
-box.execute("CREATE TRIGGER tr1 AFTER DELETE ON tt1 FOR EACH ROW BEGIN DELETE FROM tt2; END;")
+CREATE TRIGGER tr1 AFTER DELETE ON tt1 FOR EACH ROW \
+BEGIN                                               \
+    DELETE FROM tt2;                                \
+END
 ---
 - row_count: 1
 ...
-box.execute("INSERT INTO tt1 VALUES (1), (2), (3);")
+INSERT INTO tt1 VALUES (1), (2), (3)
 ---
 - row_count: 3
 ...
-box.execute("INSERT INTO tt2 VALUES (1), (2), (3);")
+INSERT INTO tt2 VALUES (1), (2), (3)
 ---
 - row_count: 3
 ...
-box.execute("DELETE FROM tt1 WHERE id = 2;")
+DELETE FROM tt1 WHERE id = 2
 ---
 - row_count: 1
 ...
-box.execute("SELECT ROW_COUNT();")
+SELECT ROW_COUNT()
 ---
 - metadata:
   - name: ROW_COUNT()
@@ -228,29 +225,29 @@ box.execute("SELECT ROW_COUNT();")
   rows:
   - [1]
 ...
-box.execute("SELECT * FROM tt2;")
+SELECT * FROM tt2
 ---
 - metadata:
   - name: ID
     type: integer
   rows: []
 ...
-box.execute("DROP TABLE tt1;")
+DROP TABLE tt1
 ---
 - row_count: 1
 ...
-box.execute("DROP TABLE tt2;")
+DROP TABLE tt2
 ---
 - row_count: 1
 ...
 -- All statements which are not accounted as DML should
 -- return 0 (zero) as a row count.
 --
-box.execute("START TRANSACTION;")
+START TRANSACTION
 ---
 - row_count: 0
 ...
-box.execute("SELECT ROW_COUNT();")
+SELECT ROW_COUNT()
 ---
 - metadata:
   - name: ROW_COUNT()
@@ -258,11 +255,11 @@ box.execute("SELECT ROW_COUNT();")
   rows:
   - [0]
 ...
-box.execute("COMMIT;")
+COMMIT
 ---
 - row_count: 0
 ...
-box.execute("SELECT ROW_COUNT();")
+SELECT ROW_COUNT()
 ---
 - metadata:
   - name: ROW_COUNT()
@@ -270,11 +267,11 @@ box.execute("SELECT ROW_COUNT();")
   rows:
   - [0]
 ...
-box.execute("COMMIT;")
+COMMIT
 ---
 - error: 'Failed to execute SQL statement: cannot commit - no transaction is active'
 ...
-box.execute("SELECT ROW_COUNT();")
+SELECT ROW_COUNT()
 ---
 - metadata:
   - name: ROW_COUNT()
@@ -282,8 +279,8 @@ box.execute("SELECT ROW_COUNT();")
   rows:
   - [0]
 ...
--- box.execute("ANALYZE;")
-box.execute("SELECT ROW_COUNT();")
+-- ANALYZE
+SELECT ROW_COUNT()
 ---
 - metadata:
   - name: ROW_COUNT()
@@ -291,7 +288,7 @@ box.execute("SELECT ROW_COUNT();")
   rows:
   - [0]
 ...
-box.execute("EXPLAIN QUERY PLAN INSERT INTO t1 VALUES ('b'), ('c'), ('d');")
+EXPLAIN QUERY PLAN INSERT INTO t1 VALUES ('b'), ('c'), ('d')
 ---
 - metadata:
   - name: selectid
@@ -305,7 +302,7 @@ box.execute("EXPLAIN QUERY PLAN INSERT INTO t1 VALUES ('b'), ('c'), ('d');")
   rows:
   - [0, 0, 0, 'SCAN TABLE T2 (~262144 rows)']
 ...
-box.execute("SELECT ROW_COUNT();")
+SELECT ROW_COUNT()
 ---
 - metadata:
   - name: ROW_COUNT()
@@ -313,7 +310,7 @@ box.execute("SELECT ROW_COUNT();")
   rows:
   - [0]
 ...
-box.execute('PRAGMA recursive_triggers')
+PRAGMA recursive_triggers
 ---
 - metadata:
   - name: recursive_triggers
@@ -323,15 +320,15 @@ box.execute('PRAGMA recursive_triggers')
 ...
 -- Clean-up.
 --
-box.execute("DROP TABLE t2;")
+DROP TABLE t2
 ---
 - row_count: 1
 ...
-box.execute("DROP TABLE t3;")
+DROP TABLE t3
 ---
 - row_count: 1
 ...
-box.execute("DROP TABLE t1;")
+DROP TABLE t1
 ---
 - row_count: 1
 ...
