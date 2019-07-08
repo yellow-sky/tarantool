@@ -39,6 +39,39 @@
 #include "diag.h"
 #include "fiber_cond.h"
 
+/*
+ * The macro determines whether we need to workaround a libcurl
+ * bug with tracking open sockets. libcurl-7.30 and older are
+ * affected.
+ *
+ * We check for a libcurl version at compile time and enable the
+ * workaround when it is less then 7.30. Operating systems where a
+ * default libcurl version is less then that will receive a
+ * tarantool package with the workaround enabled, but everything
+ * will work even if a user will update libcurl to more recent
+ * binary compatible version (at the moment it is any above
+ * 7.16.0). The memory and performance overhead should be
+ * negligible for most cases.
+ *
+ * For operating systems where a default libcurl version is 7.31
+ * or newer we build packages w/o this workaround.
+ *
+ * The bug can lead to 'hanging' of a request when a server
+ * responds with HTTP 3xx code (depends on timings, but often
+ * occurs with machine-local requests). See
+ * curl_easy_sock_opt_cb() in src/curl.c for more information.
+ *
+ * The workaround uses CURLOPT_SOCKOPTFUNCTION, so we also check
+ * for the minimum version where it is supported: libcurl-7.16.0.
+ */
+#define LIBCURL_PROBLEMATIC_REDIRECTION (LIBCURL_VERSION_NUM >= 0x071000 && \
+					 LIBCURL_VERSION_NUM < 0x071f00)
+
+/* Forward declarations. */
+#if LIBCURL_PROBLEMATIC_REDIRECTION
+struct mh_curl_watchers_t;
+#endif
+
 /**
  * CURL Statistics
  */
@@ -60,6 +93,13 @@ struct curl_env {
 	struct ev_timer timer_event;
 	/** Statistics. */
 	struct curl_stat stat;
+#if LIBCURL_PROBLEMATIC_REDIRECTION
+	/**
+	 * Hash table of ev_io watchers with file descriptors as
+	 * keys.
+	 */
+	struct mh_curl_watchers_t *watchers;
+#endif
 };
 
 /**
