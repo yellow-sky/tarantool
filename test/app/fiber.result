@@ -1038,12 +1038,13 @@ st;
 ...
 e:unpack();
 ---
-- type: ClientError
-  code: 1
-  message: Illegal parameters, oh my
+- code: 1
   trace:
   - file: '[string "function err() box.error(box.error.ILLEGAL_PA..."]'
     line: 1
+  type: ClientError
+  message: Illegal parameters, oh my
+  refs: 2
 ...
 flag = false;
 ---

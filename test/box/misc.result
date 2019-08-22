@@ -125,12 +125,13 @@ e
 ...
 e:unpack()
 ---
-- type: ClientError
-  code: 1
-  message: Illegal parameters, bla bla
+- code: 1
   trace:
   - file: '[C]'
     line: 4294967295
+  type: ClientError
+  message: Illegal parameters, bla bla
+  refs: 4
 ...
 e.type
 ---

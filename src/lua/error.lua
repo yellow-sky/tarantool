@@ -23,6 +23,8 @@ struct error {
     char _file[DIAG_FILENAME_MAX];
     /* Error description. */
     char _errmsg[DIAG_ERRMSG_MAX];
+    /* A pointer to the reason error. */
+    struct error *_prev;
 };
 
 char *
@@ -86,10 +88,20 @@ local function error_trace(err)
     }
 end
 
+local function error_refs(err)
+    return err._refs
+end
+
+local function error_prev(err)
+    return box.error.prev(err)
+end
+
 local error_fields = {
     ["type"]        = error_type;
     ["message"]     = error_message;
     ["trace"]       = error_trace;
+    ["refs"]        = error_refs;
+    ["prev"]        = error_prev;
 }
 
 local function error_unpack(err)
