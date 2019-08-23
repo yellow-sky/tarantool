@@ -6,11 +6,8 @@ DOCKER_IMAGE?=packpack/packpack:debian-stretch
 TEST_RUN_EXTRA_PARAMS?=
 MAX_FILES?=65534
 
+# with empty TARGET env at the .travis.yml the 'package' target is default
 all: package
-
-package:
-	git clone https://github.com/packpack/packpack.git packpack
-	./packpack/packpack
 
 test: test_$(TRAVIS_OS_NAME)
 
@@ -176,34 +173,51 @@ test_freebsd_no_deps: build_freebsd
 
 test_freebsd: deps_freebsd test_freebsd_no_deps
 
-####################
-# Sources tarballs #
-####################
-
-source:
-	git clone https://github.com/packpack/packpack.git packpack
-	TARBALL_COMPRESSOR=gz packpack/packpack tarball
+###############################
+# Sources tarballs & packages #
+###############################
 
 # Push alpha and beta versions to <major>x bucket (say, 2x),
 # stable to <major>.<minor> bucket (say, 2.2).
-ifeq ($(TRAVIS_BRANCH),master)
 GIT_DESCRIBE=$(shell git describe HEAD)
 MAJOR_VERSION=$(word 1,$(subst ., ,$(GIT_DESCRIBE)))
 MINOR_VERSION=$(word 2,$(subst ., ,$(GIT_DESCRIBE)))
-else
-MAJOR_VERSION=$(word 1,$(subst ., ,$(TRAVIS_BRANCH)))
-MINOR_VERSION=$(word 2,$(subst ., ,$(TRAVIS_BRANCH)))
-endif
-BUCKET=tarantool.$(MAJOR_VERSION).$(MINOR_VERSION).src
+BUCKET=tarantool.$(MAJOR_VERSION).$(MINOR_VERSION)
 ifeq ($(MINOR_VERSION),0)
-BUCKET=tarantool.$(MAJOR_VERSION)x.src
+BUCKET=tarantool.$(MAJOR_VERSION)x
 endif
 ifeq ($(MINOR_VERSION),1)
-BUCKET=tarantool.$(MAJOR_VERSION)x.src
+BUCKET=tarantool.$(MAJOR_VERSION)x
 endif
 
-source_deploy:
+# install the AWS API
+aws_setup:
 	pip install awscli --user
+
+# prepare the packpack repository sources
+packpack_setup:
+	git clone https://github.com/packpack/packpack.git packpack
+
+# create the binaries packages at the ./build/ local path
+package: packpack_setup
+	./packpack/packpack
+
+# deploy the packages at the AWS S3 bucket named as:
+# tarantool.<major version>[x;.<minor version>]
+package_deploy: aws_setup
+	for packfile in `ls build/*.rpm build/*.deb build/*.dsc 2>/dev/null` ; do \
+		aws --endpoint-url "${AWS_S3_ENDPOINT_URL}" s3 \
+			cp $$packfile "s3://${BUCKET}/" \
+		--acl public-read ; \
+	done
+
+# create the sources tarball at the ./build/ local path
+source: packpack_setup
+	TARBALL_COMPRESSOR=gz packpack/packpack tarball
+
+# deploy the sources tarball at the AWS S3 bucket named as:
+# tarantool.<major version>[x;.<minor version>].src
+source_deploy: aws_setup
 	aws --endpoint-url "${AWS_S3_ENDPOINT_URL}" s3 \
-		cp build/*.tar.gz "s3://${BUCKET}/" \
+		cp build/*.tar.gz "s3://${BUCKET}.src/" \
 		--acl public-read
