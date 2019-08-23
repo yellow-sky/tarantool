@@ -98,13 +98,26 @@ vms_test_%:
 vms_shutdown:
 	VBoxManage controlvm ${VMS_NAME} poweroff
 
-# ########################
-# Build RPM / Deb packages
-# ########################
+# ########
+# Packages
+# ########
+
+GIT_DESCRIBE=$(shell git describe HEAD)
+MAJOR_VERSION=$(word 1,$(subst ., ,$(GIT_DESCRIBE)))
+MINOR_VERSION=$(word 2,$(subst ., ,$(GIT_DESCRIBE)))
+BUCKET="$(MAJOR_VERSION).$(MINOR_VERSION)"
 
 package: git_submodule_update
 	git clone https://github.com/packpack/packpack.git packpack
 	PACKPACK_EXTRA_DOCKER_RUN_PARAMS='--network=host' ./packpack/packpack
+
+deploy: package
+	echo ${GPG_SECRET_KEY} | base64 -d | gpg --batch --import || true
+	./tools/update_repo.sh -o=${OS} -d=${DIST} \
+		-b="${LIVE_REPO_S3_DIR}/${BUCKET}" build
+	git name-rev --name-only --tags --no-undefined HEAD 2>/dev/null && \
+		./tools/update_repo.sh -o=${OS} -d=${DIST} \
+			-b="${RELEASE_REPO_S3_DIR}/${BUCKET}" build
 
 # ############
 # Static build
