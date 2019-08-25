@@ -39,6 +39,7 @@ extern "C" {
 
 struct obuf;
 struct lua_State;
+struct sql_stmt;
 struct port;
 
 /**

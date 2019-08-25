@@ -119,6 +119,30 @@ port_init(void);
 void
 port_free(void);
 
+/**
+ * Port implementation that is used to store SQL responses and
+ * output them to obuf or Lua. This port implementation is
+ * inherited from the port_tuple structure. This allows us to use
+ * this structure in the port_tuple methods instead of port_tuple
+ * itself.
+ *
+ * The methods of port_tuple are called via explicit access to
+ * port_tuple_vtab just like C++ does with BaseClass::method, when
+ * it is called in a child method.
+ */
+struct port_sql {
+	/* port_tuple to inherit from. */
+	struct port_tuple port_tuple;
+	/* Prepared SQL statement. */
+	struct sql_stmt *stmt;
+};
+
+extern const struct port_vtab port_sql_vtab;
+
+/** Create instance of SQL port using given attributes. */
+void
+port_sql_create(struct port *port, struct sql_stmt *stmt);
+
 #if defined(__cplusplus)
 } /* extern "C" */
 #endif /* defined __cplusplus */

@@ -112,7 +112,7 @@ const struct port_vtab port_sql_vtab = {
 	/* .destroy = */ port_sql_destroy,
 };
 
-static void
+void
 port_sql_create(struct port *port, struct sql_stmt *stmt)
 {
 	port_tuple_create(port);
