@@ -251,7 +251,7 @@ void sqlVdbeSetNumCols(Vdbe *, int);
 int sqlVdbeSetColName(Vdbe *, int, int, const char *, void (*)(void *));
 void sqlVdbeCountChanges(Vdbe *);
 sql *sqlVdbeDb(Vdbe *);
-void sqlVdbeSetSql(Vdbe *, const char *z, int n, int);
+void sqlVdbeSetSql(Vdbe *, const char *z, int n);
 void sqlVdbeSwap(Vdbe *, Vdbe *);
 VdbeOp *sqlVdbeTakeOpArray(Vdbe *, int *, int *);
 sql_value *sqlVdbeGetBoundValue(Vdbe *, int, u8);
