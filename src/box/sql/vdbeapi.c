@@ -112,7 +112,7 @@ sql_clear_bindings(sql_stmt * pStmt)
 		sqlVdbeMemRelease(&p->aVar[i]);
 		p->aVar[i].flags = MEM_Null;
 	}
-	if (p->isPrepareV2 && p->expmask) {
+	if (p->expmask) {
 		p->expired = 1;
 	}
 	return rc;
@@ -454,7 +454,7 @@ sqlStep(Vdbe * p)
 	if (rc != SQL_ROW)
 		checkProfileCallback(db, p);
 
-	if (p->isPrepareV2 && rc != SQL_ROW && rc != SQL_DONE) {
+	if (rc != SQL_ROW && rc != SQL_DONE) {
 		/* If this statement was prepared using sql_prepare(), and an
 		 * error has occurred, then return an error.
 		 */
@@ -845,8 +845,7 @@ vdbeUnbind(Vdbe * p, int i)
 	 * as if there had been a schema change, on the first sql_step() call
 	 * following any change to the bindings of that parameter.
 	 */
-	if (p->isPrepareV2 &&
-	    ((i < 32 && p->expmask & ((u32) 1 << i))
+	if (((i < 32 && p->expmask & ((u32) 1 << i))
 	     || p->expmask == 0xffffffff)
 	    ) {
 		p->expired = 1;
