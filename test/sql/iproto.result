@@ -123,7 +123,23 @@ cn:execute(100)
 ...
 cn:execute('select 1', nil, {dry_run = true})
 ---
-- error: execute does not support options
+- error: Tuple/Key must be MsgPack array
+...
+cn:execute('select 1', nil, {1})
+---
+- error: 'Wrong SQL options passed to execute: dry_run must be boolean'
+...
+cn:execute('select 1', nil, {true, false})
+---
+- error: 'Wrong SQL options passed to execute: too many options are specified'
+...
+cn:execute('select 1', nil, {{dri_run = true}})
+---
+- error: 'Wrong SQL options passed to execute: unexpected option ''dri_run'''
+...
+cn:execute('select 1', nil, {{dry_run = 1}})
+---
+- error: 'Wrong SQL options passed to execute: ''dry_run'' must be boolean'
 ...
 -- Empty request.
 cn:execute('')

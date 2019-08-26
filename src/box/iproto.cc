@@ -1647,6 +1647,7 @@ tx_process_sql(struct cmsg *m)
 	int bind_count = 0;
 	const char *sql;
 	uint32_t len;
+	struct sql_opts opts = sql_opts_default;
 
 	tx_fiber_init(msg->connection->session, msg->header.sync);
 
@@ -1657,6 +1658,10 @@ tx_process_sql(struct cmsg *m)
 	if (msg->sql.bind != NULL) {
 		bind_count = sql_bind_list_decode(msg->sql.bind, &bind);
 		if (bind_count < 0)
+			goto error;
+	}
+	if (msg->sql.opts != NULL) {
+		if (sql_opts_decode(msg->sql.opts, &opts) != 0)
 			goto error;
 	}
 	sql = msg->sql.sql_text;

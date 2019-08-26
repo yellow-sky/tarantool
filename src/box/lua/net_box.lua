@@ -1185,9 +1185,6 @@ end
 
 function remote_methods:execute(query, parameters, sql_opts, netbox_opts)
     check_remote_arg(self, "execute")
-    if sql_opts ~= nil then
-        box.error(box.error.UNSUPPORTED, "execute", "options")
-    end
     return self:_request('execute', netbox_opts, nil, query, parameters or {},
                          sql_opts or {})
 end

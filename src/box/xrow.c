@@ -573,9 +573,11 @@ error:
 	uint32_t map_size = mp_decode_map(&data);
 	request->sql_text = NULL;
 	request->bind = NULL;
+	request->opts = NULL;
 	for (uint32_t i = 0; i < map_size; ++i) {
 		uint8_t key = *data;
-		if (key != IPROTO_SQL_BIND && key != IPROTO_SQL_TEXT) {
+		if (key != IPROTO_SQL_BIND && key != IPROTO_SQL_TEXT &&
+		    key != IPROTO_OPTIONS) {
 			mp_check(&data, end);   /* skip the key */
 			mp_check(&data, end);   /* skip the value */
 			continue;
@@ -583,10 +585,21 @@ error:
 		const char *value = ++data;     /* skip the key */
 		if (mp_check(&data, end) != 0)  /* check the value */
 			goto error;
-		if (key == IPROTO_SQL_BIND)
+		switch (key) {
+		case IPROTO_SQL_BIND:
 			request->bind = value;
-		else
+			break;
+		case IPROTO_SQL_TEXT:
 			request->sql_text = value;
+			break;
+		case IPROTO_OPTIONS:
+			request->opts = value;
+			break;
+		default:
+			xrow_on_decode_err(data, end, ER_INVALID_MSGPACK,
+					   "unknown IPROTO request key");
+			return -1;
+		}
 	}
 	if (request->sql_text == NULL) {
 		xrow_on_decode_err(row->body[0].iov_base, end, ER_MISSING_REQUEST_FIELD,

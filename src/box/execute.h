@@ -33,6 +33,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "opt_def.h"
 #include "port.h"
 
 #if defined(__cplusplus)
@@ -47,6 +48,20 @@ enum sql_info_key {
 };
 
 extern const char *sql_info_key_strs[];
+
+/** Options which can be passed to :execute. */
+struct sql_opts {
+	/**
+	 * In case of dry-run query is not really executed,
+	 * but only prepared (i.e. compiled into byte-code).
+	 * It allows to get query's metadata without execution
+	 * or update prepared statement cache.
+	 */
+	bool dry_run;
+};
+
+extern const struct sql_opts sql_opts_default;
+extern const struct opt_def sql_opts_reg[];
 
 struct region;
 struct sql_bind;
@@ -97,6 +112,13 @@ sql_prepare(const char *sql, int length, struct sql_stmt **stmt,
  */
 int
 sql_execute(struct sql_stmt *stmt, struct port *port, struct region *region);
+
+/**
+ * Parse SQL execution options encoded in @param data and fill in
+ * corresponding fields in output @param opts.
+ */
+int
+sql_opts_decode(const char *data, struct sql_opts *opts);
 
 #if defined(__cplusplus)
 } /* extern "C" { */

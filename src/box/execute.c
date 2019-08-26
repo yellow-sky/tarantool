@@ -51,6 +51,15 @@ const char *sql_info_key_strs[] = {
 	"autoincrement_ids",
 };
 
+const struct sql_opts sql_opts_default = {
+	/* .dry_run = */ false,
+};
+
+const struct opt_def sql_opts_reg[] = {
+	OPT_DEF("dry_run", OPT_BOOL, struct sql_opts, dry_run),
+	OPT_END,
+};
+
 static_assert(sizeof(struct port_sql) <= sizeof(struct port),
 	      "sizeof(struct port_sql) must be <= sizeof(struct port)");
 
@@ -394,6 +403,59 @@ port_sql_dump_msgpack(struct port *port, struct obuf *out)
 				      mp_encode_int(buf, id_entry->id);
 			}
 		}
+	}
+	return 0;
+}
+
+int
+sql_opts_decode(const char *data, struct sql_opts *opts)
+{
+	assert(data != NULL);
+	assert(opts != NULL);
+	if (mp_typeof(*data) != MP_ARRAY) {
+		diag_set(ClientError, ER_INVALID_MSGPACK,
+			 "SQL options are expected to be array");
+		return -1;
+	}
+	*opts = sql_opts_default;
+	uint32_t opts_count = mp_decode_array(&data);
+	if (opts_count == 0)
+		return 0;
+	if (mp_typeof(*data) == MP_MAP) {
+		/*
+		 * Options can be passed either as a map with
+		 * named arguments: ({'dry_run' = true}); or
+		 * as an array of unnamed values in the
+		 * documented order.
+		 *
+		 * FIXME: opts_decode() as a rule is used to
+		 * decode index or space opts. So to display
+		 * proper diag message number of field which is
+		 * supposed to hold options is passed as an
+		 * argument to opts_decode(). Here we don't really
+		 * have such field, so instead we can pass any
+		 * meaningful and large enough constant which
+		 * simply restricts length of error message
+		 * (see format string of error message).
+		 */
+		if (opts_decode(opts, sql_opts_reg, &data,
+				ER_WRONG_SQL_EXECUTE_OPTIONS, DIAG_ERRMSG_MAX,
+				&fiber()->gc) != 0)
+			return -1;
+		return 0;
+	}
+	if (opts_count > 1) {
+		diag_set(ClientError, ER_WRONG_SQL_EXECUTE_OPTIONS,
+			 DIAG_ERRMSG_MAX, "too many options are specified");
+		return -1;
+	}
+	for (uint32_t i = 0; i < opts_count; ++i) {
+		if (mp_typeof(*data) != MP_BOOL) {
+			diag_set(ClientError, ER_WRONG_SQL_EXECUTE_OPTIONS,
+				 DIAG_ERRMSG_MAX, "dry_run must be boolean");
+			return -1;
+		}
+		opts->dry_run = mp_decode_bool(&data);
 	}
 	return 0;
 }

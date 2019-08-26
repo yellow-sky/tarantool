@@ -39,6 +39,10 @@ cn:execute('select id as identifier from test where a = 5;')
 -- netbox API errors.
 cn:execute(100)
 cn:execute('select 1', nil, {dry_run = true})
+cn:execute('select 1', nil, {1})
+cn:execute('select 1', nil, {true, false})
+cn:execute('select 1', nil, {{dri_run = true}})
+cn:execute('select 1', nil, {{dry_run = 1}})
 
 -- Empty request.
 cn:execute('')

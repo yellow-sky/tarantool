@@ -527,6 +527,11 @@ struct sql_request {
 	const char *sql_text;
 	/** MessagePack array of parameters. */
 	const char *bind;
+	/**
+	 * Map containing SQL execution options.
+	 * See struct sql_options for details.
+	 */
+	const char *opts;
 };
 
 /**
