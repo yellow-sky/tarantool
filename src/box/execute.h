@@ -69,6 +69,18 @@ sql_prepare_and_execute(const char *sql, int len, const struct sql_bind *bind,
 			uint32_t bind_count, struct port *port,
 			struct region *region);
 
+/**
+ * Prepare (compile into VDBE byte-code) statement.
+ *
+ * @param sql UTF-8 encoded SQL statement.
+ * @param length Length of @param sql in bytes.
+ * @param[out] stmt A pointer to the prepared statement.
+ * @param[out] sql_tail End of parsed string.
+ */
+int
+sql_prepare(const char *sql, int length, struct sql_stmt **stmt,
+	    const char **sql_tail);
+
 #if defined(__cplusplus)
 } /* extern "C" { */
 #endif
