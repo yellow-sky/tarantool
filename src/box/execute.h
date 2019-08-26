@@ -81,6 +81,23 @@ int
 sql_prepare(const char *sql, int length, struct sql_stmt **stmt,
 	    const char **sql_tail);
 
+/**
+ * Execute prepared SQL statement.
+ *
+ * This function uses region to allocate memory for temporary
+ * objects. After this function, region will be in the same state
+ * in which it was before this function.
+ *
+ * @param stmt Prepared statement.
+ * @param port Port to store SQL response.
+ * @param region Region to allocate temporary objects.
+ *
+ * @retval  0 Success.
+ * @retval -1 Error.
+ */
+int
+sql_execute(struct sql_stmt *stmt, struct port *port, struct region *region);
+
 #if defined(__cplusplus)
 } /* extern "C" { */
 #endif

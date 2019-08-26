@@ -1661,9 +1661,20 @@ tx_process_sql(struct cmsg *m)
 	}
 	sql = msg->sql.sql_text;
 	sql = mp_decode_str(&sql, &len);
-	if (sql_prepare_and_execute(sql, len, bind, bind_count, &port,
-				    &fiber()->gc) != 0)
+	/* Compile, bind and execute SQL statement. */
+	struct sql_stmt *stmt;
+	if (sql_prepare(sql, len, &stmt, NULL) != 0)
 		goto error;
+	assert(stmt != NULL);
+	port_sql_create(&port, stmt);
+	if (sql_bind(stmt, bind, bind_count) != 0) {
+		port_destroy(&port);
+		goto error;
+	}
+	if (sql_execute(stmt, &port, &fiber()->gc) != 0) {
+		port_destroy(&port);
+		goto error;
+	}
 	/*
 	 * Take an obuf only after execute(). Else the buffer can
 	 * become out of date during yield.
