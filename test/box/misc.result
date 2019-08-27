@@ -62,6 +62,7 @@ t
   - cfg
   - commit
   - ctl
+  - dry_run
   - error
   - execute
   - feedback

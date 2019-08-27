@@ -247,6 +247,21 @@ res.metadata
 cn:execute("SELECT LEAST(1, 2, 3);")
 cn:execute("SELECT GREATEST(1, 2, 3);")
 
+-- gh-3292: introduce dry-run SQL query execution.
+-- Dry-run returns only meta-information, i.e. there's no
+-- execution of query, only its compilation.
+--
+cn:execute("SELECT * FROM t1;", {}, {true})
+cn:execute("SELECT * FROM t1;", {}, {{dry_run = true}})
+box.dry_run("SELECT * FROM t1;")
+cn:execute("SELECT 1, 'abc', 0.123, x'00', ?;", {1}, {{dry_run = true}})
+box.dry_run("SELECT 1, 'abc', 0.123, x'00', ?;")
+cn:execute("DELETE FROM t1;")
+cn:execute("INSERT INTO t1 VALUES (6);", {}, {{dry_run = true}})
+cn:execute("SELECT * FROM t1;")
+cn:execute("CREATE TABLE new_t (id INT PRIMARY KEY);", {}, {{dry_run = true}})
+assert(box.space.NEW_T == nil)
+
 cn:close()
 box.execute('DROP TABLE t1')
 

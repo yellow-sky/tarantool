@@ -738,12 +738,13 @@ netbox_decode_execute(struct lua_State *L)
 	}
 	if (info_index == 0) {
 		assert(meta_index != 0);
-		assert(rows_index != 0);
 		lua_createtable(L, 0, 2);
 		lua_pushvalue(L, meta_index - 1);
 		lua_setfield(L, -2, "metadata");
-		lua_pushvalue(L, rows_index - 1);
-		lua_setfield(L, -2, "rows");
+		if (rows_index != 0) {
+			lua_pushvalue(L, rows_index - 1);
+			lua_setfield(L, -2, "rows");
+		}
 	} else {
 		assert(meta_index == 0);
 		assert(rows_index == 0);

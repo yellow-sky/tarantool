@@ -1671,14 +1671,16 @@ tx_process_sql(struct cmsg *m)
 	if (sql_prepare(sql, len, &stmt, NULL) != 0)
 		goto error;
 	assert(stmt != NULL);
-	port_sql_create(&port, stmt);
-	if (sql_bind(stmt, bind, bind_count) != 0) {
-		port_destroy(&port);
-		goto error;
-	}
-	if (sql_execute(stmt, &port, &fiber()->gc) != 0) {
-		port_destroy(&port);
-		goto error;
+	port_sql_create(&port, stmt, opts.dry_run);
+	if (!opts.dry_run) {
+		if (sql_bind(stmt, bind, bind_count) != 0) {
+			port_destroy(&port);
+			goto error;
+		}
+		if (sql_execute(stmt, &port, &fiber()->gc) != 0) {
+			port_destroy(&port);
+			goto error;
+		}
 	}
 	/*
 	 * Take an obuf only after execute(). Else the buffer can

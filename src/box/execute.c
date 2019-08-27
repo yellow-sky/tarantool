@@ -82,6 +82,14 @@ static_assert(sizeof(struct port_sql) <= sizeof(struct port),
  * | }                                            |
  * +-------------------- OR ----------------------+
  * | IPROTO_BODY: {                               |
+ * |     IPROTO_METADATA: [                       |
+ * |         {IPROTO_FIELD_NAME: column name1},   |
+ * |         {IPROTO_FIELD_NAME: column name2},   |
+ * |         ...                                  |
+ * |     ],                                       |
+ * | }                                            |
+ * +-------------------- OR ----------------------+
+ * | IPROTO_BODY: {                               |
  * |     IPROTO_SQL_INFO: {                       |
  * |         SQL_INFO_ROW_COUNT: number           |
  * |         SQL_INFO_AUTOINCREMENT_IDS: [        |
@@ -122,10 +130,11 @@ const struct port_vtab port_sql_vtab = {
 };
 
 void
-port_sql_create(struct port *port, struct sql_stmt *stmt)
+port_sql_create(struct port *port, struct sql_stmt *stmt, bool meta_only)
 {
 	port_tuple_create(port);
 	((struct port_sql *)port)->stmt = stmt;
+	((struct port_sql *)port)->meta_only = meta_only;
 	port->vtab = &port_sql_vtab;
 }
 
@@ -332,10 +341,11 @@ port_sql_dump_msgpack(struct port *port, struct obuf *out)
 {
 	assert(port->vtab == &port_sql_vtab);
 	sql *db = sql_get();
-	struct sql_stmt *stmt = ((struct port_sql *)port)->stmt;
+	struct port_sql *port_sql = (struct port_sql *) port;
+	struct sql_stmt *stmt = port_sql->stmt;
 	int column_count = sql_column_count(stmt);
 	if (column_count > 0) {
-		int keys = 2;
+		int keys = port_sql->meta_only ? 1 : 2;
 		int size = mp_sizeof_map(keys);
 		char *pos = (char *) obuf_alloc(out, size);
 		if (pos == NULL) {
@@ -345,6 +355,8 @@ port_sql_dump_msgpack(struct port *port, struct obuf *out)
 		pos = mp_encode_map(pos, keys);
 		if (sql_get_metadata(stmt, out, column_count) != 0)
 			return -1;
+		if (port_sql->meta_only)
+			return 0;
 		size = mp_sizeof_uint(IPROTO_DATA);
 		pos = (char *) obuf_alloc(out, size);
 		if (pos == NULL) {
@@ -491,7 +503,7 @@ sql_prepare_and_execute(const char *sql, int len, const struct sql_bind *bind,
 	if (sql_prepare(sql, len, &stmt, NULL) != 0)
 		return -1;
 	assert(stmt != NULL);
-	port_sql_create(port, stmt);
+	port_sql_create(port, stmt, false);
 	if (sql_bind(stmt, bind, bind_count) == 0 &&
 	    sql_execute(stmt, port, region) == 0)
 		return 0;

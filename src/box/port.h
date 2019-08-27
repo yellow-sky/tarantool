@@ -135,13 +135,15 @@ struct port_sql {
 	struct port_tuple port_tuple;
 	/* Prepared SQL statement. */
 	struct sql_stmt *stmt;
+	/** If true then dump only query's meta-info. */
+	bool meta_only;
 };
 
 extern const struct port_vtab port_sql_vtab;
 
 /** Create instance of SQL port using given attributes. */
 void
-port_sql_create(struct port *port, struct sql_stmt *stmt);
+port_sql_create(struct port *port, struct sql_stmt *stmt, bool meta_only);
 
 #if defined(__cplusplus)
 } /* extern "C" */

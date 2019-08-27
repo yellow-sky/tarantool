@@ -45,12 +45,15 @@ port_sql_dump_lua(struct port *port, struct lua_State *L, bool is_flat)
 	assert(is_flat == false);
 	assert(port->vtab == &port_sql_vtab);
 	struct sql *db = sql_get();
-	struct sql_stmt *stmt = ((struct port_sql *)port)->stmt;
+	struct port_sql *port_sql = (struct port_sql *) port;
+	struct sql_stmt *stmt = port_sql->stmt;
 	int column_count = sql_column_count(stmt);
 	if (column_count > 0) {
-		lua_createtable(L, 0, 2);
+		lua_createtable(L, 0, port_sql->meta_only ? 1 : 2);
 		lua_sql_get_metadata(stmt, L, column_count);
 		lua_setfield(L, -2, "metadata");
+		if (port_sql->meta_only)
+			return;
 		port_tuple_vtab.dump_lua(port, L, false);
 		lua_setfield(L, -2, "rows");
 	} else {
@@ -266,6 +269,31 @@ lbox_execute(struct lua_State *L)
 	return 1;
 }
 
+/**
+ * In contrast to ordinary "execute" method, this one only
+ * prepares (compiles) statement but not executes. It allows
+ * to get query's meta-information.
+ */
+static int
+lbox_dry_run(struct lua_State *L)
+{
+	size_t length;
+	struct port port;
+	int top = lua_gettop(L);
+
+	if ((top != 1) || ! lua_isstring(L, 1))
+		return luaL_error(L, "Usage: box.dry_run(sqlstring)");
+
+	const char *sql = lua_tolstring(L, 1, &length);
+	struct sql_stmt *stmt;
+	if (sql_prepare(sql, length, &stmt, NULL) != 0)
+		return luaT_push_nil_and_error(L);
+	port_sql_create(&port, stmt, true);
+	port_dump_lua(&port, L, false);
+	port_destroy(&port);
+	return 1;
+}
+
 void
 box_lua_execute_init(struct lua_State *L)
 {
@@ -273,5 +301,10 @@ box_lua_execute_init(struct lua_State *L)
 	lua_pushstring(L, "execute");
 	lua_pushcfunction(L, lbox_execute);
 	lua_settable(L, -3);
+
+	lua_pushstring(L, "dry_run");
+	lua_pushcfunction(L, lbox_dry_run);
+	lua_settable(L, -3);
+
 	lua_pop(L, 1);
 }
