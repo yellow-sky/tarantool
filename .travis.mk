@@ -182,13 +182,15 @@ test_freebsd: deps_freebsd test_freebsd_no_deps
 GIT_DESCRIBE=$(shell git describe HEAD)
 MAJOR_VERSION=$(word 1,$(subst ., ,$(GIT_DESCRIBE)))
 MINOR_VERSION=$(word 2,$(subst ., ,$(GIT_DESCRIBE)))
-BUCKET=tarantool.$(MAJOR_VERSION).$(MINOR_VERSION)
+BUCKET=$(MAJOR_VERSION).$(MINOR_VERSION)
 ifeq ($(MINOR_VERSION),0)
-BUCKET=tarantool.$(MAJOR_VERSION)x
+BUCKET=$(MAJOR_VERSION)x
 endif
 ifeq ($(MINOR_VERSION),1)
-BUCKET=tarantool.$(MAJOR_VERSION)x
+BUCKET=$(MAJOR_VERSION)x
 endif
+REPOBASE=tarantool_repo/${BUCKET}/${OS}
+REPOPATH=${REPOBASE}/pool/${DIST}/main/t/tarantool
 
 # install the AWS API
 aws_setup:
@@ -197,19 +199,34 @@ aws_setup:
 # prepare the packpack repository sources
 packpack_setup:
 	git clone https://github.com/packpack/packpack.git packpack
+	sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6B05F25D762E3157
+	sudo apt-get update || true
+	sudo apt-get install -y -f reprepro tree
 
 # create the binaries packages at the ./build/ local path
+.PHONY: package
 package: packpack_setup
 	./packpack/packpack
+	mkdir -p ${REPOPATH}
+	mkdir -p ${REPOBASE}/conf
+	for packfile in `ls build/*.rpm build/*.deb build/*.dsc build/*.tar.*z 2>/dev/null` ; \
+		do cp $$packfile ${REPOPATH}/. ; done
+	printf '%s\n' "Origin: tarantool.org" \
+	    "Label: tarantool.org" \
+	    "Codename: ${OS}" \
+	    "Architectures: amd64 source" \
+	    "Components: main" \
+	    "Description: tarantool repo" >${REPOBASE}/conf/distributions
+	reprepro -b ${REPOBASE} includedeb ${OS} ${REPOPATH}/tarantool*.deb
+	reprepro -b ${REPOBASE} includedsc ${OS} ${REPOPATH}/tarantool*.dsc
+	tree tarantool_repo
 
 # deploy the packages at the AWS S3 bucket named as:
 # tarantool.<major version>[x;.<minor version>]
-package_deploy: aws_setup
-	for packfile in `ls build/*.rpm build/*.deb build/*.dsc 2>/dev/null` ; do \
-		aws --endpoint-url "${AWS_S3_ENDPOINT_URL}" s3 \
-			cp $$packfile "s3://${BUCKET}/" \
-		--acl public-read ; \
-	done
+#package_deploy: aws_setup
+#	aws --endpoint-url "${AWS_S3_ENDPOINT_URL}" s3 \
+#		cp --recursive ${REPOBASE} "s3://tarantool_repo/${BUCKET}/" \
+#	--acl public-read ; \
 
 # create the sources tarball at the ./build/ local path
 source: packpack_setup
@@ -219,5 +236,5 @@ source: packpack_setup
 # tarantool.<major version>[x;.<minor version>].src
 source_deploy: aws_setup
 	aws --endpoint-url "${AWS_S3_ENDPOINT_URL}" s3 \
-		cp build/*.tar.gz "s3://${BUCKET}.src/" \
+		cp build/*.tar.gz "s3://tarantool.${BUCKET}.src/" \
 		--acl public-read
