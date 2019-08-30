@@ -41,6 +41,7 @@
 #include "tt_static.h"
 #include "error.h"
 #include "vclock.h"
+#include "mpstream.h"
 #include "scramble.h"
 #include "iproto_constants.h"
 #include "mpstream.h"
@@ -482,12 +483,34 @@ mpstream_error_handler(void *error_ctx)
 	*(bool *)error_ctx = true;
 }
 
+#define IPROTO_ERROR_V2_CODE   "code"
+#define IPROTO_ERROR_V2_REASON "reason"
+#define IPROTO_ERROR_V2_FILE   "file"
+#define IPROTO_ERROR_V2_LINE   "line"
+
 static void
 mpstream_iproto_encode_error(struct mpstream *stream, const struct error *error)
 {
 	mpstream_encode_map(stream, 2);
 	mpstream_encode_uint(stream, IPROTO_ERROR);
 	mpstream_encode_str(stream, error->errmsg);
+
+	mpstream_encode_uint(stream, IPROTO_ERROR_V2);
+	uint32_t stack_sz = 0;
+	for (const struct error *it = error; it != NULL; it = it->prev)
+		stack_sz++;
+	mpstream_encode_array(stream, stack_sz);
+	for (const struct error *it = error; it != NULL; it = it->prev) {
+		mpstream_encode_map(stream, 4);
+		mpstream_encode_str(stream, IPROTO_ERROR_V2_CODE);
+		mpstream_encode_uint(stream, box_error_code(it));
+		mpstream_encode_str(stream, IPROTO_ERROR_V2_REASON);
+		mpstream_encode_str(stream, it->errmsg);
+		mpstream_encode_str(stream, IPROTO_ERROR_V2_FILE);
+		mpstream_encode_str(stream, it->file);
+		mpstream_encode_str(stream, IPROTO_ERROR_V2_LINE);
+		mpstream_encode_uint(stream, it->line);
+	}
 }
 
 int
@@ -1059,44 +1082,117 @@ xrow_encode_auth(struct xrow_header *packet, const char *salt, size_t salt_len,
 	return 0;
 }
 
+static int
+iproto_decode_error(const char **pos, uint32_t errcode, enum iproto_key *key)
+{
+	char reason[DIAG_ERRMSG_MAX] = {0};
+	char filename[DIAG_FILENAME_MAX] = {0};
+
+	*key = (enum iproto_key)mp_decode_uint(pos);
+	if (*key == IPROTO_ERROR && mp_typeof(**pos) == MP_STR) {
+		/* Legacy IPROTO_ERROR error. */
+		uint32_t len;
+		const char *str = mp_decode_str(pos, &len);
+		snprintf(reason, sizeof(reason), "%.*s", len, str);
+		box_error_set(__FILE__, __LINE__, errcode, NULL, reason);
+		return 0;
+	} else if (*key != IPROTO_ERROR_V2 || mp_typeof(**pos) != MP_ARRAY) {
+		/* Corrupted frame. */
+		return -1;
+	}
+
+	assert(*key == IPROTO_ERROR_V2 && mp_typeof(**pos) == MP_ARRAY);
+	struct error *prev = NULL;
+	uint32_t stack_sz = mp_decode_array(pos);
+	for (uint32_t stack_idx = 0; stack_idx < stack_sz; stack_idx++) {
+		filename[0] = reason[0] = 0;
+		uint32_t code = errcode, line = 0;
+		if (mp_typeof(**pos) != MP_MAP)
+			return -1;
+		uint32_t map_sz = mp_decode_map(pos);
+		for (uint32_t key_idx = 0; key_idx < map_sz; key_idx++) {
+			uint32_t len;
+			const char *str = mp_decode_str(pos, &len);
+			if (len == strlen(IPROTO_ERROR_V2_CODE) &&
+			    memcmp(str, IPROTO_ERROR_V2_CODE, len) == 0) {
+				if (mp_typeof(**pos) != MP_UINT)
+					return -1;
+				code = mp_decode_uint(pos);
+			} else if (len == strlen(IPROTO_ERROR_V2_REASON) &&
+				memcmp(str, IPROTO_ERROR_V2_REASON, len) == 0) {
+				if (mp_typeof(**pos) != MP_STR)
+					return -1;
+				uint32_t len;
+				const char *str = mp_decode_str(pos, &len);
+				snprintf(reason, sizeof(reason), "%.*s",
+					 len, str);
+			} else if (len == strlen(IPROTO_ERROR_V2_FILE) &&
+				   memcmp(str, IPROTO_ERROR_V2_FILE,
+					  len) == 0) {
+				if (mp_typeof(**pos) != MP_STR)
+					return -1;
+				uint32_t len;
+				const char *str = mp_decode_str(pos, &len);
+				snprintf(filename, sizeof(filename), "%.*s",
+					 len, str);
+			} else if (len == strlen(IPROTO_ERROR_V2_LINE) &&
+				   memcmp(str, IPROTO_ERROR_V2_LINE,
+					  len) == 0) {
+				if (mp_typeof(**pos) != MP_UINT)
+					return -1;
+				line = mp_decode_uint(pos);
+			} else {
+				return -1;
+			}
+		}
+		box_error_set(filename[0] == 0 ? __FILE__ : filename,
+			      line == 0 ? __LINE__ : line, code, prev, reason);
+		prev = diag_last_error(diag_get());
+	}
+	return 0;
+}
+
 void
 xrow_decode_error(struct xrow_header *row)
 {
 	uint32_t code = row->type & (IPROTO_TYPE_ERROR - 1);
-
-	char error[DIAG_ERRMSG_MAX] = { 0 };
-	const char *pos;
-	uint32_t map_size;
-
 	if (row->bodycnt == 0)
 		goto error;
-	pos = (char *) row->body[0].iov_base;
+	const char *pos = (char *) row->body[0].iov_base;
 	if (mp_check(&pos, pos + row->body[0].iov_len))
 		goto error;
 
 	pos = (char *) row->body[0].iov_base;
 	if (mp_typeof(*pos) != MP_MAP)
 		goto error;
-	map_size = mp_decode_map(&pos);
+	bool is_error_set = false;
+	uint32_t map_size = mp_decode_map(&pos);
 	for (uint32_t i = 0; i < map_size; i++) {
 		if (mp_typeof(*pos) != MP_UINT) {
 			mp_next(&pos); /* key */
 			mp_next(&pos); /* value */
 			continue;
 		}
-		uint8_t key = mp_decode_uint(&pos);
-		if (key != IPROTO_ERROR || mp_typeof(*pos) != MP_STR) {
+		enum iproto_key key;
+		if (iproto_decode_error(&pos, code, &key) != 0) {
 			mp_next(&pos); /* value */
 			continue;
 		}
-
-		uint32_t len;
-		const char *str = mp_decode_str(&pos, &len);
-		snprintf(error, sizeof(error), "%.*s", len, str);
+		/*
+		 * New tnt instances send both legacy
+		 * IPROTO_ERROR and IPROTO_ERROR_V2 error
+		 * messages. Prefer an error message is
+		 * constructed with IPROTO_ERROR_V2 payload.
+		 */
+		is_error_set = true;
+		if (key == IPROTO_ERROR_V2)
+			return;
+		assert(key == IPROTO_ERROR);
 	}
-
+	if (is_error_set)
+		return;
 error:
-	box_error_set(__FILE__, __LINE__, code, NULL, error);
+	box_error_set(__FILE__, __LINE__, code, NULL, NULL);
 }
 
 void

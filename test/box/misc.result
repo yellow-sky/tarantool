@@ -1401,3 +1401,85 @@ collectgarbage()
 ---
 - 0
 ...
+-- test stacked diagnostics with netbox
+test_run:cmd("push filter \"file: .*\" to \"file: <filename>\"")
+---
+- true
+...
+test_run:cmd("setopt delimiter ';'")
+---
+- true
+...
+lua_code = [[function(tuple)
+                local json = require('json')
+                return json.encode(tuple)
+             end]]
+test_run:cmd("setopt delimiter ''");
+---
+...
+box.schema.func.create('runtimeerror', {body = lua_code, is_deterministic = true, is_sandboxed = true})
+---
+...
+s = box.schema.space.create('withdata')
+---
+...
+pk = s:create_index('pk')
+---
+...
+idx = s:create_index('idx', {func = box.func.runtimeerror.id, parts = {{1, 'string'}}})
+---
+...
+box.schema.user.grant('guest', 'read,write,execute', 'universe')
+---
+...
+net = require('net.box')
+---
+...
+c = net.connect(os.getenv("LISTEN"))
+---
+...
+c.space.withdata:insert({1})
+---
+- error: 'Failed to build a key for functional index ''idx'' of space ''withdata'':
+    can''t evaluate function'
+...
+e = box.error.last()
+---
+...
+e:unpack()
+---
+- code: 198
+  trace:
+  - file: <filename>
+    line: 68
+  type: ClientError
+  prev: '[string "return function(tuple)                 local ..."]:1: attempt to
+    call global ''require'' (a nil value)'
+  message: 'Failed to build a key for functional index ''idx'' of space ''withdata'':
+    can''t evaluate function'
+  refs: 3
+...
+e.prev:unpack()
+---
+- code: 32
+  trace:
+  - file: <filename>
+    line: 1010
+  type: ClientError
+  message: '[string "return function(tuple)                 local ..."]:1: attempt
+    to call global ''require'' (a nil value)'
+  refs: 4
+...
+box.schema.user.revoke('guest', 'read,write,execute', 'universe')
+---
+...
+s:drop()
+---
+...
+box.func.runtimeerror:drop()
+---
+...
+test_run:cmd("clear filter")
+---
+- true
+...

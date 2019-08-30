@@ -120,6 +120,7 @@ enum iproto_key {
 	 * }
 	 */
 	IPROTO_SQL_INFO = 0x42,
+	IPROTO_ERROR_V2 = 0x43,
 	IPROTO_KEY_MAX
 };
 

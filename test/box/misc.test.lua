@@ -405,3 +405,30 @@ collectgarbage()
 e1.refs == 1
 e1 = nil
 collectgarbage()
+
+-- test stacked diagnostics with netbox
+test_run:cmd("push filter \"file: .*\" to \"file: <filename>\"")
+test_run:cmd("setopt delimiter ';'")
+lua_code = [[function(tuple)
+                local json = require('json')
+                return json.encode(tuple)
+             end]]
+test_run:cmd("setopt delimiter ''");
+box.schema.func.create('runtimeerror', {body = lua_code, is_deterministic = true, is_sandboxed = true})
+s = box.schema.space.create('withdata')
+pk = s:create_index('pk')
+idx = s:create_index('idx', {func = box.func.runtimeerror.id, parts = {{1, 'string'}}})
+
+box.schema.user.grant('guest', 'read,write,execute', 'universe')
+net = require('net.box')
+c = net.connect(os.getenv("LISTEN"))
+c.space.withdata:insert({1})
+
+e = box.error.last()
+e:unpack()
+e.prev:unpack()
+
+box.schema.user.revoke('guest', 'read,write,execute', 'universe')
+s:drop()
+box.func.runtimeerror:drop()
+test_run:cmd("clear filter")
