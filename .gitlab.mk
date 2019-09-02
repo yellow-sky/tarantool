@@ -102,9 +102,63 @@ vms_shutdown:
 # Build RPM / Deb packages
 # ########################
 
-package: git_submodule_update
+# ###########################
+# Sources tarballs & packages
+# ###########################
+
+# Push alpha and beta versions to <major>x bucket (say, 2x),
+# stable to <major>.<minor> bucket (say, 2.2).
+GIT_DESCRIBE=$(shell git describe HEAD)
+MAJOR_VERSION=$(word 1,$(subst ., ,$(GIT_DESCRIBE)))
+MINOR_VERSION=$(word 2,$(subst ., ,$(GIT_DESCRIBE)))
+BUCKET=$(MAJOR_VERSION)_$(MINOR_VERSION)
+ifeq ($(MINOR_VERSION),0)
+BUCKET=$(MAJOR_VERSION)x
+endif
+ifeq ($(MINOR_VERSION),1)
+BUCKET=$(MAJOR_VERSION)x
+endif
+REPOBASE=/var/spool/apt-mirror/mirror/packagecloud.io/tarantool/${BUCKET}/${OS}
+REPOPATH=${REPOBASE}/pool/${DIST}/main/t/tarantool
+
+# prepare the packpack repository sources
+packpack_setup:
 	git clone https://github.com/packpack/packpack.git packpack
+	#sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6B05F25D762E3157
+	#sudo apt-get update || true
+	#sudo apt-get install -y -f reprepro tree
+	#pip install awscli --user
+
+# create the binaries packages at the ./build/ local path
+# deploy the packages at the AWS S3 bucket named as:
+# tarantool.<major version>[x;.<minor version>]
+.PHONY: package
+package: git_submodule_update packpack_setup
 	PACKPACK_EXTRA_DOCKER_RUN_PARAMS='--network=host' ./packpack/packpack
+	[ ! -d ${REPOPATH} ] || true && mkdir -p ${REPOPATH}
+	[ ! -d ${REPOBASE}/conf ] || true && mkdir -p ${REPOBASE}/conf
+	lockfile -l 1000 /tmp/tarantool_repo_s3.lock
+	aws --endpoint-url "${AWS_S3_ENDPOINT_URL}" s3 \
+		sync "s3://tarantool_repo/${BUCKET}/" ${REPOBASE}
+	printf '%s\n' "Origin: tarantool.org" \
+	    "Label: tarantool.org" \
+	    "Codename: ${OS}" \
+	    "Architectures: amd64 source" \
+	    "Components: main" \
+	    "Description: tarantool repo" >${REPOBASE}/conf/distributions
+	for packfile in `ls build/*.rpm build/*.deb build/*.tar.*z 2>/dev/null` ; \
+		do cp $$packfile ${REPOPATH}/. ; done
+	for packfile in `cd build && ls *.dsc 2>/dev/null` ; do \
+		cp build/$$packfile ${REPOPATH}/. ; \
+			docker run --rm --network=host -v /var/spool/apt-mirror:/var/spool/apt-mirror \
+				-i registry.gitlab.com/tarantool/tarantool/ubuntu:bionic_deploy_s3 \
+				/bin/bash -c \
+				"reprepro -b ${REPOBASE} includedeb ${OS} ${REPOPATH}/tarantool*.deb ; \
+					reprepro -b ${REPOBASE} includedsc ${OS} ${REPOPATH}/$$packfile" ; \
+	done
+	aws --endpoint-url "${AWS_S3_ENDPOINT_URL}" s3 \
+		sync ${REPOBASE} "s3://tarantool_repo/${BUCKET}/" --acl public-read
+	rm -f /tmp/tarantool_repo_s3.lock
 
 # ############
 # Static build

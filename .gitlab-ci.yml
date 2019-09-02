@@ -25,10 +25,10 @@ variables:
     - docker_test
 
 .deploy_template: &deploy_definition
-  <<: *release_only_definition
+  #<<: *release_only_definition
   stage: test
   tags:
-    - deploy
+    - deploy_s3
   script:
     - ${GITLAB_MAKE} package
 

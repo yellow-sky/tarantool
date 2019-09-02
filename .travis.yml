@@ -66,12 +66,10 @@ jobs:
         if: branch = "master"
       - name: "Ubuntu Disco (19.04) build + deploy DEB"
         env: OS=ubuntu DIST=disco
-        # avtikhon: temporary
-        #if: branch = "master"
+        if: branch = "master"
       - name: "Debian Jessie (8) build + deploy DEB"
         env: OS=debian DIST=jessie
-        # avtikhon: temporary
-        #if: branch = "master"
+        if: branch = "master"
       - name: "Debian Stretch (9) build + deploy DEB"
         env: OS=debian DIST=stretch
         if: branch = "master"
