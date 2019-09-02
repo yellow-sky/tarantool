@@ -142,6 +142,7 @@ add_library(box STATIC
     lua/info.c
     lua/stat.c
     lua/ctl.c
+    lua/txn.c
     lua/error.cc
     lua/session.c
     lua/net_box.c
