@@ -383,3 +383,25 @@ tuple_format = box.internal.new_tuple_format(format)
 box.cfg{}
 local ffi = require'ffi' ffi.C._say(ffi.C.S_WARN, nil, 0, nil, "%s", "test log")
 test_run:grep_log('default', 'test log')
+
+--
+-- gh-1148: Stacked diagnostics area in fiber
+--
+e1 = box.error.new({code = 128, file = "hohoho.c", line = 123, reason = "#1"})
+e2 = box.error.new({code = 129, file = "hohoho.c", line = 124, reason = "#2", prev = e1})
+e2.refs == 2
+e1.refs == 2
+box.error.prev(e1) == nil
+box.error.prev(e2) == e1
+e2.prev == box.error.prev(e2)
+collectgarbage()
+e1.refs == 2
+e1.refs == 2
+box.error.clear()
+e1.refs == 2
+e2.refs == 1
+e2 = nil
+collectgarbage()
+e1.refs == 1
+e1 = nil
+collectgarbage()

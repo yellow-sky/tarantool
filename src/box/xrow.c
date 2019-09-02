@@ -1066,7 +1066,7 @@ xrow_decode_error(struct xrow_header *row)
 	}
 
 error:
-	box_error_set(__FILE__, __LINE__, code, error);
+	box_error_set(__FILE__, __LINE__, code, NULL, error);
 }
 
 void

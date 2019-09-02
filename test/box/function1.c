@@ -36,13 +36,13 @@ args(box_function_ctx_t *ctx, const char *args, const char *args_end)
 {
 	uint32_t arg_count = mp_decode_array(&args);
 	if (arg_count < 1) {
-		return box_error_set(__FILE__, __LINE__, ER_PROC_C, "%s",
-			"invalid argument count");
+		return box_error_set(__FILE__, __LINE__, ER_PROC_C, NULL,
+				     "invalid argument count");
 	}
 
 	if (mp_typeof(*args) != MP_UINT) {
-		return box_error_set(__FILE__, __LINE__, ER_PROC_C, "%s",
-			"first tuple field must be uint");
+		return box_error_set(__FILE__, __LINE__, ER_PROC_C, NULL,
+				     "first tuple field must be uint");
 	}
 
 	uint32_t num = mp_decode_uint(&args);
@@ -89,7 +89,7 @@ divide(box_function_ctx_t *ctx, const char *args, const char *args_end)
 		return -1;
 	return box_return_tuple(ctx, tuple);
 error:
-	return box_error_set(__FILE__, __LINE__, ER_PROC_C, "%s",
+	return box_error_set(__FILE__, __LINE__, ER_PROC_C, NULL,
 			     "invalid argument");
 }
 
@@ -109,9 +109,9 @@ multi_inc(box_function_ctx_t *ctx, const char *args, const char *args_end)
 	uint32_t index_id = box_index_id_by_name(space_id, INDEX_NAME,
 		strlen(INDEX_NAME));
 	if (space_id == BOX_ID_NIL || index_id == BOX_ID_NIL) {
-		return box_error_set(__FILE__, __LINE__, ER_PROC_C,
-			"Can't find index %s in space %s",
-			INDEX_NAME, SPACE_NAME);
+		return box_error_set(__FILE__, __LINE__, ER_PROC_C, NULL,
+				     "Can't find index %s in space %s",
+				     INDEX_NAME, SPACE_NAME);
 	}
 	say_debug("space_id = %u, index_id = %u", space_id, index_id);
 
@@ -123,7 +123,8 @@ multi_inc(box_function_ctx_t *ctx, const char *args, const char *args_end)
 		/* Decode next argument */
 		if (mp_typeof(*args) != MP_UINT)
 			return box_error_set(__FILE__, __LINE__,
-					       ER_PROC_C, "Expected uint keys");
+					     ER_PROC_C, NULL,
+					     "Expected uint keys");
 		uint32_t key = mp_decode_uint(&args);
 		(void) key;
 
@@ -144,8 +145,8 @@ multi_inc(box_function_ctx_t *ctx, const char *args, const char *args_end)
 			const char *field = box_tuple_field(tuple, 1);
 			if (field == NULL || mp_typeof(*field) != MP_UINT)
 				return box_error_set(__FILE__, __LINE__,
-						       ER_PROC_LUA,
-						       "Invalid tuple");
+						     ER_PROC_LUA, NULL,
+						     "Invalid tuple");
 			counter = mp_decode_uint(&field) + 1;
 		}
 
@@ -168,7 +169,7 @@ multi_inc(box_function_ctx_t *ctx, const char *args, const char *args_end)
 int
 errors(box_function_ctx_t *ctx, const char *args, const char *args_end)
 {
-	box_error_set(__FILE__, __LINE__, ER_PROC_C, "%s", "Proc error");
+	box_error_set(__FILE__, __LINE__, ER_PROC_C, NULL, "Proc error");
 
 	const box_error_t *error = box_error_last();
 	assert(strcmp(box_error_type(error), "ClientError") == 0);
@@ -203,8 +204,8 @@ test_yield(box_function_ctx_t *ctx, const char *args, const char *args_end)
 
 	uint32_t space_id = box_space_id_by_name(SPACE_NAME, strlen(SPACE_NAME));
 	if (space_id == BOX_ID_NIL) {
-		return box_error_set(__FILE__, __LINE__, ER_PROC_C,
-			"Can't find space %s", SPACE_NAME);
+		return box_error_set(__FILE__, __LINE__, ER_PROC_C, NULL,
+				     "Can't find space %s", SPACE_NAME);
 	}
 
 	assert(!box_txn());

@@ -202,7 +202,8 @@ int fiber_test_func(va_list va)
 		fiber_set_cancellable(true);
 		fiber_sleep(0.01);
 		if (fiber_is_cancelled()) {
-			box_error_set(__FILE__, __LINE__, 10, "test error");
+			box_error_set(__FILE__, __LINE__, 10, NULL,
+				      "test error");
 			return -1;
 		}
 		fiber_set_cancellable(false);

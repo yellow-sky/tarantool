@@ -23,9 +23,9 @@ tuple_bench(box_function_ctx_t *ctx, const char *args, const char *args_end)
 		strlen(INDEX_NAME));
 
 	if (space_id == BOX_ID_NIL || index_id == BOX_ID_NIL) {
-		return box_error_set(__FILE__, __LINE__, ER_PROC_C,
-			"Can't find index %s in space %s",
-			INDEX_NAME, SPACE_NAME);
+		return box_error_set(__FILE__, __LINE__, ER_PROC_C, NULL,
+				     "Can't find index %s in space %s",
+				     INDEX_NAME, SPACE_NAME);
 	}
 	say_debug("space_id = %u, index_id = %u", space_id, index_id);
 
@@ -37,8 +37,8 @@ tuple_bench(box_function_ctx_t *ctx, const char *args, const char *args_end)
 	/* get key types from args, and build test tuples with according types*/
 	uint32_t arg_count = mp_decode_array(&args);
 	if (arg_count < 1) {
-		return box_error_set(__FILE__, __LINE__, ER_PROC_C, "%s",
-			"invalid argument count");
+		return box_error_set(__FILE__, __LINE__, ER_PROC_C, NULL,
+				     "invalid argument count");
 	}
 	uint32_t n = mp_decode_array(&args);
 	uint32_t knum = 0, kstr = 0;

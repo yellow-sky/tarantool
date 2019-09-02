@@ -119,6 +119,7 @@ box_error_clear(void);
  * Set the last error.
  *
  * \param code IPROTO error code (enum \link box_error_code \endlink)
+ * \param prev - the reason error object
  * \param format (const char * ) - printf()-like format string
  * \param ... - format arguments
  * \returns -1 for convention use
@@ -127,13 +128,13 @@ box_error_clear(void);
  */
 int
 box_error_set(const char *file, unsigned line, uint32_t code,
-	      const char *format, ...);
+	      struct error *prev, const char *format, ...);
 
 /**
  * A backward-compatible API define.
  */
 #define box_error_raise(code, format, ...) \
-	box_error_set(__FILE__, __LINE__, code, format, ##__VA_ARGS__)
+	box_error_set(__FILE__, __LINE__, code, NULL, format, ##__VA_ARGS__)
 
 /** \endcond public */
 

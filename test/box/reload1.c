@@ -13,9 +13,9 @@ foo(box_function_ctx_t *ctx, const char *args, const char *args_end)
 	uint32_t index_id = box_index_id_by_name(space_test_id, INDEX_NAME,
 		strlen(INDEX_NAME));
 	if (space_test_id == BOX_ID_NIL || index_id == BOX_ID_NIL) {
-		return box_error_set(__FILE__, __LINE__, ER_PROC_C,
-			"Can't find index %s in space %s",
-			INDEX_NAME, SPACE_TEST_NAME);
+		return box_error_set(__FILE__, __LINE__, ER_PROC_C, NULL,
+				     "Can't find index %s in space %s",
+				     INDEX_NAME, SPACE_TEST_NAME);
 	}
 	mp_decode_array(&args);
 	uint32_t num = mp_decode_uint(&args);
@@ -25,8 +25,9 @@ foo(box_function_ctx_t *ctx, const char *args, const char *args_end)
 	end = mp_encode_array(end, 1);
 	end = mp_encode_uint(end, num);
 	if (box_insert(space_test_id, buf, end, NULL) < 0) {
-		return box_error_set(__FILE__, __LINE__, ER_PROC_C,
-			"Can't insert in space %s", SPACE_TEST_NAME);
+		return box_error_set(__FILE__, __LINE__, ER_PROC_C, NULL,
+				     "Can't insert in space %s",
+				     SPACE_TEST_NAME);
 	}
 	end = buf;
 	end = mp_encode_array(end, 1);
@@ -38,8 +39,9 @@ foo(box_function_ctx_t *ctx, const char *args, const char *args_end)
 	end = mp_encode_array(end, 1);
 	end = mp_encode_int(end, -((int)num));
 	if (box_insert(space_test_id, buf, end, NULL) < 0) {
-		return box_error_set(__FILE__, __LINE__, ER_PROC_C,
-			"Can't insert in space %s", SPACE_TEST_NAME);
+		return box_error_set(__FILE__, __LINE__, ER_PROC_C, NULL,
+				     "Can't insert in space %s",
+				     SPACE_TEST_NAME);
 	}
 	return 0;
 }
@@ -51,8 +53,8 @@ test_reload(box_function_ctx_t *ctx, const char *args, const char *args_end)
 
 	uint32_t space_id = box_space_id_by_name(SPACE_NAME, strlen(SPACE_NAME));
 	if (space_id == BOX_ID_NIL) {
-		return box_error_set(__FILE__, __LINE__, ER_PROC_C,
-			"Can't find space %s", SPACE_NAME);
+		return box_error_set(__FILE__, __LINE__, ER_PROC_C, NULL,
+				     "Can't find space %s", SPACE_NAME);
 	}
 
 	assert(!box_txn());

@@ -49,6 +49,7 @@ luaT_error_create(lua_State *L, int top_base)
 	const char *reason = NULL;
 	const char *file = "";
 	unsigned line = 0;
+	struct error *prev = NULL;
 	lua_Debug info;
 	int top = lua_gettop(L);
 	if (top >= top_base && lua_type(L, top_base) == LUA_TNUMBER) {
@@ -82,6 +83,15 @@ luaT_error_create(lua_State *L, int top_base)
 			if (reason == NULL)
 				reason = "";
 			lua_pop(L, 1);
+			lua_getfield(L, top_base, "file");
+			file = lua_tostring(L, -1);
+			lua_pop(L, 1);
+			lua_getfield(L, top_base, "line");
+			line = lua_tonumber(L, -1);
+			lua_pop(L, 1);
+			lua_getfield(L, top_base, "prev");
+			prev = luaL_iserror(L, -1);
+			lua_pop(L, 1);
 		} else if (luaL_iserror(L, top_base)) {
 			lua_error(L);
 			return;
@@ -91,7 +101,8 @@ luaT_error_create(lua_State *L, int top_base)
 	}
 
 raise:
-	if (lua_getstack(L, 1, &info) && lua_getinfo(L, "Sl", &info)) {
+	if ((line == 0 || file == NULL) &&
+	    lua_getstack(L, 1, &info) && lua_getinfo(L, "Sl", &info)) {
 		if (*info.short_src) {
 			file = info.short_src;
 		} else if (*info.source) {
@@ -102,7 +113,7 @@ raise:
 		line = info.currentline;
 	}
 	say_debug("box.error() at %s:%i", file, line);
-	box_error_set(file, line, code, "%s", reason);
+	box_error_set(file, line, code, prev, "%s", reason);
 }
 
 static int

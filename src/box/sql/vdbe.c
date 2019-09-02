@@ -972,7 +972,7 @@ case OP_Goto: {             /* jump */
  * text description of the error.
  */
 case OP_SetDiag: {             /* jump */
-	box_error_set(__FILE__, __LINE__, pOp->p1, pOp->p4.z);
+	box_error_set(__FILE__, __LINE__, pOp->p1, NULL, pOp->p4.z);
 	if (pOp->p2 != 0)
 		goto jump_to_p2;
 	break;

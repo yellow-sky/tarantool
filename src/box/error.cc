@@ -71,12 +71,15 @@ box_error_clear(void)
 
 int
 box_error_set(const char *file, unsigned line, uint32_t code,
-		const char *fmt, ...)
+	      struct error *prev, const char *fmt, ...)
 {
 	struct error *e = BuildClientError(file, line, ER_UNKNOWN);
 	ClientError *client_error = type_cast(ClientError, e);
 	if (client_error) {
 		client_error->m_errcode = code;
+		client_error->prev = prev;
+		if (prev != NULL)
+			error_ref(prev);
 		va_list ap;
 		va_start(ap, fmt);
 		error_vformat_msg(e, fmt, ap);
