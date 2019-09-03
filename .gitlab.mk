@@ -139,6 +139,8 @@ package: git_submodule_update packpack_setup
 	[ ! -d ${REPOBASE}/conf ] || true && mkdir -p ${REPOBASE}/conf
 	lockfile -l 1000 /tmp/tarantool_repo_s3.lock
 	aws --endpoint-url "${AWS_S3_ENDPOINT_URL}" s3 \
+		ls "s3://tarantool_repo/${BUCKET}/"
+	aws --endpoint-url "${AWS_S3_ENDPOINT_URL}" s3 \
 		sync "s3://tarantool_repo/${BUCKET}/" ${REPOBASE}
 	printf '%s\n' "Origin: tarantool.org" \
 	    "Label: tarantool.org" \
