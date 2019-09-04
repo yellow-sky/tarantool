@@ -118,7 +118,8 @@ endif
 ifeq ($(MINOR_VERSION),1)
 BUCKET=$(MAJOR_VERSION)x
 endif
-REPOBASE=/var/spool/apt-mirror/mirror/packagecloud.io/tarantool/${BUCKET}/${OS}
+#REPOBASE=/var/spool/apt-mirror/mirror/packagecloud.io/tarantool/${BUCKET}/${OS}
+REPOBASE=${PWD}/${BUCKET}/${OS}
 REPOPATH=${REPOBASE}/pool/${DIST}/main/t/tarantool
 
 # prepare the packpack repository sources
@@ -135,13 +136,16 @@ packpack_setup:
 .PHONY: package
 package: git_submodule_update packpack_setup
 	PACKPACK_EXTRA_DOCKER_RUN_PARAMS='--network=host' ./packpack/packpack
+	[ ! -d ${REPOBASE} ] || true && mkdir -p ${REPOBASE}
+	AWSACCESSKEYID=${AWS_ACCESS_KEY_ID} AWSSECRETACCESSKEY=${AWS_SECRET_ACCESS_KEY} \
+		s3fs "tarantool_repo:/${BUCKET}" ${REPOBASE} -o url="${AWS_S3_ENDPOINT_URL}"
 	[ ! -d ${REPOPATH} ] || true && mkdir -p ${REPOPATH}
 	[ ! -d ${REPOBASE}/conf ] || true && mkdir -p ${REPOBASE}/conf
-	lockfile -l 1000 /tmp/tarantool_repo_s3.lock
-	aws --endpoint-url "${AWS_S3_ENDPOINT_URL}" s3 \
-		ls "s3://tarantool_repo/${BUCKET}/"
-	aws --endpoint-url "${AWS_S3_ENDPOINT_URL}" s3 \
-		sync "s3://tarantool_repo/${BUCKET}/" ${REPOBASE}
+	#lockfile -l 1000 /tmp/tarantool_repo_s3.lock
+	#aws --endpoint-url "${AWS_S3_ENDPOINT_URL}" s3 \
+	#	ls "s3://tarantool_repo/${BUCKET}/"
+	#aws --endpoint-url "${AWS_S3_ENDPOINT_URL}" s3 \
+	#	sync "s3://tarantool_repo/${BUCKET}/" ${REPOBASE}
 	printf '%s\n' "Origin: tarantool.org" \
 	    "Label: tarantool.org" \
 	    "Codename: ${OS}" \
@@ -158,9 +162,10 @@ package: git_submodule_update packpack_setup
 				"reprepro -b ${REPOBASE} includedeb ${OS} ${REPOPATH}/tarantool*.deb ; \
 					reprepro -b ${REPOBASE} includedsc ${OS} ${REPOPATH}/$$packfile" ; \
 	done
-	aws --endpoint-url "${AWS_S3_ENDPOINT_URL}" s3 \
-		sync ${REPOBASE} "s3://tarantool_repo/${BUCKET}/" --acl public-read
-	rm -f /tmp/tarantool_repo_s3.lock
+	#aws --endpoint-url "${AWS_S3_ENDPOINT_URL}" s3 \
+	#	sync ${REPOBASE} "s3://tarantool_repo/${BUCKET}/" --acl public-read
+	#rm -f /tmp/tarantool_repo_s3.lock
+	unlock ${REPOBASE}
 
 # ############
 # Static build
