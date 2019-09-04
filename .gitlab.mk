@@ -137,8 +137,7 @@ packpack_setup:
 package: git_submodule_update packpack_setup
 	PACKPACK_EXTRA_DOCKER_RUN_PARAMS='--network=host' ./packpack/packpack
 	[ ! -d ${REPOBASE} ] || true && mkdir -p ${REPOBASE}
-	AWSACCESSKEYID=${AWS_ACCESS_KEY_ID} AWSSECRETACCESSKEY=${AWS_SECRET_ACCESS_KEY} \
-		s3fs "tarantool_repo:/${BUCKET}" ${REPOBASE} -o url="${AWS_S3_ENDPOINT_URL}"
+	s3fs "tarantool_repo:/${BUCKET}" ${REPOBASE} -o url="${AWS_S3_ENDPOINT_URL}"
 	[ ! -d ${REPOPATH} ] || true && mkdir -p ${REPOPATH}
 	[ ! -d ${REPOBASE}/conf ] || true && mkdir -p ${REPOBASE}/conf
 	#lockfile -l 1000 /tmp/tarantool_repo_s3.lock
