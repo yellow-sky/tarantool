@@ -136,33 +136,9 @@ packpack_setup:
 .PHONY: package
 package: git_submodule_update packpack_setup
 	PACKPACK_EXTRA_DOCKER_RUN_PARAMS='--network=host' ./packpack/packpack
-	[ ! -d ${REPOBASE} ] && mkdir -p ${REPOBASE} || true
-	[ ! -d ${REPOBASE}/pool ] && s3fs "tarantool_repo:/${BUCKET}/${OS}" ${REPOBASE} \
-		-o url="https://hb.bizmrg.com" || true
-	[ ! -d ${REPOPATH} ] && mkdir -p ${REPOPATH} || true
-	[ ! -d ${REPOBASE}/conf ] && mkdir -p ${REPOBASE}/conf || true
-	#lockfile -l 1000 /tmp/tarantool_repo_s3.lock
-	#aws --endpoint-url "${AWS_S3_ENDPOINT_URL}" s3 \
-	#	ls "s3://tarantool_repo/${BUCKET}/"
-	#aws --endpoint-url "${AWS_S3_ENDPOINT_URL}" s3 \
-	#	sync "s3://tarantool_repo/${BUCKET}/" ${REPOBASE}
-	printf '%s\n' "Origin: tarantool.org" \
-	    "Label: tarantool.org" \
-	    "Codename: ${OS}" \
-	    "Architectures: amd64 source" \
-	    "Components: bionic cosmic disco trusty xenial ${DIST}" \
-	    "Description: tarantool repo" >${REPOBASE}/conf/distributions
 	for packfile in `ls build/*.rpm build/*.deb build/*.tar.*z 2>/dev/null` ; \
 		do cp $$packfile ${REPOPATH}/. ; done
-	for packfile in `cd build && ls *.dsc 2>/dev/null` ; do \
-		cp build/$$packfile ${REPOPATH}/. ; \
-		reprepro -b ${REPOBASE} -C ${DIST} includedeb ${OS} ${REPOPATH}/tarantool*.deb ; \
-		reprepro -b ${REPOBASE} -C ${DIST} includedsc ${OS} ${REPOPATH}/$$packfile ; \
-	done
-	#aws --endpoint-url "${AWS_S3_ENDPOINT_URL}" s3 \
-	#	sync ${REPOBASE} "s3://tarantool_repo/${BUCKET}/" --acl public-read
-	#rm -f /tmp/tarantool_repo_s3.lock
-	#umount ${REPOBASE}
+	reprepro -Vb ${REPOBASE} export
 
 # ############
 # Static build
