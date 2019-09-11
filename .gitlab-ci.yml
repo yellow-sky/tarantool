@@ -50,6 +50,7 @@ variables:
 # Tests
 
 release:
+  <<: *release_only_definition
   <<: *docker_test_definition
   script:
     - ${GITLAB_MAKE} test_debian_no_deps
@@ -60,6 +61,7 @@ debug:
     - ${GITLAB_MAKE} test_coverage_debian_no_deps
 
 release_clang:
+  <<: *release_only_definition
   <<: *docker_test_definition
   variables:
     CC: clang
@@ -98,6 +100,7 @@ osx_13_release:
     - ${GITLAB_MAKE} vms_test_osx
 
 osx_14_release:
+  <<: *release_only_definition
   <<: *vbox_definition
   tags:
     - vms_osx_14
@@ -122,6 +125,7 @@ osx_14_release_lto:
     - ${GITLAB_MAKE} vms_test_osx
 
 freebsd_12_release:
+  <<: *release_only_definition
   <<: *vbox_definition
   tags:
     - vms_freebsd_12
