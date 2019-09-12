@@ -119,7 +119,7 @@ ifeq ($(MINOR_VERSION),1)
 BUCKET=$(MAJOR_VERSION)x
 endif
 #REPOBASE=/var/spool/apt-mirror/mirror/packagecloud.io/tarantool/${BUCKET}/${OS}
-REPOBASE=/mnt/tarantool_repo/${BUCKET}/${OS}
+REPOBASE=tarantool_repo/${BUCKET}/${OS}
 REPOPATH=${REPOBASE}/pool/${DIST}/main/t/tarantool
 
 # prepare the packpack repository sources
@@ -136,9 +136,12 @@ packpack_setup:
 .PHONY: package
 package: git_submodule_update packpack_setup
 	PACKPACK_EXTRA_DOCKER_RUN_PARAMS='--network=host' ./packpack/packpack
-	for packfile in `ls build/*.rpm build/*.deb build/*.tar.*z 2>/dev/null` ; \
+	mkdir -p ${REPOPATH}
+	for packfile in `ls build/*.rpm build/*.deb build/*.dsc build/*.tar.*z 2>/dev/null` ; \
 		do cp $$packfile ${REPOPATH}/. ; done
-	reprepro -Vb ${REPOBASE} export
+	mkdir ${REPOBASE}/conf
+	cp distributions ${REPOBASE}/conf
+	cd ${REPOBASE} && ../../../pub_packs_s3.sh .
 
 # ############
 # Static build
