@@ -141,7 +141,8 @@ add_executable(histogram.test histogram.c)
 target_link_libraries(histogram.test stat unit)
 add_executable(ratelimit.test ratelimit.c)
 target_link_libraries(ratelimit.test unit)
-add_executable(luaT_tuple_new.test luaT_tuple_new.c)
+add_executable(luaT_tuple_new.test luaT_tuple_new.c
+               ${PROJECT_SOURCE_DIR}/src/box/trigger_def.c)
 target_link_libraries(luaT_tuple_new.test unit box server core misc
     ${CURL_LIBRARIES} ${LIBYAML_LIBRARIES} ${READLINE_LIBRARIES}
     ${ICU_LIBRARIES} ${LUAJIT_LIBRARIES})

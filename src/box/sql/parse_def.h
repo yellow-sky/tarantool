@@ -35,6 +35,7 @@
 #include "box/fk_constraint.h"
 #include "box/key_def.h"
 #include "box/sql.h"
+#include "box/trigger_def.h"
 
 /**
  * This file contains auxiliary structures and functions which
@@ -268,8 +269,8 @@ struct create_trigger_def {
 	struct create_entity_def base;
 	/** One of TK_BEFORE, TK_AFTER, TK_INSTEAD. */
 	int tr_tm;
-	/** One of TK_INSERT, TK_UPDATE, TK_DELETE. */
-	int op;
+	/** The trigger event: INSERT, UPDATE or DELETE. */
+	enum trigger_event_manipulation event_manipulation;
 	/** Column list if this is an UPDATE trigger. */
 	struct IdList *cols;
 	/** When clause. */
@@ -413,7 +414,7 @@ create_trigger_def_init(struct create_trigger_def *trigger_def,
 	create_entity_def_init(&trigger_def->base, ENTITY_TYPE_TRIGGER,
 			       table_name, name, if_not_exists);
 	trigger_def->tr_tm = tr_tm;
-	trigger_def->op = op;
+	trigger_def->event_manipulation = trigger_event_manipulation_by_op(op);
 	trigger_def->cols = cols;
 	trigger_def->when = when;
 }

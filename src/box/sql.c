@@ -1265,3 +1265,18 @@ vdbe_field_ref_prepare_tuple(struct vdbe_field_ref *field_ref,
 	vdbe_field_ref_create(field_ref, tuple, tuple_data(tuple),
 			      tuple->bsize);
 }
+
+enum trigger_event_manipulation
+trigger_event_manipulation_by_op(int op)
+{
+	switch (op) {
+	case TK_DELETE:
+		return TRIGGER_EVENT_MANIPULATION_DELETE;
+	case TK_UPDATE:
+		return TRIGGER_EVENT_MANIPULATION_UPDATE;
+	case TK_INSERT:
+		return TRIGGER_EVENT_MANIPULATION_INSERT;
+	default:
+		unreachable();
+	}
+}

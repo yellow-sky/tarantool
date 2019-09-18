@@ -39,6 +39,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "box/schema.h"
+#include "box/trigger_def.h"
 
 /*
  * Walk the expression tree pExpr and increase the aggregate function
@@ -313,15 +314,17 @@ lookupName(Parse * pParse,	/* The parsing context */
 		 */
 		if (zTab != NULL && cntTab == 0 &&
 		    pParse->triggered_space != NULL) {
-			int op = pParse->eTriggerOp;
-			assert(op == TK_DELETE || op == TK_UPDATE
-			       || op == TK_INSERT);
+			enum trigger_event_manipulation event_manipulation =
+					pParse->trigger_event_manipulation;
 			struct space_def *space_def = NULL;
-			if (op != TK_DELETE && sqlStrICmp("new", zTab) == 0) {
+			if (event_manipulation !=
+			    TRIGGER_EVENT_MANIPULATION_DELETE &&
+			    sqlStrICmp("new", zTab) == 0) {
 				pExpr->iTable = 1;
 				space_def = pParse->triggered_space->def;
-			} else if (op != TK_INSERT
-				   && sqlStrICmp("old", zTab) == 0) {
+			} else if (event_manipulation !=
+				   TRIGGER_EVENT_MANIPULATION_INSERT &&
+				   sqlStrICmp("old", zTab) == 0) {
 				pExpr->iTable = 0;
 				space_def = pParse->triggered_space->def;
 			}

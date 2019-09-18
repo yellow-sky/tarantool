@@ -150,7 +150,8 @@ sql_table_delete_from(struct Parse *parse, struct SrcList *tab_list,
 	struct space *space = sql_lookup_space(parse, tab_list->a);
 	if (space == NULL)
 		goto delete_from_cleanup;
-	trigger_list = sql_triggers_exist(space->def, TK_DELETE,
+	trigger_list = sql_triggers_exist(space->def,
+					  TRIGGER_EVENT_MANIPULATION_DELETE,
 					  NULL, parse->sql_flags, NULL);
 	bool is_complex = trigger_list != NULL || fk_constraint_is_required(space, NULL);
 	bool is_view = space->def->opts.is_view;
@@ -486,7 +487,8 @@ sql_generate_row_delete(struct Parse *parse, struct space *space,
 
 		/* Invoke BEFORE DELETE trigger programs. */
 		int addr_start = sqlVdbeCurrentAddr(v);
-		vdbe_code_row_trigger(parse, trigger_list, TK_DELETE, NULL,
+		vdbe_code_row_trigger(parse, trigger_list,
+				      TRIGGER_EVENT_MANIPULATION_DELETE, NULL,
 				      TRIGGER_BEFORE, space, first_old_reg,
 				      onconf, label);
 
@@ -540,7 +542,8 @@ sql_generate_row_delete(struct Parse *parse, struct space *space,
 		fk_constraint_emit_actions(parse, space, first_old_reg, NULL);
 
 		/* Invoke AFTER DELETE trigger programs. */
-		vdbe_code_row_trigger(parse, trigger_list, TK_DELETE, 0,
+		vdbe_code_row_trigger(parse, trigger_list,
+				      TRIGGER_EVENT_MANIPULATION_DELETE, 0,
 				      TRIGGER_AFTER, space, first_old_reg,
 				      onconf, label);
 	}

@@ -72,6 +72,7 @@
 #include "box/field_def.h"
 #include "box/func.h"
 #include "box/func_def.h"
+#include "box/trigger_def.h"
 #include "box/sql.h"
 #include "box/txn.h"
 #include "trivia/util.h"
@@ -2140,7 +2141,7 @@ struct Parse {
 	uint64_t oldmask;
 	/* Mask of new.* columns referenced. */
 	uint64_t newmask;
-	u8 eTriggerOp;		/* TK_UPDATE, TK_INSERT or TK_DELETE */
+	enum trigger_event_manipulation trigger_event_manipulation;
 	u8 eOrconf;		/* Default ON CONFLICT policy for trigger steps */
 	/** Region to make SQL temp allocations. */
 	struct region region;
@@ -2298,8 +2299,14 @@ struct sql_trigger {
 	char *zName;
 	/** The ID of space the trigger refers to. */
 	uint32_t space_id;
-	/** One of TK_DELETE, TK_UPDATE, TK_INSERT. */
-	u8 op;
+	/**
+	 * The trigger event. This is the type of operation
+	 * on the associated space for which the trigger
+	 * activates. The value is `INSERT` (a row was inserted),
+	 * `DELETE` (a row was deleted), or `UPDATE` (a row was
+	 * modified).
+	 */
+	enum trigger_event_manipulation event_manipulation;
 	/** One of TRIGGER_BEFORE, TRIGGER_AFTER. */
 	u8 tr_tm;
 	/** The WHEN clause of the expression (may be NULL). */
@@ -3457,13 +3464,14 @@ vdbe_code_drop_trigger(struct Parse *parser, const char *trigger_name,
  *
  * @param space_def The definition of the space that contains
  *        the triggers.
- * @param op operation one of TK_DELETE, TK_INSERT, TK_UPDATE.
+ * @param event_manipulation The event of the trigger to be find.
  * @param changes_list Columns that change in an UPDATE statement.
  * @param sql_flags SQL flags which describe how to parse request.
  * @param[out] pMask Mask of TRIGGER_BEFORE|TRIGGER_AFTER
  */
 struct sql_trigger *
-sql_triggers_exist(struct space_def *space_def, int op,
+sql_triggers_exist(struct space_def *space_def,
+		   enum trigger_event_manipulation event_manipulation,
 		   struct ExprList *changes_list, uint32_t sql_flags,
 		   int *mask_ptr);
 
@@ -3512,7 +3520,7 @@ sql_triggers_exist(struct space_def *space_def, int op,
  *
  * @param parser Parse context.
  * @param trigger List of triggers on table.
- * @param op operation, one of TK_UPDATE, TK_INSERT, TK_DELETE.
+ * @param event_manipulation Trigger operation.
  * @param changes_list Changes list for any UPDATE OF triggers.
  * @param tr_tm One of TRIGGER_BEFORE, TRIGGER_AFTER.
  * @param space The space to code triggers from.
@@ -3522,7 +3530,8 @@ sql_triggers_exist(struct space_def *space_def, int op,
  */
 void
 vdbe_code_row_trigger(struct Parse *parser, struct sql_trigger *trigger,
-		      int op, struct ExprList *changes_list, int tr_tm,
+		      enum trigger_event_manipulation event_manipulation,
+		      struct ExprList *changes_list, int tr_tm,
 		      struct space *space, int reg, int orconf, int ignore_jump);
 
 /**

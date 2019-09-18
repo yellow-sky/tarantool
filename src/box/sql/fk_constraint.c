@@ -897,10 +897,12 @@ fk_constraint_action_trigger(struct Parse *pParse, struct space_def *def,
 
 	if (is_update) {
 		fk->on_update_trigger = trigger;
-		trigger->op = TK_UPDATE;
+		trigger->event_manipulation =
+			TRIGGER_EVENT_MANIPULATION_UPDATE;
 	} else {
 		fk->on_delete_trigger = trigger;
-		trigger->op = TK_DELETE;
+		trigger->event_manipulation =
+			TRIGGER_EVENT_MANIPULATION_DELETE;
 	}
 	return trigger;
 }

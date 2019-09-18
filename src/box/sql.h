@@ -33,6 +33,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "box/trigger_def.h"
 
 #if defined(__cplusplus)
 extern "C" {
@@ -419,6 +420,13 @@ vdbe_field_ref_prepare_data(struct vdbe_field_ref *field_ref, const char *data,
 void
 vdbe_field_ref_prepare_tuple(struct vdbe_field_ref *field_ref,
 			     struct tuple *tuple);
+
+/**
+ * Convert a given OP_INSERT/OP_UPDATE/OP_DELETE operation
+ * to trigger_event_manipulation value.
+ */
+enum trigger_event_manipulation
+trigger_event_manipulation_by_op(int op);
 
 #if defined(__cplusplus)
 } /* extern "C" { */

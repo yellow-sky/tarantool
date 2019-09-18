@@ -100,8 +100,9 @@ sqlUpdate(Parse * pParse,		/* The parser context */
 	/* Figure out if we have any triggers and if the table being
 	 * updated is a view.
 	 */
-	trigger = sql_triggers_exist(space->def, TK_UPDATE, pChanges,
-				     pParse->sql_flags, &tmask);
+	trigger = sql_triggers_exist(space->def,
+				     TRIGGER_EVENT_MANIPULATION_UPDATE,
+				     pChanges, pParse->sql_flags, &tmask);
 	is_view = space->def->opts.is_view;
 	assert(trigger != NULL || tmask == 0);
 
@@ -363,8 +364,9 @@ sqlUpdate(Parse * pParse,		/* The parser context */
 	 */
 	if (tmask & TRIGGER_BEFORE) {
 		sql_emit_table_types(v, space->def, regNew);
-		vdbe_code_row_trigger(pParse, trigger, TK_UPDATE, pChanges,
-				      TRIGGER_BEFORE, space, regOldPk,
+		vdbe_code_row_trigger(pParse, trigger,
+				      TRIGGER_EVENT_MANIPULATION_UPDATE,
+				      pChanges, TRIGGER_BEFORE, space, regOldPk,
 				      on_error, labelContinue);
 
 		/* The row-trigger may have deleted the row being updated. In this
@@ -477,7 +479,8 @@ sqlUpdate(Parse * pParse,		/* The parser context */
 		sqlVdbeAddOp2(v, OP_AddImm, regRowCount, 1);
 	}
 
-	vdbe_code_row_trigger(pParse, trigger, TK_UPDATE, pChanges,
+	vdbe_code_row_trigger(pParse, trigger,
+			      TRIGGER_EVENT_MANIPULATION_UPDATE, pChanges,
 			      TRIGGER_AFTER, space, regOldPk, on_error,
 			      labelContinue);
 

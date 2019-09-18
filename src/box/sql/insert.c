@@ -293,7 +293,8 @@ sqlInsert(Parse * pParse,	/* Parser context */
 	 * inserted into is a view
 	 */
 	struct space_def *space_def = space->def;
-	trigger = sql_triggers_exist(space_def, TK_INSERT, NULL,
+	trigger = sql_triggers_exist(space_def,
+				     TRIGGER_EVENT_MANIPULATION_INSERT, NULL,
 				     pParse->sql_flags, &tmask);
 
 	bool is_view = space_def->opts.is_view;
@@ -599,7 +600,8 @@ sqlInsert(Parse * pParse,	/* Parser context */
 			sql_emit_table_types(v, space_def, regCols + 1);
 
 		/* Fire BEFORE or INSTEAD OF triggers */
-		vdbe_code_row_trigger(pParse, trigger, TK_INSERT, 0,
+		vdbe_code_row_trigger(pParse, trigger,
+				      TRIGGER_EVENT_MANIPULATION_INSERT, 0,
 				      TRIGGER_BEFORE, space,
 				      regCols - space_def->field_count - 1, on_error,
 				      endOfLoop);
@@ -753,7 +755,8 @@ sqlInsert(Parse * pParse,	/* Parser context */
 
 	if (trigger != NULL) {
 		/* Code AFTER triggers */
-		vdbe_code_row_trigger(pParse, trigger, TK_INSERT, 0,
+		vdbe_code_row_trigger(pParse, trigger,
+				      TRIGGER_EVENT_MANIPULATION_INSERT, 0,
 				      TRIGGER_AFTER, space,
 				      regData - 2 - space_def->field_count, on_error,
 				      endOfLoop);
@@ -961,9 +964,9 @@ process_index:  ;
 					     part_count);
 			sql_set_multi_write(parse_context, true);
 			struct sql_trigger *trigger =
-				sql_triggers_exist(space->def, TK_DELETE, NULL,
-						   parse_context->sql_flags,
-						   NULL);
+				sql_triggers_exist(space->def,
+					TRIGGER_EVENT_MANIPULATION_DELETE, NULL,
+					parse_context->sql_flags, NULL);
 			sql_generate_row_delete(parse_context, space, trigger,
 						cursor, idx_key_reg, part_count,
 						true,

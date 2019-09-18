@@ -35,6 +35,7 @@
 
 #include "box/box.h"
 #include "box/schema.h"
+#include "box/trigger_def.h"
 #include "sqlInt.h"
 #include "tarantoolInt.h"
 #include "vdbeInt.h"
@@ -125,9 +126,7 @@ sql_trigger_begin(struct Parse *parse)
 	trigger->space_id = space_id;
 	trigger->zName = trigger_name;
 	trigger_name = NULL;
-	assert(trigger_def->op == TK_INSERT || trigger_def->op == TK_UPDATE ||
-	       trigger_def->op== TK_DELETE);
-	trigger->op = (u8) trigger_def->op;
+	trigger->event_manipulation = trigger_def->event_manipulation;
 	trigger->tr_tm = trigger_def->tr_tm;
 	trigger->pWhen = sqlExprDup(db, trigger_def->when, EXPRDUP_REDUCE);
 	trigger->pColumns = sqlIdListDup(db, trigger_def->cols);
@@ -530,7 +529,8 @@ checkColumnOverlap(IdList * pIdList, ExprList * pEList)
 }
 
 struct sql_trigger *
-sql_triggers_exist(struct space_def *space_def, int op,
+sql_triggers_exist(struct space_def *space_def,
+		   enum trigger_event_manipulation event_manipulation,
 		   struct ExprList *changes_list, uint32_t sql_flags,
 		   int *mask_ptr)
 {
@@ -539,8 +539,8 @@ sql_triggers_exist(struct space_def *space_def, int op,
 	if ((sql_flags & SQL_EnableTrigger) != 0)
 		trigger_list = space_trigger_list(space_def->id);
 	for (struct sql_trigger *p = trigger_list; p != NULL; p = p->next) {
-		if (p->op == op && checkColumnOverlap(p->pColumns,
-						      changes_list) != 0)
+		if (p->event_manipulation == event_manipulation &&
+		    checkColumnOverlap(p->pColumns, changes_list) != 0)
 			mask |= p->tr_tm;
 	}
 	if (mask_ptr != NULL)
@@ -755,19 +755,18 @@ sql_row_trigger_program(struct Parse *parser, struct sql_trigger *trigger,
 	sNC.pParse = pSubParse;
 	pSubParse->triggered_space = space;
 	pSubParse->pToplevel = pTop;
-	pSubParse->eTriggerOp = trigger->op;
+	pSubParse->trigger_event_manipulation = trigger->event_manipulation;
 	pSubParse->nQueryLoop = parser->nQueryLoop;
 
 	/* Temporary VM. */
 	struct Vdbe *v = sqlGetVdbe(pSubParse);
 	if (v != NULL) {
-		VdbeComment((v, "Start: %s.%s (%s %s%s%s ON %s)",
+		VdbeComment((v, "Start: %s.%s (%s %s ON %s)",
 			     trigger->zName, onErrorText(orconf),
 			     (trigger->tr_tm ==
 			      TRIGGER_BEFORE ? "BEFORE" : "AFTER"),
-			     (trigger->op == TK_UPDATE ? "UPDATE" : ""),
-			     (trigger->op == TK_INSERT ? "INSERT" : ""),
-			     (trigger->op == TK_DELETE ? "DELETE" : ""),
+			      trigger_event_manipulation_strs[
+						trigger->event_manipulation],
 			      space->def->name));
 		sqlVdbeChangeP4(v, -1,
 				    sqlMPrintf(db, "-- TRIGGER %s",
@@ -912,16 +911,18 @@ vdbe_code_row_trigger_direct(struct Parse *parser, struct sql_trigger *trigger,
 
 void
 vdbe_code_row_trigger(struct Parse *parser, struct sql_trigger *trigger,
-		      int op, struct ExprList *changes_list, int tr_tm,
+		      enum trigger_event_manipulation event_manipulation,
+		      struct ExprList *changes_list, int tr_tm,
 		      struct space *space, int reg, int orconf, int ignore_jump)
 {
-	assert(op == TK_UPDATE || op == TK_INSERT || op == TK_DELETE);
 	assert(tr_tm == TRIGGER_BEFORE || tr_tm == TRIGGER_AFTER);
-	assert((op == TK_UPDATE) == (changes_list != NULL));
+	assert((event_manipulation == TRIGGER_EVENT_MANIPULATION_UPDATE) ==
+	       (changes_list != NULL));
 
 	for (struct sql_trigger *p = trigger; p != NULL; p = p->next) {
 		/* Determine whether we should code trigger. */
-		if (p->op == op && p->tr_tm == tr_tm &&
+		if (p->event_manipulation == event_manipulation &&
+		    p->tr_tm == tr_tm &&
 		    checkColumnOverlap(p->pColumns, changes_list)) {
 			vdbe_code_row_trigger_direct(parser, p, space, reg,
 						     orconf, ignore_jump);
@@ -934,13 +935,16 @@ sql_trigger_colmask(Parse *parser, struct sql_trigger *trigger,
 		    ExprList *changes_list, int new, int tr_tm,
 		    struct space *space, int orconf)
 {
-	const int op = changes_list != NULL ? TK_UPDATE : TK_DELETE;
+	enum trigger_event_manipulation event_manipulation =
+		changes_list != NULL ? TRIGGER_EVENT_MANIPULATION_UPDATE :
+				       TRIGGER_EVENT_MANIPULATION_DELETE;
 	uint64_t mask = 0;
 
 	assert(new == 1 || new == 0);
 	for (struct sql_trigger *p = trigger; p != NULL; p = p->next) {
-		if (p->op == op && (tr_tm & p->tr_tm)
-		    && checkColumnOverlap(p->pColumns, changes_list)) {
+		if (p->event_manipulation == event_manipulation &&
+		    (tr_tm & p->tr_tm) &&
+		    checkColumnOverlap(p->pColumns, changes_list)) {
 			TriggerPrg *prg =
 				sql_row_trigger(parser, p, space, orconf);
 			if (prg != NULL)
