@@ -311,8 +311,9 @@ sqlUpdate(Parse * pParse,		/* The parser context */
 		assert(space != NULL);
 		uint64_t oldmask = hasFK ? space->fk_constraint_mask : 0;
 		oldmask |= sql_trigger_colmask(pParse, trigger, pChanges, 0,
-					       TRIGGER_BEFORE | TRIGGER_AFTER,
-					       space, on_error);
+					(1 << TRIGGER_ACTION_TIMING_BEFORE) |
+					(1 << TRIGGER_ACTION_TIMING_AFTER),
+					space, on_error);
 		for (i = 0; i < (int)def->field_count; i++) {
 			if (column_mask_fieldno_is_set(oldmask, i) ||
 			    sql_space_column_is_in_pk(space, i)) {
@@ -339,13 +340,14 @@ sqlUpdate(Parse * pParse,		/* The parser context */
 	 * be used eliminates some redundant opcodes.
 	 */
 	uint64_t newmask = sql_trigger_colmask(pParse, trigger, pChanges, 1,
-					       TRIGGER_BEFORE, space, on_error);
+					       1 << TRIGGER_ACTION_TIMING_BEFORE,
+					       space, on_error);
 	for (i = 0; i < (int)def->field_count; i++) {
 		j = aXRef[i];
 		if (j >= 0) {
 			sqlExprCode(pParse, pChanges->a[j].pExpr,
 					regNew + i);
-		} else if ((tmask & TRIGGER_BEFORE) == 0 ||
+		} else if ((tmask & (1 << TRIGGER_ACTION_TIMING_BEFORE)) == 0 ||
 			   column_mask_fieldno_is_set(newmask, i) != 0) {
 			/* This branch loads the value of a column that will not be changed
 			 * into a register. This is done if there are no BEFORE triggers, or
@@ -362,12 +364,12 @@ sqlUpdate(Parse * pParse,		/* The parser context */
 	/* Fire any BEFORE UPDATE triggers. This happens before constraints are
 	 * verified. One could argue that this is wrong.
 	 */
-	if (tmask & TRIGGER_BEFORE) {
+	if ((tmask & (1 << TRIGGER_ACTION_TIMING_BEFORE)) != 0) {
 		sql_emit_table_types(v, space->def, regNew);
 		vdbe_code_row_trigger(pParse, trigger,
 				      TRIGGER_EVENT_MANIPULATION_UPDATE,
-				      pChanges, TRIGGER_BEFORE, space, regOldPk,
-				      on_error, labelContinue);
+				      pChanges, TRIGGER_ACTION_TIMING_BEFORE,
+				      space, regOldPk, on_error, labelContinue);
 
 		/* The row-trigger may have deleted the row being updated. In this
 		 * case, jump to the next row. No updates or AFTER triggers are
@@ -481,8 +483,8 @@ sqlUpdate(Parse * pParse,		/* The parser context */
 
 	vdbe_code_row_trigger(pParse, trigger,
 			      TRIGGER_EVENT_MANIPULATION_UPDATE, pChanges,
-			      TRIGGER_AFTER, space, regOldPk, on_error,
-			      labelContinue);
+			      TRIGGER_ACTION_TIMING_AFTER, space, regOldPk,
+			      on_error, labelContinue);
 
 	/* Repeat the above with the next record to be updated, until
 	 * all record selected by the WHERE clause have been updated.

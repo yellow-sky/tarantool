@@ -50,6 +50,23 @@ enum trigger_event_manipulation {
 
 extern const char *trigger_event_manipulation_strs[];
 
+/**
+ * Whether the trigger activates before or after the triggering
+ * event. The value is `BEFORE` or `AFTER`.
+ */
+enum trigger_action_timing {
+	TRIGGER_ACTION_TIMING_BEFORE,
+	TRIGGER_ACTION_TIMING_AFTER,
+	/*
+	 * INSTEAD of triggers are only for views and
+	 * views only support INSTEAD of triggers.
+	 */
+	TRIGGER_ACTION_TIMING_INSTEAD,
+	trigger_action_timing_MAX
+};
+
+extern const char *trigger_action_timing_strs[];
+
 #if defined(__cplusplus)
 } /* extern "C" */
 #endif /* defined(__cplusplus) */

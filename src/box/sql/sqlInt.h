@@ -2307,8 +2307,11 @@ struct sql_trigger {
 	 * modified).
 	 */
 	enum trigger_event_manipulation event_manipulation;
-	/** One of TRIGGER_BEFORE, TRIGGER_AFTER. */
-	u8 tr_tm;
+	/**
+	 * Whether the trigger activates before or after the
+	 * triggering event. The value is `BEFORE` or `AFTER`.
+	 */
+	enum trigger_action_timing action_timing;
 	/** The WHEN clause of the expression (may be NULL). */
 	Expr *pWhen;
 	/**
@@ -2321,16 +2324,6 @@ struct sql_trigger {
 	/** Next trigger associated with the table. */
 	struct sql_trigger *next;
 };
-
-/*
- * A trigger is either a BEFORE or an AFTER trigger.  The following constants
- * determine which.
- *
- * If there are multiple triggers, you might of some BEFORE and some AFTER.
- * In that cases, the constants below can be ORed together.
- */
-#define TRIGGER_BEFORE  1
-#define TRIGGER_AFTER   2
 
 /*
  * An instance of struct TriggerStep is used to store a single SQL statement
@@ -3522,7 +3515,8 @@ sql_triggers_exist(struct space_def *space_def,
  * @param trigger List of triggers on table.
  * @param event_manipulation Trigger operation.
  * @param changes_list Changes list for any UPDATE OF triggers.
- * @param tr_tm One of TRIGGER_BEFORE, TRIGGER_AFTER.
+ * @param action_timing Whether the trigger activates before or
+ *                      after the triggering event. .
  * @param space The space to code triggers from.
  * @param reg The first in an array of registers.
  * @param orconf ON CONFLICT policy.
@@ -3531,8 +3525,10 @@ sql_triggers_exist(struct space_def *space_def,
 void
 vdbe_code_row_trigger(struct Parse *parser, struct sql_trigger *trigger,
 		      enum trigger_event_manipulation event_manipulation,
-		      struct ExprList *changes_list, int tr_tm,
-		      struct space *space, int reg, int orconf, int ignore_jump);
+		      struct ExprList *changes_list,
+		      enum trigger_action_timing action_timing,
+		      struct space *space, int reg, int orconf,
+		      int ignore_jump);
 
 /**
  * Generate code for the trigger program associated with trigger
@@ -3657,7 +3653,8 @@ sql_trigger_delete_step(struct sql *db, struct Token *table_name,
  * @param trigger List of triggers on table.
  * @param changes_list Changes list for any UPDATE OF triggers.
  * @param new  1 for new.* ref mask, 0 for old.* ref mask.
- * @param tr_tm Mask of TRIGGER_BEFORE|TRIGGER_AFTER.
+ * @param action_timing_mask Mask of action timings referenced in
+ *                           the triggers list.
  * @param space The space to code triggers from.
  * @param orconf Default ON CONFLICT policy for trigger steps.
  *
@@ -3665,8 +3662,10 @@ sql_trigger_delete_step(struct sql *db, struct Token *table_name,
  */
 uint64_t
 sql_trigger_colmask(Parse *parser, struct sql_trigger *trigger,
-		    ExprList *changes_list, int new, int tr_tm,
-		    struct space *space, int orconf);
+		    struct ExprList *changes_list, int new,
+		    uint8_t action_timing_mask, struct space *space,
+		    int orconf);
+
 #define sqlParseToplevel(p) ((p)->pToplevel ? (p)->pToplevel : (p))
 #define sqlIsToplevel(p) ((p)->pToplevel==0)
 

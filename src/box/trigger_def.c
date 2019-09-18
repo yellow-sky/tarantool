@@ -31,3 +31,5 @@
 #include "trigger_def.h"
 
 const char *trigger_event_manipulation_strs[] = {"DELETE", "UPDATE", "INSERT"};
+
+const char *trigger_action_timing_strs[] = {"BEFORE", "AFTER", "INSTEAD"};

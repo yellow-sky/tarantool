@@ -1280,3 +1280,18 @@ trigger_event_manipulation_by_op(int op)
 		unreachable();
 	}
 }
+
+enum trigger_action_timing
+trigger_action_timing_by_op(int op)
+{
+	switch (op) {
+	case TK_BEFORE:
+		return TRIGGER_ACTION_TIMING_BEFORE;
+	case TK_AFTER:
+		return TRIGGER_ACTION_TIMING_AFTER;
+	case TK_INSTEAD:
+		return TRIGGER_ACTION_TIMING_INSTEAD;
+	default:
+		unreachable();
+	}
+}

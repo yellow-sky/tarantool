@@ -127,7 +127,7 @@ sql_trigger_begin(struct Parse *parse)
 	trigger->zName = trigger_name;
 	trigger_name = NULL;
 	trigger->event_manipulation = trigger_def->event_manipulation;
-	trigger->tr_tm = trigger_def->tr_tm;
+	trigger->action_timing = trigger_def->action_timing;
 	trigger->pWhen = sqlExprDup(db, trigger_def->when, EXPRDUP_REDUCE);
 	trigger->pColumns = sqlIdListDup(db, trigger_def->cols);
 	if ((trigger->pWhen != NULL && trigger->pWhen == NULL) ||
@@ -449,25 +449,27 @@ sql_trigger_replace(const char *name, uint32_t space_id,
 		 * INSTEAD of triggers are only for views and
 		 * views only support INSTEAD of triggers.
 		 */
-		if (space->def->opts.is_view && trigger->tr_tm != TK_INSTEAD) {
-			diag_set(ClientError, ER_SQL_EXECUTE,
-				 tt_sprintf("cannot create %s "\
-                         "trigger on view: %s", trigger->tr_tm == TK_BEFORE ?
-						"BEFORE" : "AFTER",
-					    space->def->name));
+		if (space->def->opts.is_view &&
+		    trigger->action_timing != TRIGGER_ACTION_TIMING_INSTEAD) {
+			const char *err_msg =
+				tt_sprintf("cannot create %s trigger on "
+					   "view: %s",
+					    trigger_action_timing_strs[
+						trigger->action_timing],
+					    space->def->name);
+			diag_set(ClientError, ER_SQL_EXECUTE, err_msg);
 			return -1;
 		}
-		if (!space->def->opts.is_view && trigger->tr_tm == TK_INSTEAD) {
+		if (!space->def->opts.is_view &&
+		    trigger->action_timing == TRIGGER_ACTION_TIMING_INSTEAD) {
 			diag_set(ClientError, ER_SQL_EXECUTE,
 				 tt_sprintf("cannot create "\
                          "INSTEAD OF trigger on space: %s", space->def->name));
 			return -1;
 		}
 
-		if (trigger->tr_tm == TK_BEFORE || trigger->tr_tm == TK_INSTEAD)
-			trigger->tr_tm = TRIGGER_BEFORE;
-		else if (trigger->tr_tm == TK_AFTER)
-			trigger->tr_tm = TRIGGER_AFTER;
+		if (trigger->action_timing == TRIGGER_ACTION_TIMING_INSTEAD)
+			trigger->action_timing = TRIGGER_ACTION_TIMING_BEFORE;
 	}
 
 	struct sql_trigger **ptr = &space->sql_triggers;
@@ -541,7 +543,7 @@ sql_triggers_exist(struct space_def *space_def,
 	for (struct sql_trigger *p = trigger_list; p != NULL; p = p->next) {
 		if (p->event_manipulation == event_manipulation &&
 		    checkColumnOverlap(p->pColumns, changes_list) != 0)
-			mask |= p->tr_tm;
+			mask |= (1 << p->action_timing);
 	}
 	if (mask_ptr != NULL)
 		*mask_ptr = mask;
@@ -763,8 +765,7 @@ sql_row_trigger_program(struct Parse *parser, struct sql_trigger *trigger,
 	if (v != NULL) {
 		VdbeComment((v, "Start: %s.%s (%s %s ON %s)",
 			     trigger->zName, onErrorText(orconf),
-			     (trigger->tr_tm ==
-			      TRIGGER_BEFORE ? "BEFORE" : "AFTER"),
+			     trigger_action_timing_strs[trigger->action_timing],
 			      trigger_event_manipulation_strs[
 						trigger->event_manipulation],
 			      space->def->name));
@@ -912,17 +913,19 @@ vdbe_code_row_trigger_direct(struct Parse *parser, struct sql_trigger *trigger,
 void
 vdbe_code_row_trigger(struct Parse *parser, struct sql_trigger *trigger,
 		      enum trigger_event_manipulation event_manipulation,
-		      struct ExprList *changes_list, int tr_tm,
+		      struct ExprList *changes_list,
+		      enum trigger_action_timing action_timing,
 		      struct space *space, int reg, int orconf, int ignore_jump)
 {
-	assert(tr_tm == TRIGGER_BEFORE || tr_tm == TRIGGER_AFTER);
+	assert(action_timing == TRIGGER_ACTION_TIMING_BEFORE ||
+	       action_timing == TRIGGER_ACTION_TIMING_AFTER);
 	assert((event_manipulation == TRIGGER_EVENT_MANIPULATION_UPDATE) ==
 	       (changes_list != NULL));
 
 	for (struct sql_trigger *p = trigger; p != NULL; p = p->next) {
 		/* Determine whether we should code trigger. */
 		if (p->event_manipulation == event_manipulation &&
-		    p->tr_tm == tr_tm &&
+		    p->action_timing == action_timing &&
 		    checkColumnOverlap(p->pColumns, changes_list)) {
 			vdbe_code_row_trigger_direct(parser, p, space, reg,
 						     orconf, ignore_jump);
@@ -932,7 +935,7 @@ vdbe_code_row_trigger(struct Parse *parser, struct sql_trigger *trigger,
 
 uint64_t
 sql_trigger_colmask(Parse *parser, struct sql_trigger *trigger,
-		    ExprList *changes_list, int new, int tr_tm,
+		    ExprList *changes_list, int new, uint8_t action_timing_mask,
 		    struct space *space, int orconf)
 {
 	enum trigger_event_manipulation event_manipulation =
@@ -943,7 +946,7 @@ sql_trigger_colmask(Parse *parser, struct sql_trigger *trigger,
 	assert(new == 1 || new == 0);
 	for (struct sql_trigger *p = trigger; p != NULL; p = p->next) {
 		if (p->event_manipulation == event_manipulation &&
-		    (tr_tm & p->tr_tm) &&
+		    ((action_timing_mask & (1 << p->action_timing)) != 0) &&
 		    checkColumnOverlap(p->pColumns, changes_list)) {
 			TriggerPrg *prg =
 				sql_row_trigger(parser, p, space, orconf);

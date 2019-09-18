@@ -552,7 +552,7 @@ sqlInsert(Parse * pParse,	/* Parser context */
 	/* Run the BEFORE and INSTEAD OF triggers, if there are any
 	 */
 	endOfLoop = sqlVdbeMakeLabel(v);
-	if (tmask & TRIGGER_BEFORE) {
+	if ((tmask & (1 << TRIGGER_ACTION_TIMING_BEFORE)) != 0) {
 		int regCols =
 			sqlGetTempRange(pParse, space_def->field_count + 1);
 
@@ -602,7 +602,7 @@ sqlInsert(Parse * pParse,	/* Parser context */
 		/* Fire BEFORE or INSTEAD OF triggers */
 		vdbe_code_row_trigger(pParse, trigger,
 				      TRIGGER_EVENT_MANIPULATION_INSERT, 0,
-				      TRIGGER_BEFORE, space,
+				      TRIGGER_ACTION_TIMING_BEFORE, space,
 				      regCols - space_def->field_count - 1, on_error,
 				      endOfLoop);
 
@@ -757,7 +757,7 @@ sqlInsert(Parse * pParse,	/* Parser context */
 		/* Code AFTER triggers */
 		vdbe_code_row_trigger(pParse, trigger,
 				      TRIGGER_EVENT_MANIPULATION_INSERT, 0,
-				      TRIGGER_AFTER, space,
+				      TRIGGER_ACTION_TIMING_AFTER, space,
 				      regData - 2 - space_def->field_count, on_error,
 				      endOfLoop);
 	}

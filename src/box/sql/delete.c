@@ -466,8 +466,9 @@ sql_generate_row_delete(struct Parse *parse, struct space *space,
 		/* TODO: Could use temporary registers here. */
 		uint64_t mask =
 			sql_trigger_colmask(parse, trigger_list, 0, 0,
-					    TRIGGER_BEFORE | TRIGGER_AFTER,
-					    space, onconf);
+					(1 << TRIGGER_ACTION_TIMING_BEFORE) |
+					(1 << TRIGGER_ACTION_TIMING_AFTER),
+					space, onconf);
 		assert(space != NULL);
 		mask |= space->fk_constraint_mask;
 		first_old_reg = parse->nMem + 1;
@@ -489,8 +490,8 @@ sql_generate_row_delete(struct Parse *parse, struct space *space,
 		int addr_start = sqlVdbeCurrentAddr(v);
 		vdbe_code_row_trigger(parse, trigger_list,
 				      TRIGGER_EVENT_MANIPULATION_DELETE, NULL,
-				      TRIGGER_BEFORE, space, first_old_reg,
-				      onconf, label);
+				      TRIGGER_ACTION_TIMING_BEFORE, space,
+				      first_old_reg, onconf, label);
 
 		/* If any BEFORE triggers were coded, then seek
 		 * the cursor to the row to be deleted again. It
@@ -544,8 +545,8 @@ sql_generate_row_delete(struct Parse *parse, struct space *space,
 		/* Invoke AFTER DELETE trigger programs. */
 		vdbe_code_row_trigger(parse, trigger_list,
 				      TRIGGER_EVENT_MANIPULATION_DELETE, 0,
-				      TRIGGER_AFTER, space, first_old_reg,
-				      onconf, label);
+				      TRIGGER_ACTION_TIMING_AFTER, space,
+				      first_old_reg, onconf, label);
 	}
 
 	/* Jump here if the row had already been deleted before

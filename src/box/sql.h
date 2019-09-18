@@ -428,6 +428,13 @@ vdbe_field_ref_prepare_tuple(struct vdbe_field_ref *field_ref,
 enum trigger_event_manipulation
 trigger_event_manipulation_by_op(int op);
 
+/**
+ * Convert a given TK_BEFORE/TK_AFTER/TK_INSTEAD operation
+ * to trigger_event_manipulation value.
+ */
+enum trigger_action_timing
+trigger_action_timing_by_op(int op);
+
 #if defined(__cplusplus)
 } /* extern "C" { */
 #endif
