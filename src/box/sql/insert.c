@@ -257,7 +257,7 @@ sqlInsert(Parse * pParse,	/* Parser context */
 	int regData;		/* register holding first column to insert */
 	int *aRegIdx = 0;	/* One register allocated to each index */
 	/* List of triggers on pTab, if required. */
-	struct sql_trigger *trigger;
+	struct rlist *trigger_list;
 	int tmask;		/* Mask of trigger times */
 
 	db = pParse->db;
@@ -293,13 +293,13 @@ sqlInsert(Parse * pParse,	/* Parser context */
 	 * inserted into is a view
 	 */
 	struct space_def *space_def = space->def;
-	trigger = sql_triggers_exist(space_def,
-				     TRIGGER_EVENT_MANIPULATION_INSERT, NULL,
-				     pParse->sql_flags, &tmask);
+	trigger_list = sql_triggers_exist(space,
+					  TRIGGER_EVENT_MANIPULATION_INSERT,
+					  NULL, pParse->sql_flags, &tmask);
 
 	bool is_view = space_def->opts.is_view;
-	assert((trigger != NULL && tmask != 0) ||
-	       (trigger == NULL && tmask == 0));
+	assert((trigger_list != NULL && tmask != 0) ||
+	       (trigger_list == NULL && tmask == 0));
 
 	/* If pTab is really a view, make sure it has been initialized.
 	 * ViewGetColumnNames() is a no-op if pTab is not a view.
@@ -320,7 +320,7 @@ sqlInsert(Parse * pParse,	/* Parser context */
 	if (v == NULL)
 		goto insert_cleanup;
 	sqlVdbeCountChanges(v);
-	sql_set_multi_write(pParse, pSelect != NULL || trigger != NULL);
+	sql_set_multi_write(pParse, pSelect != NULL || trigger_list != NULL);
 
 	/* If the statement is of the form
 	 *
@@ -333,7 +333,7 @@ sqlInsert(Parse * pParse,	/* Parser context */
 	 */
 	if (pColumn == NULL &&
 	    xferOptimization(pParse, space, pSelect, on_error)) {
-		assert(trigger == NULL);
+		assert(trigger_list == NULL);
 		assert(pList == 0);
 		goto insert_end;
 	}
@@ -435,7 +435,8 @@ sqlInsert(Parse * pParse,	/* Parser context */
 		 * the SELECT statement. Also use a temp table in
 		 * the case of row triggers.
 		 */
-		if (trigger != NULL || vdbe_has_space_read(pParse, space_def))
+		if (trigger_list != NULL ||
+		    vdbe_has_space_read(pParse, space_def))
 			useTempTable = 1;
 
 		if (useTempTable) {
@@ -600,7 +601,7 @@ sqlInsert(Parse * pParse,	/* Parser context */
 			sql_emit_table_types(v, space_def, regCols + 1);
 
 		/* Fire BEFORE or INSTEAD OF triggers */
-		vdbe_code_row_trigger(pParse, trigger,
+		vdbe_code_row_trigger(pParse, trigger_list,
 				      TRIGGER_EVENT_MANIPULATION_INSERT, 0,
 				      TRIGGER_ACTION_TIMING_BEFORE, space,
 				      regCols - space_def->field_count - 1, on_error,
@@ -753,9 +754,9 @@ sqlInsert(Parse * pParse,	/* Parser context */
 		sqlVdbeAddOp2(v, OP_AddImm, regRowCount, 1);
 	}
 
-	if (trigger != NULL) {
+	if (trigger_list != NULL) {
 		/* Code AFTER triggers */
-		vdbe_code_row_trigger(pParse, trigger,
+		vdbe_code_row_trigger(pParse, trigger_list,
 				      TRIGGER_EVENT_MANIPULATION_INSERT, 0,
 				      TRIGGER_ACTION_TIMING_AFTER, space,
 				      regData - 2 - space_def->field_count, on_error,
@@ -963,8 +964,8 @@ process_index:  ;
 					     skip_index, idx_key_reg,
 					     part_count);
 			sql_set_multi_write(parse_context, true);
-			struct sql_trigger *trigger =
-				sql_triggers_exist(space->def,
+			struct rlist *trigger =
+				sql_triggers_exist(space,
 					TRIGGER_EVENT_MANIPULATION_DELETE, NULL,
 					parse_context->sql_flags, NULL);
 			sql_generate_row_delete(parse_context, space, trigger,
@@ -1069,7 +1070,7 @@ xferOptimization(Parse * pParse,	/* Parser context */
 		return 0;
 	}
 	/* The pDest must not have triggers. */
-	if (dest->sql_triggers != NULL)
+	if (!rlist_empty(&dest->trigger_list))
 		return 0;
 	if (onError == ON_CONFLICT_ACTION_DEFAULT) {
 		onError = ON_CONFLICT_ACTION_ABORT;

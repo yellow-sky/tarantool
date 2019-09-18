@@ -69,7 +69,7 @@ sqlUpdate(Parse * pParse,		/* The parser context */
 
 	bool is_view;		/* True when updating a view (INSTEAD OF trigger) */
 	/* List of triggers on pTab, if required. */
-	struct sql_trigger *trigger;
+	struct rlist *trigger_list;
 	int tmask;		/* Mask of TRIGGER_BEFORE|TRIGGER_AFTER */
 	int iEph = 0;		/* Ephemeral table holding all primary key values */
 	int nKey = 0;		/* Number of elements in regKey */
@@ -100,11 +100,11 @@ sqlUpdate(Parse * pParse,		/* The parser context */
 	/* Figure out if we have any triggers and if the table being
 	 * updated is a view.
 	 */
-	trigger = sql_triggers_exist(space->def,
-				     TRIGGER_EVENT_MANIPULATION_UPDATE,
-				     pChanges, pParse->sql_flags, &tmask);
+	trigger_list = sql_triggers_exist(space,
+					  TRIGGER_EVENT_MANIPULATION_UPDATE,
+					  pChanges, pParse->sql_flags, &tmask);
 	is_view = space->def->opts.is_view;
-	assert(trigger != NULL || tmask == 0);
+	assert(trigger_list != NULL || tmask == 0);
 
 	if (is_view &&
 	    sql_view_assign_cursors(pParse, space->def->opts.sql) != 0) {
@@ -192,7 +192,7 @@ sqlUpdate(Parse * pParse,		/* The parser context */
 	/* Allocate required registers. */
 	regOldPk = regNewPk = ++pParse->nMem;
 
-	if (is_pk_modified || trigger != NULL || hasFK != 0) {
+	if (is_pk_modified || trigger_list != NULL || hasFK != 0) {
 		regOld = pParse->nMem + 1;
 		pParse->nMem += def->field_count;
 		regNewPk = ++pParse->nMem;
@@ -301,16 +301,16 @@ sqlUpdate(Parse * pParse,		/* The parser context */
 	 * then regNewPk is the same register as regOldPk, which is
 	 * already populated.
 	 */
-	assert(is_pk_modified || trigger != NULL || hasFK != 0 ||
+	assert(is_pk_modified || trigger_list != NULL || hasFK != 0 ||
 	       regOldPk == regNewPk);
 
 	/* Compute the old pre-UPDATE content of the row being changed, if that
 	 * information is needed
 	 */
-	if (is_pk_modified || hasFK != 0 || trigger != NULL) {
+	if (is_pk_modified || hasFK != 0 || trigger_list != NULL) {
 		assert(space != NULL);
 		uint64_t oldmask = hasFK ? space->fk_constraint_mask : 0;
-		oldmask |= sql_trigger_colmask(pParse, trigger, pChanges, 0,
+		oldmask |= sql_trigger_colmask(pParse, trigger_list, pChanges, 0,
 					(1 << TRIGGER_ACTION_TIMING_BEFORE) |
 					(1 << TRIGGER_ACTION_TIMING_AFTER),
 					space, on_error);
@@ -339,7 +339,7 @@ sqlUpdate(Parse * pParse,		/* The parser context */
 	 * may have modified them). So not loading those that are not going to
 	 * be used eliminates some redundant opcodes.
 	 */
-	uint64_t newmask = sql_trigger_colmask(pParse, trigger, pChanges, 1,
+	uint64_t newmask = sql_trigger_colmask(pParse, trigger_list, pChanges, 1,
 					       1 << TRIGGER_ACTION_TIMING_BEFORE,
 					       space, on_error);
 	for (i = 0; i < (int)def->field_count; i++) {
@@ -366,7 +366,7 @@ sqlUpdate(Parse * pParse,		/* The parser context */
 	 */
 	if ((tmask & (1 << TRIGGER_ACTION_TIMING_BEFORE)) != 0) {
 		sql_emit_table_types(v, space->def, regNew);
-		vdbe_code_row_trigger(pParse, trigger,
+		vdbe_code_row_trigger(pParse, trigger_list,
 				      TRIGGER_EVENT_MANIPULATION_UPDATE,
 				      pChanges, TRIGGER_ACTION_TIMING_BEFORE,
 				      space, regOldPk, on_error, labelContinue);
@@ -481,7 +481,7 @@ sqlUpdate(Parse * pParse,		/* The parser context */
 		sqlVdbeAddOp2(v, OP_AddImm, regRowCount, 1);
 	}
 
-	vdbe_code_row_trigger(pParse, trigger,
+	vdbe_code_row_trigger(pParse, trigger_list,
 			      TRIGGER_EVENT_MANIPULATION_UPDATE, pChanges,
 			      TRIGGER_ACTION_TIMING_AFTER, space, regOldPk,
 			      on_error, labelContinue);

@@ -4710,23 +4710,28 @@ case OP_RenameTable: {
 	space = space_by_id(space_id);
 	assert(space);
 	/* Rename space op doesn't change triggers. */
-	struct sql_trigger *triggers = space->sql_triggers;
+	RLIST_HEAD(trigger_list);
+	rlist_swap(&trigger_list, &space->trigger_list);
 	zOldTableName = space_name(space);
 	assert(zOldTableName);
 	zNewTableName = pOp->p4.z;
 	zOldTableName = sqlDbStrNDup(db, zOldTableName,
 					 sqlStrlen30(zOldTableName));
-	if (sql_rename_table(space_id, zNewTableName) != 0)
+	if (sql_rename_table(space_id, zNewTableName) != 0) {
+		rlist_swap(&trigger_list, &space->trigger_list);
 		goto abort_due_to_error;
+	}
+	space = space_by_id(space_id);
+	assert(space != NULL);
+	rlist_swap(&trigger_list, &space->trigger_list);
 	/*
 	 * Rebuild 'CREATE TRIGGER' expressions of all triggers
 	 * created on this table. Sure, this action is not atomic
 	 * due to lack of transactional DDL, but just do the best
 	 * effort.
 	 */
-	for (struct sql_trigger *trigger = triggers; trigger != NULL; ) {
-		/* Store pointer as trigger will be destructed. */
-		struct sql_trigger *next_trigger = trigger->next;
+	struct sql_trigger *trigger, *tmp;
+	rlist_foreach_entry_safe(trigger, &space->trigger_list, link, tmp) {
 		/*
 		 * FIXME: In the case of error, part of triggers
 		 * would have invalid space name in tuple so can
@@ -4736,7 +4741,6 @@ case OP_RenameTable: {
 		if (tarantoolsqlRenameTrigger(trigger->zName, zOldTableName,
 					      zNewTableName) != 0)
 			goto abort_due_to_error;
-		trigger = next_trigger;
 	}
 	sqlDbFree(db, (void*)zOldTableName);
 	break;

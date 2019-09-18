@@ -857,6 +857,7 @@ fk_constraint_action_trigger(struct Parse *pParse, struct space_def *def,
 	if (trigger != NULL) {
 		size_t step_size = sizeof(TriggerStep) + name_len + 1;
 		trigger->step_list = sqlDbMallocZero(db, step_size);
+		rlist_create(&trigger->link);
 		step = trigger->step_list;
 		step->zTarget = (char *) &step[1];
 		memcpy((char *) step->zTarget, space_name, name_len);

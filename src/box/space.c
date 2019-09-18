@@ -177,6 +177,7 @@ space_create(struct space *space, struct engine *engine,
 	rlist_create(&space->parent_fk_constraint);
 	rlist_create(&space->child_fk_constraint);
 	rlist_create(&space->ck_constraint);
+	rlist_create(&space->trigger_list);
 
 	/*
 	 * Check if there are unique indexes that are contained
@@ -261,7 +262,7 @@ space_delete(struct space *space)
 	 * SQL Triggers should be deleted with
 	 * on_replace_dd_trigger on deletion from _trigger.
 	 */
-	assert(space->sql_triggers == NULL);
+	assert(rlist_empty(&space->trigger_list));
 	assert(rlist_empty(&space->parent_fk_constraint));
 	assert(rlist_empty(&space->child_fk_constraint));
 	assert(rlist_empty(&space->ck_constraint));

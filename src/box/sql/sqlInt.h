@@ -2283,49 +2283,6 @@ struct Parse {
 #endif
 
 /*
- * Each trigger present in the database schema is stored as an
- * instance of struct sql_trigger.
- * Pointers to instances of struct sql_trigger are stored in a
- * linked list, using the next member of struct sql_trigger. A
- * pointer to the first element of the linked list is stored as
- * sql_triggers member of the associated space.
- *
- * The "step_list" member points to the first element of a linked
- * list containing the SQL statements specified as the trigger
- * program.
- */
-struct sql_trigger {
-	/** The name of the trigger. */
-	char *zName;
-	/** The ID of space the trigger refers to. */
-	uint32_t space_id;
-	/**
-	 * The trigger event. This is the type of operation
-	 * on the associated space for which the trigger
-	 * activates. The value is `INSERT` (a row was inserted),
-	 * `DELETE` (a row was deleted), or `UPDATE` (a row was
-	 * modified).
-	 */
-	enum trigger_event_manipulation event_manipulation;
-	/**
-	 * Whether the trigger activates before or after the
-	 * triggering event. The value is `BEFORE` or `AFTER`.
-	 */
-	enum trigger_action_timing action_timing;
-	/** The WHEN clause of the expression (may be NULL). */
-	Expr *pWhen;
-	/**
-	 * If this is an UPDATE OF <column-list> trigger,
-	 * the <column-list> is stored here
-	 */
-	IdList *pColumns;
-	/** Link list of trigger program steps. */
-	TriggerStep *step_list;
-	/** Next trigger associated with the table. */
-	struct sql_trigger *next;
-};
-
-/*
  * An instance of struct TriggerStep is used to store a single SQL statement
  * that is a part of a trigger-program.
  *
@@ -3229,7 +3186,7 @@ sql_expr_needs_no_type_change(const struct Expr *expr, enum field_type type);
  */
 void
 sql_generate_row_delete(struct Parse *parse, struct space *space,
-			struct sql_trigger *trigger_list, int cursor,
+			struct rlist *trigger_list, int cursor,
 			int reg_pk, short npk, bool need_update_count,
 			enum on_conflict_action onconf, u8 mode,
 			int idx_noseek);
@@ -3462,8 +3419,8 @@ vdbe_code_drop_trigger(struct Parse *parser, const char *trigger_name,
  * @param sql_flags SQL flags which describe how to parse request.
  * @param[out] pMask Mask of TRIGGER_BEFORE|TRIGGER_AFTER
  */
-struct sql_trigger *
-sql_triggers_exist(struct space_def *space_def,
+struct rlist *
+sql_triggers_exist(struct space *space,
 		   enum trigger_event_manipulation event_manipulation,
 		   struct ExprList *changes_list, uint32_t sql_flags,
 		   int *mask_ptr);
@@ -3512,7 +3469,7 @@ sql_triggers_exist(struct space_def *space_def,
  * jump to if a trigger program raises an IGNORE exception.
  *
  * @param parser Parse context.
- * @param trigger List of triggers on table.
+ * @param trigger_list List of triggers on table.
  * @param event_manipulation Trigger operation.
  * @param changes_list Changes list for any UPDATE OF triggers.
  * @param action_timing Whether the trigger activates before or
@@ -3523,7 +3480,7 @@ sql_triggers_exist(struct space_def *space_def,
  * @param ignore_jump Instruction to jump to for RAISE(IGNORE).
  */
 void
-vdbe_code_row_trigger(struct Parse *parser, struct sql_trigger *trigger,
+vdbe_code_row_trigger(struct Parse *parser, struct rlist *trigger_list,
 		      enum trigger_event_manipulation event_manipulation,
 		      struct ExprList *changes_list,
 		      enum trigger_action_timing action_timing,
@@ -3537,7 +3494,7 @@ vdbe_code_row_trigger(struct Parse *parser, struct sql_trigger *trigger,
  * header function for sql_code_row_trigger().
  *
  * @param parser Parse context.
- * @param trigger Trigger to code.
+ * @param trigger_list Trigger to code.
  * @param space The space to code triggers from.
  * @param reg Reg array containing OLD.* and NEW.* values.
  * @param orconf ON CONFLICT policy.
@@ -3650,7 +3607,7 @@ sql_trigger_delete_step(struct sql *db, struct Token *table_name,
  * returned mask if the TRIGGER_AFTER bit is set in tr_tm.
  *
  * @param parser  Parse context.
- * @param trigger List of triggers on table.
+ * @param trigger_list List of triggers on table.
  * @param changes_list Changes list for any UPDATE OF triggers.
  * @param new  1 for new.* ref mask, 0 for old.* ref mask.
  * @param action_timing_mask Mask of action timings referenced in
@@ -3661,7 +3618,7 @@ sql_trigger_delete_step(struct sql *db, struct Token *table_name,
  * @retval mask value.
  */
 uint64_t
-sql_trigger_colmask(Parse *parser, struct sql_trigger *trigger,
+sql_trigger_colmask(struct Parse *parser, struct rlist *trigger_list,
 		    struct ExprList *changes_list, int new,
 		    uint8_t action_timing_mask, struct space *space,
 		    int orconf);

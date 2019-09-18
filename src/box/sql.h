@@ -34,6 +34,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "box/trigger_def.h"
+#include "small/rlist.h"
 
 #if defined(__cplusplus)
 extern "C" {
@@ -420,6 +421,52 @@ vdbe_field_ref_prepare_data(struct vdbe_field_ref *field_ref, const char *data,
 void
 vdbe_field_ref_prepare_tuple(struct vdbe_field_ref *field_ref,
 			     struct tuple *tuple);
+
+/**
+ * Each trigger present in the database schema is stored as an
+ * instance of struct sql_trigger.
+ * Pointers to instances of struct sql_trigger are stored in a
+ * linked list, using the next member of struct sql_trigger. A
+ * pointer to the first element of the linked list is stored as
+ * trigger_list member of the associated space.
+ *
+ * The "step_list" member points to the first element of a linked
+ * list containing the SQL statements specified as the trigger
+ * program.
+ */
+struct sql_trigger {
+	/** The name of the trigger. */
+	char *zName;
+	/** The ID of space the trigger refers to. */
+	uint32_t space_id;
+	/**
+	 * The trigger event. This is the type of operation
+	 * on the associated space for which the trigger
+	 * activates. The value is `INSERT` (a row was inserted),
+	 * `DELETE` (a row was deleted), or `UPDATE` (a row was
+	 * modified).
+	 */
+	enum trigger_event_manipulation event_manipulation;
+	/**
+	 * Whether the trigger activates before or after the
+	 * triggering event. The value is `BEFORE` or `AFTER`.
+	 */
+	enum trigger_action_timing action_timing;
+	/** The WHEN clause of the expression (may be NULL). */
+	struct Expr *pWhen;
+	/**
+	 * If this is an UPDATE OF <column-list> trigger,
+	 * the <column-list> is stored here
+	 */
+	struct IdList *pColumns;
+	/** Link list of trigger program steps. */
+	struct TriggerStep *step_list;
+	/**
+	 * Organize sql_trigger structs into linked list
+	 * with space::trigger_list.
+	 */
+	struct rlist link;
+};
 
 /**
  * Convert a given OP_INSERT/OP_UPDATE/OP_DELETE operation

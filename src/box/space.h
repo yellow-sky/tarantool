@@ -163,7 +163,7 @@ struct space {
 	/** Triggers fired after space_replace() -- see txn_commit_stmt(). */
 	struct rlist on_replace;
 	/** SQL Trigger list. */
-	struct sql_trigger *sql_triggers;
+	struct rlist trigger_list;
 	/**
 	 * The number of *enabled* indexes in the space.
 	 *

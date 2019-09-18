@@ -1546,11 +1546,9 @@ sql_code_drop_table(struct Parse *parse_context, struct space *space,
 	 * Do not account triggers deletion - they will be
 	 * accounted in DELETE from _space below.
 	 */
-	struct sql_trigger *trigger = space->sql_triggers;
-	while (trigger != NULL) {
+	struct sql_trigger *trigger;
+	rlist_foreach_entry(trigger, &space->trigger_list, link)
 		vdbe_code_drop_trigger(parse_context, trigger->zName, false);
-		trigger = trigger->next;
-	}
 	/*
 	 * Remove any entries from the _sequence_data, _sequence
 	 * and _space_sequence spaces associated with the table

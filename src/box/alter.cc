@@ -606,9 +606,7 @@ space_swap_triggers(struct space *new_space, struct space *old_space)
 	rlist_swap(&new_space->before_replace, &old_space->before_replace);
 	rlist_swap(&new_space->on_replace, &old_space->on_replace);
 	/** Swap SQL Triggers pointer. */
-	struct sql_trigger *new_value = new_space->sql_triggers;
-	new_space->sql_triggers = old_space->sql_triggers;
-	old_space->sql_triggers = new_value;
+	rlist_swap(&new_space->trigger_list, &old_space->trigger_list);
 }
 
 /** The same as for triggers - swap lists of FK constraints. */

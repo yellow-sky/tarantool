@@ -130,6 +130,7 @@ sql_trigger_begin(struct Parse *parse)
 	trigger->action_timing = trigger_def->action_timing;
 	trigger->pWhen = sqlExprDup(db, trigger_def->when, EXPRDUP_REDUCE);
 	trigger->pColumns = sqlIdListDup(db, trigger_def->cols);
+	rlist_create(&trigger->link);
 	if ((trigger->pWhen != NULL && trigger->pWhen == NULL) ||
 	    (trigger->pColumns != NULL && trigger->pColumns == NULL))
 		goto trigger_cleanup;
@@ -472,18 +473,17 @@ sql_trigger_replace(const char *name, uint32_t space_id,
 			trigger->action_timing = TRIGGER_ACTION_TIMING_BEFORE;
 	}
 
-	struct sql_trigger **ptr = &space->sql_triggers;
-	while (*ptr != NULL && strcmp((*ptr)->zName, name) != 0)
-		ptr = &((*ptr)->next);
-	if (*ptr != NULL) {
-		*old_trigger = *ptr;
-		*ptr = (*ptr)->next;
+	struct sql_trigger *p;
+	rlist_foreach_entry(p, &space->trigger_list, link) {
+		if (strcmp(p->zName, name) != 0)
+			continue;
+		*old_trigger = p;
+		rlist_del(&p->link);
+		break;
 	}
 
-	if (trigger != NULL) {
-		trigger->next = space->sql_triggers;
-		space->sql_triggers = trigger;
-	}
+	if (trigger != NULL)
+		rlist_add(&space->trigger_list, &trigger->link);
 	return 0;
 }
 
@@ -497,15 +497,6 @@ uint32_t
 sql_trigger_space_id(struct sql_trigger *trigger)
 {
 	return trigger->space_id;
-}
-
-struct sql_trigger *
-space_trigger_list(uint32_t space_id)
-{
-	struct space *space = space_cache_find(space_id);
-	assert(space != NULL);
-	assert(space->def != NULL);
-	return space->sql_triggers;
 }
 
 /*
@@ -530,17 +521,18 @@ checkColumnOverlap(IdList * pIdList, ExprList * pEList)
 	return 0;
 }
 
-struct sql_trigger *
-sql_triggers_exist(struct space_def *space_def,
+struct rlist *
+sql_triggers_exist(struct space *space,
 		   enum trigger_event_manipulation event_manipulation,
 		   struct ExprList *changes_list, uint32_t sql_flags,
 		   int *mask_ptr)
 {
 	int mask = 0;
-	struct sql_trigger *trigger_list = NULL;
+	struct rlist *trigger_list = NULL;
 	if ((sql_flags & SQL_EnableTrigger) != 0)
-		trigger_list = space_trigger_list(space_def->id);
-	for (struct sql_trigger *p = trigger_list; p != NULL; p = p->next) {
+		trigger_list = &space->trigger_list;
+	struct sql_trigger *p;
+	rlist_foreach_entry(p, trigger_list, link) {
 		if (p->event_manipulation == event_manipulation &&
 		    checkColumnOverlap(p->pColumns, changes_list) != 0)
 			mask |= (1 << p->action_timing);
@@ -911,7 +903,7 @@ vdbe_code_row_trigger_direct(struct Parse *parser, struct sql_trigger *trigger,
 }
 
 void
-vdbe_code_row_trigger(struct Parse *parser, struct sql_trigger *trigger,
+vdbe_code_row_trigger(struct Parse *parser, struct rlist *trigger_list,
 		      enum trigger_event_manipulation event_manipulation,
 		      struct ExprList *changes_list,
 		      enum trigger_action_timing action_timing,
@@ -921,8 +913,11 @@ vdbe_code_row_trigger(struct Parse *parser, struct sql_trigger *trigger,
 	       action_timing == TRIGGER_ACTION_TIMING_AFTER);
 	assert((event_manipulation == TRIGGER_EVENT_MANIPULATION_UPDATE) ==
 	       (changes_list != NULL));
+	if (trigger_list == NULL)
+		return;
 
-	for (struct sql_trigger *p = trigger; p != NULL; p = p->next) {
+	struct sql_trigger *p;
+	rlist_foreach_entry(p, trigger_list, link) {
 		/* Determine whether we should code trigger. */
 		if (p->event_manipulation == event_manipulation &&
 		    p->action_timing == action_timing &&
@@ -934,7 +929,7 @@ vdbe_code_row_trigger(struct Parse *parser, struct sql_trigger *trigger,
 }
 
 uint64_t
-sql_trigger_colmask(Parse *parser, struct sql_trigger *trigger,
+sql_trigger_colmask(Parse *parser, struct rlist *trigger_list,
 		    ExprList *changes_list, int new, uint8_t action_timing_mask,
 		    struct space *space, int orconf)
 {
@@ -942,9 +937,12 @@ sql_trigger_colmask(Parse *parser, struct sql_trigger *trigger,
 		changes_list != NULL ? TRIGGER_EVENT_MANIPULATION_UPDATE :
 				       TRIGGER_EVENT_MANIPULATION_DELETE;
 	uint64_t mask = 0;
+	if (trigger_list == NULL)
+		return mask;
 
 	assert(new == 1 || new == 0);
-	for (struct sql_trigger *p = trigger; p != NULL; p = p->next) {
+	struct sql_trigger *p;
+	rlist_foreach_entry(p, trigger_list, link) {
 		if (p->event_manipulation == event_manipulation &&
 		    ((action_timing_mask & (1 << p->action_timing)) != 0) &&
 		    checkColumnOverlap(p->pColumns, changes_list)) {

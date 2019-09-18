@@ -33,6 +33,7 @@
 #include "box/schema.h"
 #include "sqlInt.h"
 #include "tarantoolInt.h"
+#include "small/rlist.h"
 
 struct space *
 sql_lookup_space(struct Parse *parse, struct SrcList_item *space_name)
@@ -143,14 +144,14 @@ sql_table_delete_from(struct Parse *parse, struct SrcList *tab_list,
 	/* Figure out if we have any triggers and if the table
 	 * being deleted from is a view.
 	 */
-	struct sql_trigger *trigger_list = NULL;
+	struct rlist *trigger_list = NULL;
 	/* True if there are triggers or FKs or subqueries in the
 	 * WHERE clause.
 	 */
 	struct space *space = sql_lookup_space(parse, tab_list->a);
 	if (space == NULL)
 		goto delete_from_cleanup;
-	trigger_list = sql_triggers_exist(space->def,
+	trigger_list = sql_triggers_exist(space,
 					  TRIGGER_EVENT_MANIPULATION_DELETE,
 					  NULL, parse->sql_flags, NULL);
 	bool is_complex = trigger_list != NULL || fk_constraint_is_required(space, NULL);
@@ -432,7 +433,7 @@ sql_table_delete_from(struct Parse *parse, struct SrcList *tab_list,
 
 void
 sql_generate_row_delete(struct Parse *parse, struct space *space,
-			struct sql_trigger *trigger_list, int cursor,
+			struct rlist *trigger_list, int cursor,
 			int reg_pk, short npk, bool need_update_count,
 			enum on_conflict_action onconf, u8 mode,
 			int idx_noseek)
