@@ -2,11 +2,24 @@
 set -e
 
 # manual configuration
-branch=2_3
+if [ "$BUCKET" == "" ]; then
+    echo "ERROR: need to set BUCKET env variable to any like <1_10,2_2,2_3,2x>"
+    exit 1
+fi
+branch=$BUCKET
 update_dists=0
 
 # configuration
-os=ubuntu
+if [ "$OS" == "" ]; then
+    echo "ERROR: need to set OS env variable to any of <ubuntu,debian>"
+    exit 1
+fi
+os=$OS
+if [ "$DIST" == "" ]; then
+    echo "ERROR: need to set DIST env variable to any like <bionic,cosmic,disco,trusty,xenial>"
+    exit 1
+fi
+dists=$DIST
 component=main
 debdir=pool
 aws='aws --endpoint-url https://hb.bizmrg.com'
@@ -29,7 +42,7 @@ if [ ! -d $debpath ] ; then
 fi
 
 # create standalone repository with separate components
-for dist in bionic cosmic disco trusty xenial ; do
+for dist in $DISTS ; do
     echo =================== DISTRIBUTION: $dist =========================
     updated_deb=0
     updated_dsc=0

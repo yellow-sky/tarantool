@@ -118,21 +118,16 @@ endif
 ifeq ($(MINOR_VERSION),1)
 BUCKET=$(MAJOR_VERSION)x
 endif
-#REPOBASE=/var/spool/apt-mirror/mirror/packagecloud.io/tarantool/${BUCKET}/${OS}
 REPOBASE=tarantool_repo/${BUCKET}/${OS}
 REPOPATH=${REPOBASE}/pool/${DIST}/main/t/tarantool
 
 # prepare the packpack repository sources
 packpack_setup:
 	git clone https://github.com/packpack/packpack.git packpack
-	#sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6B05F25D762E3157
-	#sudo apt-get update || true
-	#sudo apt-get install -y -f reprepro tree
-	#pip install awscli --user
 
 # create the binaries packages at the ./build/ local path
-# deploy the packages at the AWS S3 bucket named as:
-# tarantool.<major version>[x;.<minor version>]
+# deploy the packages at the AWS S3 bucket path:
+# tarantool_repo/<major version>[x;_<minor version>]
 .PHONY: package
 package: git_submodule_update packpack_setup
 	PACKPACK_EXTRA_DOCKER_RUN_PARAMS='--network=host' ./packpack/packpack
@@ -141,7 +136,7 @@ package: git_submodule_update packpack_setup
 		do cp $$packfile ${REPOPATH}/. ; done
 	mkdir ${REPOBASE}/conf
 	cp distributions ${REPOBASE}/conf
-	cd ${REPOBASE} && ../../../pub_packs_s3.sh .
+	cd ${REPOBASE} && BUCKET=${BUCKET} OS=${OS} DISTS=${DIST} ../../../pub_packs_s3.sh .
 
 # ############
 # Static build

@@ -84,10 +84,6 @@ before_deploy:
   - ls -l build/
 
 deploy:
-  # NOTE: to check the changes at the local branch set instead 'branch' and 'tags':
-  #  on:
-  #    all_branches: true
-
   # Deploy packages to PackageCloud from master branch (w/o tagged revisions)
   - provider: packagecloud
     username: "tarantool"
@@ -100,29 +96,6 @@ deploy:
       repo: tarantool/tarantool
       branch: "master"
       condition: -n "${OS}" && -n "${DIST}" && -n "${PACKAGECLOUD_TOKEN}"
-  # Deploy packages to Mail.ru S3 from master branch (w/o tagged revisions)
-  - provider: s3
-    access_key_id: "${AWS_ACCESS_KEY_ID}"
-    secret_access_key: "${AWS_SECRET_ACCESS_KEY}"
-    endpoint: "${AWS_S3_ENDPOINT_URL}"
-    bucket: "tarantool_repo"
-    upload-dir: "2.3"
-    local_dir: "tarantool_repo/2.3/${OS}"
-    skip_cleanup: true
-    acl: public_read
-    on:
-      repo: tarantool/tarantool
-      all_branches: true
-      condition: -n "${OS}" && -n "${DIST}" && -n "${AWS_S3_ENDPOINT_URL}"
-  #- provider: script
-  #  script: make -f .travis.mk package_deploy
-  #  skip_cleanup: true
-  #  on:
-  #    repo: tarantool/tarantool
-  #    # avtikhon: temporary 2
-  #    #    branch: "master"
-  #    all_branches: true
-  #    condition: -n "${OS}" && -n "${DIST}" && -n "${AWS_S3_ENDPOINT_URL}"
   # Deploy source tarballs to S3 from master branch (w/o tagged revisions)
   - provider: script
     script: make -f .travis.mk source_deploy
@@ -144,15 +117,6 @@ deploy:
       repo: tarantool/tarantool
       tags: true
       condition: -n "${OS}" && -n "${DIST}" && -n "${PACKAGECLOUD_TOKEN}"
-  # Deploy packages tarballs to S3 from tagged revisions
-  # https://github.com/travis-ci/travis-ci/issues/7780#issuecomment-302389370
-  - provider: script
-    script: make -f .travis.mk package_deploy
-    skip_cleanup: true
-    on:
-      repo: tarantool/tarantool
-      tags: true
-      condition: -n "${OS}" && -n "${DIST}" && -n "${AWS_S3_ENDPOINT_URL}"
   # Deploy source tarballs to S3 from tagged revisions
   # https://github.com/travis-ci/travis-ci/issues/7780#issuecomment-302389370
   - provider: script
