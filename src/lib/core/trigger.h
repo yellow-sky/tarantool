@@ -39,11 +39,11 @@ extern "C" {
  * Type of the callback which may be invoked
  * on an event.
  */
-struct trigger;
-typedef void (*trigger_f)(struct trigger *trigger, void *event);
-typedef void (*trigger_f0)(struct trigger *trigger);
+struct lua_trigger;
+typedef void (*trigger_f)(struct lua_trigger *trigger, void *event);
+typedef void (*trigger_f0)(struct lua_trigger *trigger);
 
-struct trigger
+struct lua_trigger
 {
 	struct rlist link;
 	trigger_f run;
@@ -60,7 +60,7 @@ struct trigger
 };
 
 static inline void
-trigger_create(struct trigger *trigger, trigger_f run, void *data,
+trigger_create(struct lua_trigger *trigger, trigger_f run, void *data,
 	       trigger_f0 destroy)
 {
 	rlist_create(&trigger->link);
@@ -70,7 +70,7 @@ trigger_create(struct trigger *trigger, trigger_f run, void *data,
 }
 
 static inline void
-trigger_add(struct rlist *list, struct trigger *trigger)
+trigger_add(struct rlist *list, struct lua_trigger *trigger)
 {
 	/*
 	 * New triggers are pushed to the beginning of the list.
@@ -85,9 +85,9 @@ trigger_add(struct rlist *list, struct trigger *trigger)
 }
 
 static inline void
-trigger_add_unique(struct rlist *list, struct trigger *trigger)
+trigger_add_unique(struct rlist *list, struct lua_trigger *trigger)
 {
-	struct trigger *trg;
+	struct lua_trigger *trg;
 	rlist_foreach_entry(trg, list, link) {
 		if (trg->data == trigger->data && trg->run == trigger->run)
 			return;
@@ -96,7 +96,7 @@ trigger_add_unique(struct rlist *list, struct trigger *trigger)
 }
 
 static inline void
-trigger_clear(struct trigger *trigger)
+trigger_clear(struct lua_trigger *trigger)
 {
 	rlist_del_entry(trigger, link);
 }
@@ -105,7 +105,7 @@ trigger_clear(struct trigger *trigger)
 static inline void
 trigger_destroy(struct rlist *list)
 {
-	struct trigger *trigger, *tmp;
+	struct lua_trigger *trigger, *tmp;
 	rlist_foreach_entry_safe(trigger, list, link, tmp) {
 		trigger_clear(trigger);
 		if (trigger->destroy)

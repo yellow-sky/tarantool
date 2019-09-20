@@ -148,7 +148,7 @@ replica_is_orphan(struct replica *replica)
 }
 
 static void
-replica_on_applier_state_f(struct trigger *trigger, void *event);
+replica_on_applier_state_f(struct lua_trigger *trigger, void *event);
 
 static struct replica *
 replica_new(void)
@@ -402,7 +402,7 @@ replica_on_applier_disconnect(struct replica *replica)
 }
 
 static void
-replica_on_applier_state_f(struct trigger *trigger, void *event)
+replica_on_applier_state_f(struct lua_trigger *trigger, void *event)
 {
 	(void)event;
 	struct replica *replica = container_of(trigger,
@@ -571,12 +571,12 @@ struct replicaset_connect_state {
 };
 
 struct applier_on_connect {
-	struct trigger base;
+	struct lua_trigger base;
 	struct replicaset_connect_state *state;
 };
 
 static void
-applier_on_connect_f(struct trigger *trigger, void *event)
+applier_on_connect_f(struct lua_trigger *trigger, void *event)
 {
 	struct applier_on_connect *on_connect = container_of(trigger,
 					struct applier_on_connect, base);

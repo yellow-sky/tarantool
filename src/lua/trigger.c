@@ -35,7 +35,7 @@
 
 struct lbox_trigger
 {
-	struct trigger base;
+	struct lua_trigger base;
 	/** A reference to Lua trigger function. */
 	int ref;
 	/*
@@ -53,7 +53,7 @@ struct lbox_trigger
 };
 
 static void
-lbox_trigger_destroy(struct trigger *ptr)
+lbox_trigger_destroy(struct lua_trigger *ptr)
 {
 	if (tarantool_L) {
 		struct lbox_trigger *trigger = (struct lbox_trigger *) ptr;
@@ -63,7 +63,7 @@ lbox_trigger_destroy(struct trigger *ptr)
 }
 
 static void
-lbox_trigger_run(struct trigger *ptr, void *event)
+lbox_trigger_run(struct lua_trigger *ptr, void *event)
 {
 	struct lbox_trigger *trigger = (struct lbox_trigger *) ptr;
 	/*

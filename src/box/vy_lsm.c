@@ -45,7 +45,7 @@
 #include "say.h"
 #include "schema.h"
 #include "tuple.h"
-#include "trigger.h"
+#include "lib/core/trigger.h"
 #include "vy_log.h"
 #include "vy_mem.h"
 #include "vy_range.h"

@@ -33,7 +33,7 @@
 
 #include "fiber.h"
 #include "rmean.h"
-#include "trigger.h"
+#include "lib/core/trigger.h"
 #include "vclock.h"
 #include "schema.h"
 

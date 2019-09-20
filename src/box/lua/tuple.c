@@ -561,7 +561,7 @@ tuple_serializer_update_options(void)
 }
 
 static void
-on_msgpack_serializer_update(struct trigger *trigger, void *event)
+on_msgpack_serializer_update(struct lua_trigger *trigger, void *event)
 {
 	(void) trigger;
 	(void) event;

@@ -33,7 +33,7 @@
 
 #include <stdbool.h>
 #include "salad/stailq.h"
-#include "trigger.h"
+#include "lib/core/trigger.h"
 #include "fiber.h"
 #include "space.h"
 
@@ -205,12 +205,12 @@ struct txn {
 	 * Triggers on fiber yield to abort transaction for
 	 * for in-memory engine.
 	 */
-	struct trigger fiber_on_yield;
+	struct lua_trigger fiber_on_yield;
 	/**
 	 * Trigger on fiber stop, to rollback transaction
 	 * in case a fiber stops (all engines).
 	 */
-	struct trigger fiber_on_stop;
+	struct lua_trigger fiber_on_stop;
 	/** Commit and rollback triggers. */
 	struct rlist on_commit, on_rollback;
 	/**
@@ -309,14 +309,14 @@ txn_init_triggers(struct txn *txn)
 }
 
 static inline void
-txn_on_commit(struct txn *txn, struct trigger *trigger)
+txn_on_commit(struct txn *txn, struct lua_trigger *trigger)
 {
 	txn_init_triggers(txn);
 	trigger_add(&txn->on_commit, trigger);
 }
 
 static inline void
-txn_on_rollback(struct txn *txn, struct trigger *trigger)
+txn_on_rollback(struct txn *txn, struct lua_trigger *trigger)
 {
 	txn_init_triggers(txn);
 	trigger_add(&txn->on_rollback, trigger);
@@ -338,14 +338,14 @@ txn_stmt_init_triggers(struct txn_stmt *stmt)
 }
 
 static inline void
-txn_stmt_on_commit(struct txn_stmt *stmt, struct trigger *trigger)
+txn_stmt_on_commit(struct txn_stmt *stmt, struct lua_trigger *trigger)
 {
 	txn_stmt_init_triggers(stmt);
 	trigger_add(&stmt->on_commit, trigger);
 }
 
 static inline void
-txn_stmt_on_rollback(struct txn_stmt *stmt, struct trigger *trigger)
+txn_stmt_on_rollback(struct txn_stmt *stmt, struct lua_trigger *trigger)
 {
 	txn_stmt_init_triggers(stmt);
 	trigger_add(&stmt->on_rollback, trigger);

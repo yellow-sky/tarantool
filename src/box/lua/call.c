@@ -953,7 +953,7 @@ lbox_func_delete(struct lua_State *L, struct func *func)
 }
 
 static void
-lbox_func_new_or_delete(struct trigger *trigger, void *event)
+lbox_func_new_or_delete(struct lua_trigger *trigger, void *event)
 {
 	struct lua_State *L = (struct lua_State *) trigger->data;
 	struct func *func = (struct func *)event;
@@ -965,7 +965,7 @@ lbox_func_new_or_delete(struct trigger *trigger, void *event)
 		lbox_func_delete(L, func);
 }
 
-static struct trigger on_alter_func_in_lua = {
+static struct lua_trigger on_alter_func_in_lua = {
 	RLIST_LINK_INITIALIZER, lbox_func_new_or_delete, NULL, NULL
 };
 

@@ -261,7 +261,7 @@ struct luaL_serializer {
 	 * general serializer. For example, tuple serializer
 	 * subscribes on msgpack.
 	 */
-	struct trigger update_trigger;
+	struct lua_trigger update_trigger;
 	/**
 	 * List of triggers on update of this serializer. To push
 	 * updates down to dependent serializers.

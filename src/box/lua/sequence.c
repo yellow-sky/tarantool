@@ -158,7 +158,7 @@ lbox_sequence_delete(struct lua_State *L, struct sequence *seq)
 }
 
 static void
-lbox_sequence_new_or_delete(struct trigger *trigger, void *event)
+lbox_sequence_new_or_delete(struct lua_trigger *trigger, void *event)
 {
 	struct lua_State *L = trigger->data;
 	struct sequence *seq = event;
@@ -180,7 +180,7 @@ box_lua_sequence_init(struct lua_State *L)
 	luaL_register(L, "box.internal.sequence", sequence_internal_lib);
 	lua_pop(L, 1);
 
-	static struct trigger on_alter_sequence_in_lua;
+	static struct lua_trigger on_alter_sequence_in_lua;
 	trigger_create(&on_alter_sequence_in_lua,
 		       lbox_sequence_new_or_delete, L, NULL);
 	trigger_add(&on_alter_sequence, &on_alter_sequence_in_lua);

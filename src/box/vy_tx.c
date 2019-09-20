@@ -48,7 +48,7 @@
 #include "schema.h" /* space_cache_version */
 #include "session.h"
 #include "space.h"
-#include "trigger.h"
+#include "lib/core/trigger.h"
 #include "trivia/util.h"
 #include "tuple.h"
 #include "vy_cache.h"

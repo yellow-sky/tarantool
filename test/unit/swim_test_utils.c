@@ -35,7 +35,7 @@
 #include "uuid/tt_uuid.h"
 #include "trivia/util.h"
 #include "msgpuck.h"
-#include "trigger.h"
+#include "lib/core/trigger.h"
 #include "memory.h"
 #include "random.h"
 #include <fcntl.h>
@@ -177,7 +177,7 @@ swim_cluster_id_to_uri(char *buffer, int id)
  * to yield.
  */
 void
-swim_test_event_cb(struct trigger *trigger, void *event)
+swim_test_event_cb(struct lua_trigger *trigger, void *event)
 {
 	(void) trigger;
 	struct swim_on_member_event_ctx *ctx =
@@ -195,7 +195,7 @@ swim_node_create(struct swim_node *n, int id)
 	n->generation = 0;
 	n->swim = swim_new(0);
 	assert(n->swim != NULL);
-	struct trigger *t = (struct trigger *) malloc(sizeof(*t));
+	struct lua_trigger *t = (struct lua_trigger *) malloc(sizeof(*t));
 	trigger_create(t, swim_test_event_cb, NULL, (trigger_f0) free);
 	trigger_add(swim_trigger_list_on_member_event(n->swim), t);
 

@@ -705,11 +705,11 @@ public:
  * A trigger installed on transaction commit/rollback events of
  * the transaction which initiated the alter.
  */
-static struct trigger *
+static struct lua_trigger *
 txn_alter_trigger_new(trigger_f run, void *data)
 {
-	struct trigger *trigger = (struct trigger *)
-		region_calloc_object_xc(&in_txn()->region, struct trigger);
+	struct lua_trigger *trigger = (struct lua_trigger *)
+		region_calloc_object_xc(&in_txn()->region, struct lua_trigger);
 	trigger->run = run;
 	trigger->data = data;
 	trigger->destroy = NULL;
@@ -860,7 +860,7 @@ struct mh_i32_t *AlterSpaceLock::registry;
  * Replace the old space with a new one in the space cache.
  */
 static void
-alter_space_commit(struct trigger *trigger, void *event)
+alter_space_commit(struct lua_trigger *trigger, void *event)
 {
 	struct txn *txn = (struct txn *) event;
 	struct alter_space *alter = (struct alter_space *) trigger->data;
@@ -900,7 +900,7 @@ alter_space_commit(struct trigger *trigger, void *event)
  * alter_space_commit() failure (unlikely)
  */
 static void
-alter_space_rollback(struct trigger *trigger, void * /* event */)
+alter_space_rollback(struct lua_trigger *trigger, void * /* event */)
 {
 	struct alter_space *alter = (struct alter_space *) trigger->data;
 	/* Rollback alter ops */
@@ -966,7 +966,7 @@ alter_space_do(struct txn_stmt *stmt, struct alter_space *alter)
 	 * free them in case of failure, because they are allocated on
 	 * the region.
 	 */
-	struct trigger *on_commit, *on_rollback;
+	struct lua_trigger *on_commit, *on_rollback;
 	on_commit = txn_alter_trigger_new(alter_space_commit, alter);
 	on_rollback = txn_alter_trigger_new(alter_space_rollback, alter);
 
@@ -1646,7 +1646,7 @@ MoveCkConstraints::rollback(struct alter_space *alter)
  * Delete the space. It is already removed from the space cache.
  */
 static void
-on_drop_space_commit(struct trigger *trigger, void *event)
+on_drop_space_commit(struct lua_trigger *trigger, void *event)
 {
 	(void) event;
 	struct space *space = (struct space *)trigger->data;
@@ -1659,7 +1659,7 @@ on_drop_space_commit(struct trigger *trigger, void *event)
  * reverted by the cascading rollback.
  */
 static void
-on_drop_space_rollback(struct trigger *trigger, void *event)
+on_drop_space_rollback(struct lua_trigger *trigger, void *event)
 {
 	(void) event;
 	struct space *space = (struct space *)trigger->data;
@@ -1674,7 +1674,7 @@ on_drop_space_rollback(struct trigger *trigger, void *event)
  * rely on cascading rollback.
  */
 static void
-on_create_space_rollback(struct trigger *trigger, void *event)
+on_create_space_rollback(struct lua_trigger *trigger, void *event)
 {
 	(void) event;
 	struct space *space = (struct space *)trigger->data;
@@ -1792,7 +1792,7 @@ update_view_references(struct Select *select, int update_value,
  * Its purpose is to release memory of SELECT.
  */
 static void
-on_create_view_commit(struct trigger *trigger, void *event)
+on_create_view_commit(struct lua_trigger *trigger, void *event)
 {
 	(void) event;
 	struct Select *select = (struct Select *)trigger->data;
@@ -1805,7 +1805,7 @@ on_create_view_commit(struct trigger *trigger, void *event)
  * releases memory for SELECT.
  */
 static void
-on_create_view_rollback(struct trigger *trigger, void *event)
+on_create_view_rollback(struct lua_trigger *trigger, void *event)
 {
 	(void) event;
 	struct Select *select = (struct Select *)trigger->data;
@@ -1819,7 +1819,7 @@ on_create_view_rollback(struct trigger *trigger, void *event)
  * dependent spaces and release memory for SELECT.
  */
 static void
-on_drop_view_commit(struct trigger *trigger, void *event)
+on_drop_view_commit(struct lua_trigger *trigger, void *event)
 {
 	(void) event;
 	struct Select *select = (struct Select *)trigger->data;
@@ -1832,7 +1832,7 @@ on_drop_view_commit(struct trigger *trigger, void *event)
  * on_replace_dd_space trigger.
  */
 static void
-on_drop_view_rollback(struct trigger *trigger, void *event)
+on_drop_view_rollback(struct lua_trigger *trigger, void *event)
 {
 	(void) event;
 	struct Select *select = (struct Select *)trigger->data;
@@ -1891,7 +1891,7 @@ on_drop_view_rollback(struct trigger *trigger, void *event)
  * clumsy, so it is simply not done.
  */
 static void
-on_replace_dd_space(struct trigger * /* trigger */, void *event)
+on_replace_dd_space(struct lua_trigger * /* trigger */, void *event)
 {
 	struct txn *txn = (struct txn *) event;
 	struct txn_stmt *stmt = txn_current_stmt(txn);
@@ -1946,7 +1946,7 @@ on_replace_dd_space(struct trigger * /* trigger */, void *event)
 		 * so it's safe to simply drop the space on
 		 * rollback.
 		 */
-		struct trigger *on_rollback =
+		struct lua_trigger *on_rollback =
 			txn_alter_trigger_new(on_create_space_rollback, space);
 		txn_stmt_on_rollback(stmt, on_rollback);
 		if (def->opts.is_view) {
@@ -1969,11 +1969,11 @@ on_replace_dd_space(struct trigger * /* trigger */, void *event)
 				tnt_raise(ClientError, ER_NO_SUCH_SPACE,
 					  disappeared_space);
 			}
-			struct trigger *on_commit_view =
+			struct lua_trigger *on_commit_view =
 				txn_alter_trigger_new(on_create_view_commit,
 						      select);
 			txn_stmt_on_commit(stmt, on_commit_view);
-			struct trigger *on_rollback_view =
+			struct lua_trigger *on_rollback_view =
 				txn_alter_trigger_new(on_create_view_rollback,
 						      select);
 			txn_stmt_on_rollback(stmt, on_rollback_view);
@@ -2031,10 +2031,10 @@ on_replace_dd_space(struct trigger * /* trigger */, void *event)
 		 * AlterSpaceOps are registered in case of space drop.
 		 */
 		++schema_version;
-		struct trigger *on_commit =
+		struct lua_trigger *on_commit =
 			txn_alter_trigger_new(on_drop_space_commit, old_space);
 		txn_stmt_on_commit(stmt, on_commit);
-		struct trigger *on_rollback =
+		struct lua_trigger *on_rollback =
 			txn_alter_trigger_new(on_drop_space_rollback, old_space);
 		txn_stmt_on_rollback(stmt, on_rollback);
 		if (old_space->def->opts.is_view) {
@@ -2046,11 +2046,11 @@ on_replace_dd_space(struct trigger * /* trigger */, void *event)
 			auto select_guard = make_scoped_guard([=] {
 				sql_select_delete(sql_get(), select);
 			});
-			struct trigger *on_commit_view =
+			struct lua_trigger *on_commit_view =
 				txn_alter_trigger_new(on_drop_view_commit,
 						      select);
 			txn_stmt_on_commit(stmt, on_commit_view);
-			struct trigger *on_rollback_view =
+			struct lua_trigger *on_rollback_view =
 				txn_alter_trigger_new(on_drop_view_rollback,
 						      select);
 			txn_stmt_on_rollback(stmt, on_rollback_view);
@@ -2187,7 +2187,7 @@ index_is_used_by_fk_constraint(struct rlist *fk_list, uint32_t iid)
  *   are modified.
  */
 static void
-on_replace_dd_index(struct trigger * /* trigger */, void *event)
+on_replace_dd_index(struct lua_trigger * /* trigger */, void *event)
 {
 	struct txn *txn = (struct txn *) event;
 	struct txn_stmt *stmt = txn_current_stmt(txn);
@@ -2377,7 +2377,7 @@ on_replace_dd_index(struct trigger * /* trigger */, void *event)
  * rollback of all transactions following this one.
  */
 static void
-on_replace_dd_truncate(struct trigger * /* trigger */, void *event)
+on_replace_dd_truncate(struct lua_trigger * /* trigger */, void *event)
 {
 	struct txn *txn = (struct txn *) event;
 	struct txn_stmt *stmt = txn_current_stmt(txn);
@@ -2584,7 +2584,7 @@ user_def_new_from_tuple(struct tuple *tuple)
 }
 
 static void
-user_cache_remove_user(struct trigger *trigger, void * /* event */)
+user_cache_remove_user(struct lua_trigger *trigger, void * /* event */)
 {
 	struct tuple *tuple = (struct tuple *)trigger->data;
 	uint32_t uid = tuple_field_u32_xc(tuple, BOX_USER_FIELD_ID);
@@ -2592,7 +2592,7 @@ user_cache_remove_user(struct trigger *trigger, void * /* event */)
 }
 
 static void
-user_cache_alter_user(struct trigger *trigger, void * /* event */)
+user_cache_alter_user(struct lua_trigger *trigger, void * /* event */)
 {
 	struct tuple *tuple = (struct tuple *)trigger->data;
 	struct user_def *user = user_def_new_from_tuple(tuple);
@@ -2606,7 +2606,7 @@ user_cache_alter_user(struct trigger *trigger, void * /* event */)
  * A trigger invoked on replace in the user table.
  */
 static void
-on_replace_dd_user(struct trigger * /* trigger */, void *event)
+on_replace_dd_user(struct lua_trigger * /* trigger */, void *event)
 {
 	struct txn *txn = (struct txn *) event;
 	struct txn_stmt *stmt = txn_current_stmt(txn);
@@ -2623,7 +2623,7 @@ on_replace_dd_user(struct trigger * /* trigger */, void *event)
 		auto def_guard = make_scoped_guard([=] { free(user); });
 		(void) user_cache_replace(user);
 		def_guard.is_active = false;
-		struct trigger *on_rollback =
+		struct lua_trigger *on_rollback =
 			txn_alter_trigger_new(user_cache_remove_user, new_tuple);
 		txn_stmt_on_rollback(stmt, on_rollback);
 	} else if (new_tuple == NULL) { /* DELETE */
@@ -2645,7 +2645,7 @@ on_replace_dd_user(struct trigger * /* trigger */, void *event)
 				  old_user->def->name, "the user has objects");
 		}
 		user_cache_delete(uid);
-		struct trigger *on_rollback =
+		struct lua_trigger *on_rollback =
 			txn_alter_trigger_new(user_cache_alter_user, old_tuple);
 		txn_stmt_on_rollback(stmt, on_rollback);
 	} else { /* UPDATE, REPLACE */
@@ -2661,7 +2661,7 @@ on_replace_dd_user(struct trigger * /* trigger */, void *event)
 		auto def_guard = make_scoped_guard([=] { free(user); });
 		user_cache_replace(user);
 		def_guard.is_active = false;
-		struct trigger *on_rollback =
+		struct lua_trigger *on_rollback =
 			txn_alter_trigger_new(user_cache_alter_user, old_tuple);
 		txn_stmt_on_rollback(stmt, on_rollback);
 	}
@@ -2860,7 +2860,7 @@ func_def_new_from_tuple(struct tuple *tuple)
 }
 
 static void
-on_create_func_rollback(struct trigger *trigger, void * /* event */)
+on_create_func_rollback(struct lua_trigger *trigger, void * /* event */)
 {
 	/* Remove the new function from the cache and delete it. */
 	struct func *func = (struct func *)trigger->data;
@@ -2870,7 +2870,7 @@ on_create_func_rollback(struct trigger *trigger, void * /* event */)
 }
 
 static void
-on_drop_func_commit(struct trigger *trigger, void * /* event */)
+on_drop_func_commit(struct lua_trigger *trigger, void * /* event */)
 {
 	/* Delete the old function. */
 	struct func *func = (struct func *)trigger->data;
@@ -2878,7 +2878,7 @@ on_drop_func_commit(struct trigger *trigger, void * /* event */)
 }
 
 static void
-on_drop_func_rollback(struct trigger *trigger, void * /* event */)
+on_drop_func_rollback(struct lua_trigger *trigger, void * /* event */)
 {
 	/* Insert the old function back into the cache. */
 	struct func *func = (struct func *)trigger->data;
@@ -2891,7 +2891,7 @@ on_drop_func_rollback(struct trigger *trigger, void * /* event */)
  * functions on which there were defined any grants.
  */
 static void
-on_replace_dd_func(struct trigger * /* trigger */, void *event)
+on_replace_dd_func(struct lua_trigger * /* trigger */, void *event)
 {
 	struct txn *txn = (struct txn *) event;
 	struct txn_stmt *stmt = txn_current_stmt(txn);
@@ -2906,7 +2906,7 @@ on_replace_dd_func(struct trigger * /* trigger */, void *event)
 		auto def_guard = make_scoped_guard([=] { free(def); });
 		access_check_ddl(def->name, def->fid, def->uid, SC_FUNCTION,
 				 PRIV_C);
-		struct trigger *on_rollback =
+		struct lua_trigger *on_rollback =
 			txn_alter_trigger_new(on_create_func_rollback, NULL);
 		struct func *func = func_new(def);
 		if (func == NULL)
@@ -2943,9 +2943,9 @@ on_replace_dd_func(struct trigger * /* trigger */, void *event)
 				  (unsigned) old_func->def->uid,
 				  "function is SQL built-in");
 		}
-		struct trigger *on_commit =
+		struct lua_trigger *on_commit =
 			txn_alter_trigger_new(on_drop_func_commit, old_func);
-		struct trigger *on_rollback =
+		struct lua_trigger *on_rollback =
 			txn_alter_trigger_new(on_drop_func_rollback, old_func);
 		func_cache_delete(old_func->def->fid);
 		txn_stmt_on_commit(stmt, on_commit);
@@ -3058,7 +3058,7 @@ coll_id_def_new_from_tuple(struct tuple *tuple, struct coll_id_def *def)
 
 /** Delete the new collation identifier. */
 static void
-on_create_collation_rollback(struct trigger *trigger, void *event)
+on_create_collation_rollback(struct lua_trigger *trigger, void *event)
 {
 	(void) event;
 	struct coll_id *coll_id = (struct coll_id *) trigger->data;
@@ -3069,7 +3069,7 @@ on_create_collation_rollback(struct trigger *trigger, void *event)
 
 /** Free a deleted collation identifier on commit. */
 static void
-on_drop_collation_commit(struct trigger *trigger, void *event)
+on_drop_collation_commit(struct lua_trigger *trigger, void *event)
 {
 	(void) event;
 	struct coll_id *coll_id = (struct coll_id *) trigger->data;
@@ -3078,7 +3078,7 @@ on_drop_collation_commit(struct trigger *trigger, void *event)
 
 /** Put the collation identifier back on rollback. */
 static void
-on_drop_collation_rollback(struct trigger *trigger, void *event)
+on_drop_collation_rollback(struct lua_trigger *trigger, void *event)
 {
 	(void) event;
 	struct coll_id *coll_id = (struct coll_id *) trigger->data;
@@ -3093,7 +3093,7 @@ on_drop_collation_rollback(struct trigger *trigger, void *event)
  * collations that a user defined.
  */
 static void
-on_replace_dd_collation(struct trigger * /* trigger */, void *event)
+on_replace_dd_collation(struct lua_trigger * /* trigger */, void *event)
 {
 	struct txn *txn = (struct txn *) event;
 	struct txn_stmt *stmt = txn_current_stmt(txn);
@@ -3101,9 +3101,9 @@ on_replace_dd_collation(struct trigger * /* trigger */, void *event)
 	struct tuple *new_tuple = stmt->new_tuple;
 	if (new_tuple == NULL && old_tuple != NULL) {
 		/* DELETE */
-		struct trigger *on_commit =
+		struct lua_trigger *on_commit =
 			txn_alter_trigger_new(on_drop_collation_commit, NULL);
-		struct trigger *on_rollback =
+		struct lua_trigger *on_rollback =
 			txn_alter_trigger_new(on_drop_collation_rollback, NULL);
 		/*
 		 * TODO: Check that no index uses the collation
@@ -3138,7 +3138,7 @@ on_replace_dd_collation(struct trigger * /* trigger */, void *event)
 		txn_stmt_on_commit(stmt, on_commit);
 	} else if (new_tuple != NULL && old_tuple == NULL) {
 		/* INSERT */
-		struct trigger *on_rollback =
+		struct lua_trigger *on_rollback =
 			txn_alter_trigger_new(on_create_collation_rollback, NULL);
 		struct coll_id_def new_def;
 		coll_id_def_new_from_tuple(new_tuple, &new_def);
@@ -3367,7 +3367,7 @@ grant_or_revoke(struct priv_def *priv)
 
 /** A trigger called on rollback of grant. */
 static void
-revoke_priv(struct trigger *trigger, void *event)
+revoke_priv(struct lua_trigger *trigger, void *event)
 {
 	(void) event;
 	struct tuple *tuple = (struct tuple *)trigger->data;
@@ -3379,7 +3379,7 @@ revoke_priv(struct trigger *trigger, void *event)
 
 /** A trigger called on rollback of revoke or modify. */
 static void
-modify_priv(struct trigger *trigger, void *event)
+modify_priv(struct lua_trigger *trigger, void *event)
 {
 	(void) event;
 	struct tuple *tuple = (struct tuple *)trigger->data;
@@ -3393,7 +3393,7 @@ modify_priv(struct trigger *trigger, void *event)
  * all granted privileges.
  */
 static void
-on_replace_dd_priv(struct trigger * /* trigger */, void *event)
+on_replace_dd_priv(struct lua_trigger * /* trigger */, void *event)
 {
 	struct txn *txn = (struct txn *) event;
 	struct txn_stmt *stmt = txn_current_stmt(txn);
@@ -3405,7 +3405,7 @@ on_replace_dd_priv(struct trigger * /* trigger */, void *event)
 		priv_def_create_from_tuple(&priv, new_tuple);
 		priv_def_check(&priv, PRIV_GRANT);
 		grant_or_revoke(&priv);
-		struct trigger *on_rollback =
+		struct lua_trigger *on_rollback =
 			txn_alter_trigger_new(revoke_priv, new_tuple);
 		txn_stmt_on_rollback(stmt, on_rollback);
 	} else if (new_tuple == NULL) {                /* revoke */
@@ -3414,14 +3414,14 @@ on_replace_dd_priv(struct trigger * /* trigger */, void *event)
 		priv_def_check(&priv, PRIV_REVOKE);
 		priv.access = 0;
 		grant_or_revoke(&priv);
-		struct trigger *on_rollback =
+		struct lua_trigger *on_rollback =
 			txn_alter_trigger_new(modify_priv, old_tuple);
 		txn_stmt_on_rollback(stmt, on_rollback);
 	} else {                                       /* modify */
 		priv_def_create_from_tuple(&priv, new_tuple);
 		priv_def_check(&priv, PRIV_GRANT);
 		grant_or_revoke(&priv);
-		struct trigger *on_rollback =
+		struct lua_trigger *on_rollback =
 			txn_alter_trigger_new(modify_priv, old_tuple);
 		txn_stmt_on_rollback(stmt, on_rollback);
 	}
@@ -3441,7 +3441,7 @@ on_replace_dd_priv(struct trigger * /* trigger */, void *event)
  * event, not in after-replace event.
  */
 static void
-on_replace_dd_schema(struct trigger * /* trigger */, void *event)
+on_replace_dd_schema(struct lua_trigger * /* trigger */, void *event)
 {
 	struct txn *txn = (struct txn *) event;
 	struct txn_stmt *stmt = txn_current_stmt(txn);
@@ -3465,7 +3465,7 @@ on_replace_dd_schema(struct trigger * /* trigger */, void *event)
  * with it.
  */
 static void
-register_replica(struct trigger *trigger, void * /* event */)
+register_replica(struct lua_trigger *trigger, void * /* event */)
 {
 	struct tuple *new_tuple = (struct tuple *)trigger->data;
 
@@ -3486,7 +3486,7 @@ register_replica(struct trigger *trigger, void * /* event */)
 }
 
 static void
-unregister_replica(struct trigger *trigger, void * /* event */)
+unregister_replica(struct lua_trigger *trigger, void * /* event */)
 {
 	struct tuple *old_tuple = (struct tuple *)trigger->data;
 
@@ -3517,7 +3517,7 @@ unregister_replica(struct trigger *trigger, void * /* event */)
  * set without first being reset (emptied).
  */
 static void
-on_replace_dd_cluster(struct trigger *trigger, void *event)
+on_replace_dd_cluster(struct lua_trigger *trigger, void *event)
 {
 	(void) trigger;
 	struct txn *txn = (struct txn *) event;
@@ -3550,7 +3550,7 @@ on_replace_dd_cluster(struct trigger *trigger, void *event)
 					  "updates of instance uuid");
 			}
 		} else {
-			struct trigger *on_commit;
+			struct lua_trigger *on_commit;
 			on_commit = txn_alter_trigger_new(register_replica,
 							  new_tuple);
 			txn_stmt_on_commit(stmt, on_commit);
@@ -3565,7 +3565,7 @@ on_replace_dd_cluster(struct trigger *trigger, void *event)
 			tuple_field_u32_xc(old_tuple, BOX_CLUSTER_FIELD_ID);
 		replica_check_id(replica_id);
 
-		struct trigger *on_commit;
+		struct lua_trigger *on_commit;
 		on_commit = txn_alter_trigger_new(unregister_replica,
 						  old_tuple);
 		txn_stmt_on_commit(stmt, on_commit);
@@ -3618,7 +3618,7 @@ sequence_def_new_from_tuple(struct tuple *tuple, uint32_t errcode)
 }
 
 static void
-on_create_sequence_rollback(struct trigger *trigger, void * /* event */)
+on_create_sequence_rollback(struct lua_trigger *trigger, void * /* event */)
 {
 	/* Remove the new sequence from the cache and delete it. */
 	struct sequence *seq = (struct sequence *)trigger->data;
@@ -3628,7 +3628,7 @@ on_create_sequence_rollback(struct trigger *trigger, void * /* event */)
 }
 
 static void
-on_drop_sequence_commit(struct trigger *trigger, void * /* event */)
+on_drop_sequence_commit(struct lua_trigger *trigger, void * /* event */)
 {
 	/* Delete the old sequence. */
 	struct sequence *seq = (struct sequence *)trigger->data;
@@ -3636,7 +3636,7 @@ on_drop_sequence_commit(struct trigger *trigger, void * /* event */)
 }
 
 static void
-on_drop_sequence_rollback(struct trigger *trigger, void * /* event */)
+on_drop_sequence_rollback(struct lua_trigger *trigger, void * /* event */)
 {
 	/* Insert the old sequence back into the cache. */
 	struct sequence *seq = (struct sequence *)trigger->data;
@@ -3646,7 +3646,7 @@ on_drop_sequence_rollback(struct trigger *trigger, void * /* event */)
 
 
 static void
-on_alter_sequence_commit(struct trigger *trigger, void * /* event */)
+on_alter_sequence_commit(struct lua_trigger *trigger, void * /* event */)
 {
 	/* Delete the old old sequence definition. */
 	struct sequence_def *def = (struct sequence_def *)trigger->data;
@@ -3654,7 +3654,7 @@ on_alter_sequence_commit(struct trigger *trigger, void * /* event */)
 }
 
 static void
-on_alter_sequence_rollback(struct trigger *trigger, void * /* event */)
+on_alter_sequence_rollback(struct lua_trigger *trigger, void * /* event */)
 {
 	/* Restore the old sequence definition. */
 	struct sequence_def *def = (struct sequence_def *)trigger->data;
@@ -3670,7 +3670,7 @@ on_alter_sequence_rollback(struct trigger *trigger, void * /* event */)
  * Used to alter a sequence definition.
  */
 static void
-on_replace_dd_sequence(struct trigger * /* trigger */, void *event)
+on_replace_dd_sequence(struct lua_trigger * /* trigger */, void *event)
 {
 	struct txn *txn = (struct txn *) event;
 	struct txn_stmt *stmt = txn_current_stmt(txn);
@@ -3686,7 +3686,7 @@ on_replace_dd_sequence(struct trigger * /* trigger */, void *event)
 						      ER_CREATE_SEQUENCE);
 		access_check_ddl(new_def->name, new_def->id, new_def->uid,
 				 SC_SEQUENCE, PRIV_C);
-		struct trigger *on_rollback =
+		struct lua_trigger *on_rollback =
 			txn_alter_trigger_new(on_create_sequence_rollback, NULL);
 		seq = sequence_new_xc(new_def);
 		sequence_cache_insert(seq);
@@ -3708,9 +3708,9 @@ on_replace_dd_sequence(struct trigger * /* trigger */, void *event)
 		if (schema_find_grants("sequence", seq->def->id))
 			tnt_raise(ClientError, ER_DROP_SEQUENCE,
 				  seq->def->name, "the sequence has grants");
-		struct trigger *on_commit =
+		struct lua_trigger *on_commit =
 			txn_alter_trigger_new(on_drop_sequence_commit, seq);
-		struct trigger *on_rollback =
+		struct lua_trigger *on_rollback =
 			txn_alter_trigger_new(on_drop_sequence_rollback, seq);
 		sequence_cache_delete(seq->def->id);
 		txn_stmt_on_commit(stmt, on_commit);
@@ -3722,9 +3722,9 @@ on_replace_dd_sequence(struct trigger * /* trigger */, void *event)
 		assert(seq != NULL);
 		access_check_ddl(seq->def->name, seq->def->id, seq->def->uid,
 				 SC_SEQUENCE, PRIV_A);
-		struct trigger *on_commit =
+		struct lua_trigger *on_commit =
 			txn_alter_trigger_new(on_alter_sequence_commit, seq->def);
-		struct trigger *on_rollback =
+		struct lua_trigger *on_rollback =
 			txn_alter_trigger_new(on_alter_sequence_rollback, seq->def);
 		seq->def = new_def;
 		txn_stmt_on_commit(stmt, on_commit);
@@ -3737,7 +3737,7 @@ on_replace_dd_sequence(struct trigger * /* trigger */, void *event)
 
 /** Restore the old sequence value on rollback. */
 static void
-on_drop_sequence_data_rollback(struct trigger *trigger, void * /* event */)
+on_drop_sequence_data_rollback(struct lua_trigger *trigger, void * /* event */)
 {
 	struct tuple *tuple = (struct tuple *)trigger->data;
 	uint32_t id = tuple_field_u32_xc(tuple, BOX_SEQUENCE_DATA_FIELD_ID);
@@ -3754,7 +3754,7 @@ on_drop_sequence_data_rollback(struct trigger *trigger, void * /* event */)
  * Used to update a sequence value.
  */
 static void
-on_replace_dd_sequence_data(struct trigger * /* trigger */, void *event)
+on_replace_dd_sequence_data(struct lua_trigger * /* trigger */, void *event)
 {
 	struct txn *txn = (struct txn *) event;
 	struct txn_stmt *stmt = txn_current_stmt(txn);
@@ -3779,7 +3779,7 @@ on_replace_dd_sequence_data(struct trigger * /* trigger */, void *event)
 		 * we do want to restore the original sequence value
 		 * on rollback.
 		 */
-		struct trigger *on_rollback = txn_alter_trigger_new(
+		struct lua_trigger *on_rollback = txn_alter_trigger_new(
 				on_drop_sequence_data_rollback, old_tuple);
 		txn_stmt_on_rollback(stmt, on_rollback);
 		sequence_reset(seq);
@@ -3826,7 +3826,7 @@ sequence_field_from_tuple(struct space *space, struct tuple *tuple,
 
 /** Attach a sequence to a space on rollback in _space_sequence. */
 static void
-set_space_sequence(struct trigger *trigger, void * /* event */)
+set_space_sequence(struct lua_trigger *trigger, void * /* event */)
 {
 	struct tuple *tuple = (struct tuple *)trigger->data;
 	uint32_t space_id = tuple_field_u32_xc(tuple,
@@ -3851,7 +3851,7 @@ set_space_sequence(struct trigger *trigger, void * /* event */)
 
 /** Detach a sequence from a space on rollback in _space_sequence. */
 static void
-clear_space_sequence(struct trigger *trigger, void * /* event */)
+clear_space_sequence(struct lua_trigger *trigger, void * /* event */)
 {
 	struct tuple *tuple = (struct tuple *)trigger->data;
 	uint32_t space_id = tuple_field_u32_xc(tuple,
@@ -3872,7 +3872,7 @@ clear_space_sequence(struct trigger *trigger, void * /* event */)
  * Used to update space <-> sequence mapping.
  */
 static void
-on_replace_dd_space_sequence(struct trigger * /* trigger */, void *event)
+on_replace_dd_space_sequence(struct lua_trigger * /* trigger */, void *event)
 {
 	struct txn *txn = (struct txn *) event;
 	struct txn_stmt *stmt = txn_current_stmt(txn);
@@ -3923,7 +3923,7 @@ on_replace_dd_space_sequence(struct trigger * /* trigger */, void *event)
 				  space_name(space),
 				  "can not attach generated sequence");
 		}
-		struct trigger *on_rollback;
+		struct lua_trigger *on_rollback;
 		if (stmt->old_tuple != NULL)
 			on_rollback = txn_alter_trigger_new(set_space_sequence,
 							    stmt->old_tuple);
@@ -3938,7 +3938,7 @@ on_replace_dd_space_sequence(struct trigger * /* trigger */, void *event)
 		sequence_path_guard.is_active = false;
 		txn_stmt_on_rollback(stmt, on_rollback);
 	} else {					/* DELETE */
-		struct trigger *on_rollback;
+		struct lua_trigger *on_rollback;
 		on_rollback = txn_alter_trigger_new(set_space_sequence,
 						    stmt->old_tuple);
 		assert(space->sequence == seq);
@@ -3956,7 +3956,7 @@ on_replace_dd_space_sequence(struct trigger * /* trigger */, void *event)
 
 /** Delete the new trigger on rollback of an INSERT statement. */
 static void
-on_create_trigger_rollback(struct trigger *trigger, void * /* event */)
+on_create_trigger_rollback(struct lua_trigger *trigger, void * /* event */)
 {
 	struct sql_trigger *old_trigger = (struct sql_trigger *)trigger->data;
 	struct sql_trigger *new_trigger;
@@ -3971,7 +3971,7 @@ on_create_trigger_rollback(struct trigger *trigger, void * /* event */)
 
 /** Restore the old trigger on rollback of a DELETE statement. */
 static void
-on_drop_trigger_rollback(struct trigger *trigger, void * /* event */)
+on_drop_trigger_rollback(struct lua_trigger *trigger, void * /* event */)
 {
 	struct sql_trigger *old_trigger = (struct sql_trigger *)trigger->data;
 	struct sql_trigger *new_trigger;
@@ -3989,7 +3989,7 @@ on_drop_trigger_rollback(struct trigger *trigger, void * /* event */)
  * of a REPLACE statement.
  */
 static void
-on_replace_trigger_rollback(struct trigger *trigger, void * /* event */)
+on_replace_trigger_rollback(struct lua_trigger *trigger, void * /* event */)
 {
 	struct sql_trigger *old_trigger = (struct sql_trigger *)trigger->data;
 	struct sql_trigger *new_trigger;
@@ -4005,7 +4005,7 @@ on_replace_trigger_rollback(struct trigger *trigger, void * /* event */)
  * Drop useless old sql_trigger AST object if any.
  */
 static void
-on_replace_trigger_commit(struct trigger *trigger, void * /* event */)
+on_replace_trigger_commit(struct lua_trigger *trigger, void * /* event */)
 {
 	struct sql_trigger *old_trigger = (struct sql_trigger *)trigger->data;
 	sql_trigger_delete(sql_get(), old_trigger);
@@ -4016,15 +4016,15 @@ on_replace_trigger_commit(struct trigger *trigger, void * /* event */)
  * SQL triggers.
  */
 static void
-on_replace_dd_trigger(struct trigger * /* trigger */, void *event)
+on_replace_dd_trigger(struct lua_trigger * /* trigger */, void *event)
 {
 	struct txn *txn = (struct txn *) event;
 	struct txn_stmt *stmt = txn_current_stmt(txn);
 	struct tuple *old_tuple = stmt->old_tuple;
 	struct tuple *new_tuple = stmt->new_tuple;
 
-	struct trigger *on_rollback = txn_alter_trigger_new(NULL, NULL);
-	struct trigger *on_commit =
+	struct lua_trigger *on_rollback = txn_alter_trigger_new(NULL, NULL);
+	struct lua_trigger *on_commit =
 		txn_alter_trigger_new(on_replace_trigger_commit, NULL);
 
 	if (old_tuple != NULL && new_tuple == NULL) {
@@ -4304,7 +4304,7 @@ space_reset_fk_constraint_mask(struct space *space)
  * release memory.
  */
 static void
-on_create_fk_constraint_rollback(struct trigger *trigger, void *event)
+on_create_fk_constraint_rollback(struct lua_trigger *trigger, void *event)
 {
 	(void) event;
 	struct fk_constraint *fk = (struct fk_constraint *)trigger->data;
@@ -4317,7 +4317,7 @@ on_create_fk_constraint_rollback(struct trigger *trigger, void *event)
 
 /** Return old FK and release memory for the new one. */
 static void
-on_replace_fk_constraint_rollback(struct trigger *trigger, void *event)
+on_replace_fk_constraint_rollback(struct lua_trigger *trigger, void *event)
 {
 	(void) event;
 	struct fk_constraint *old_fk = (struct fk_constraint *)trigger->data;
@@ -4335,7 +4335,7 @@ on_replace_fk_constraint_rollback(struct trigger *trigger, void *event)
 
 /** On rollback of drop simply return back FK to DD. */
 static void
-on_drop_fk_constraint_rollback(struct trigger *trigger, void *event)
+on_drop_fk_constraint_rollback(struct lua_trigger *trigger, void *event)
 {
 	(void) event;
 	struct fk_constraint *old_fk = (struct fk_constraint *)trigger->data;
@@ -4355,7 +4355,7 @@ on_drop_fk_constraint_rollback(struct trigger *trigger, void *event)
  * so just release memory.
  */
 static void
-on_drop_or_replace_fk_constraint_commit(struct trigger *trigger, void *event)
+on_drop_or_replace_fk_constraint_commit(struct lua_trigger *trigger, void *event)
 {
 	(void) event;
 	fk_constraint_delete((struct fk_constraint *) trigger->data);
@@ -4398,7 +4398,7 @@ error:
 
 /** A trigger invoked on replace in the _fk_constraint space. */
 static void
-on_replace_dd_fk_constraint(struct trigger * /* trigger*/, void *event)
+on_replace_dd_fk_constraint(struct lua_trigger * /* trigger*/, void *event)
 {
 	struct txn *txn = (struct txn *) event;
 	struct txn_stmt *stmt = txn_current_stmt(txn);
@@ -4510,7 +4510,7 @@ on_replace_dd_fk_constraint(struct trigger * /* trigger*/, void *event)
 					fk, in_child_space);
 			rlist_add_entry(&parent_space->parent_fk_constraint,
 					fk, in_parent_space);
-			struct trigger *on_rollback =
+			struct lua_trigger *on_rollback =
 				txn_alter_trigger_new(on_create_fk_constraint_rollback,
 						      fk);
 			txn_stmt_on_rollback(stmt, on_rollback);
@@ -4528,11 +4528,11 @@ on_replace_dd_fk_constraint(struct trigger * /* trigger*/, void *event)
 					in_child_space);
 			rlist_add_entry(&parent_space->parent_fk_constraint, fk,
 					in_parent_space);
-			struct trigger *on_rollback =
+			struct lua_trigger *on_rollback =
 				txn_alter_trigger_new(on_replace_fk_constraint_rollback,
 						      old_fk);
 			txn_stmt_on_rollback(stmt, on_rollback);
-			struct trigger *on_commit =
+			struct lua_trigger *on_commit =
 				txn_alter_trigger_new(on_drop_or_replace_fk_constraint_commit,
 						      old_fk);
 			txn_stmt_on_commit(stmt, on_commit);
@@ -4554,11 +4554,11 @@ on_replace_dd_fk_constraint(struct trigger * /* trigger*/, void *event)
 		struct fk_constraint *old_fk=
 			fk_constraint_remove(&child_space->child_fk_constraint,
 					     fk_def->name);
-		struct trigger *on_commit =
+		struct lua_trigger *on_commit =
 			txn_alter_trigger_new(on_drop_or_replace_fk_constraint_commit,
 					      old_fk);
 		txn_stmt_on_commit(stmt, on_commit);
-		struct trigger *on_rollback =
+		struct lua_trigger *on_rollback =
 			txn_alter_trigger_new(on_drop_fk_constraint_rollback,
 					      old_fk);
 		txn_stmt_on_rollback(stmt, on_rollback);
@@ -4605,7 +4605,7 @@ ck_constraint_def_new_from_tuple(struct tuple *tuple)
 
 /** Rollback INSERT check constraint. */
 static void
-on_create_ck_constraint_rollback(struct trigger *trigger, void * /* event */)
+on_create_ck_constraint_rollback(struct lua_trigger *trigger, void * /* event */)
 {
 	struct ck_constraint *ck = (struct ck_constraint *)trigger->data;
 	assert(ck != NULL);
@@ -4620,7 +4620,7 @@ on_create_ck_constraint_rollback(struct trigger *trigger, void * /* event */)
 
 /** Commit DELETE check constraint. */
 static void
-on_drop_ck_constraint_commit(struct trigger *trigger, void * /* event */)
+on_drop_ck_constraint_commit(struct lua_trigger *trigger, void * /* event */)
 {
 	struct ck_constraint *ck = (struct ck_constraint *)trigger->data;
 	assert(ck != NULL);
@@ -4629,7 +4629,7 @@ on_drop_ck_constraint_commit(struct trigger *trigger, void * /* event */)
 
 /** Rollback DELETE check constraint. */
 static void
-on_drop_ck_constraint_rollback(struct trigger *trigger, void * /* event */)
+on_drop_ck_constraint_rollback(struct lua_trigger *trigger, void * /* event */)
 {
 	struct ck_constraint *ck = (struct ck_constraint *)trigger->data;
 	assert(ck != NULL);
@@ -4644,7 +4644,7 @@ on_drop_ck_constraint_rollback(struct trigger *trigger, void * /* event */)
 
 /** Commit REPLACE check constraint. */
 static void
-on_replace_ck_constraint_commit(struct trigger *trigger, void * /* event */)
+on_replace_ck_constraint_commit(struct lua_trigger *trigger, void * /* event */)
 {
 	struct ck_constraint *ck = (struct ck_constraint *)trigger->data;
 	if (ck != NULL)
@@ -4653,7 +4653,7 @@ on_replace_ck_constraint_commit(struct trigger *trigger, void * /* event */)
 
 /** Rollback REPLACE check constraint. */
 static void
-on_replace_ck_constraint_rollback(struct trigger *trigger, void * /* event */)
+on_replace_ck_constraint_rollback(struct lua_trigger *trigger, void * /* event */)
 {
 	struct ck_constraint *ck = (struct ck_constraint *)trigger->data;
 	assert(ck != NULL);
@@ -4670,7 +4670,7 @@ on_replace_ck_constraint_rollback(struct trigger *trigger, void * /* event */)
 
 /** A trigger invoked on replace in the _ck_constraint space. */
 static void
-on_replace_dd_ck_constraint(struct trigger * /* trigger*/, void *event)
+on_replace_dd_ck_constraint(struct lua_trigger * /* trigger*/, void *event)
 {
 	struct txn *txn = (struct txn *) event;
 	struct txn_stmt *stmt = txn_current_stmt(txn);
@@ -4680,8 +4680,8 @@ on_replace_dd_ck_constraint(struct trigger * /* trigger*/, void *event)
 		tuple_field_u32_xc(old_tuple != NULL ? old_tuple : new_tuple,
 				   BOX_CK_CONSTRAINT_FIELD_SPACE_ID);
 	struct space *space = space_cache_find_xc(space_id);
-	struct trigger *on_rollback = txn_alter_trigger_new(NULL, NULL);
-	struct trigger *on_commit = txn_alter_trigger_new(NULL, NULL);
+	struct lua_trigger *on_rollback = txn_alter_trigger_new(NULL, NULL);
+	struct lua_trigger *on_commit = txn_alter_trigger_new(NULL, NULL);
 
 	if (new_tuple != NULL) {
 		bool is_deferred =
@@ -4758,7 +4758,7 @@ on_replace_dd_ck_constraint(struct trigger * /* trigger*/, void *event)
 
 /** A trigger invoked on replace in the _func_index space. */
 static void
-on_replace_dd_func_index(struct trigger *trigger, void *event)
+on_replace_dd_func_index(struct lua_trigger *trigger, void *event)
 {
 	(void) trigger;
 	struct txn *txn = (struct txn *) event;
@@ -4820,67 +4820,67 @@ on_replace_dd_func_index(struct trigger *trigger, void *event)
 	scoped_guard.is_active = false;
 }
 
-struct trigger alter_space_on_replace_space = {
+struct lua_trigger alter_space_on_replace_space = {
 	RLIST_LINK_INITIALIZER, on_replace_dd_space, NULL, NULL
 };
 
-struct trigger alter_space_on_replace_index = {
+struct lua_trigger alter_space_on_replace_index = {
 	RLIST_LINK_INITIALIZER, on_replace_dd_index, NULL, NULL
 };
 
-struct trigger on_replace_truncate = {
+struct lua_trigger on_replace_truncate = {
 	RLIST_LINK_INITIALIZER, on_replace_dd_truncate, NULL, NULL
 };
 
-struct trigger on_replace_schema = {
+struct lua_trigger on_replace_schema = {
 	RLIST_LINK_INITIALIZER, on_replace_dd_schema, NULL, NULL
 };
 
-struct trigger on_replace_user = {
+struct lua_trigger on_replace_user = {
 	RLIST_LINK_INITIALIZER, on_replace_dd_user, NULL, NULL
 };
 
-struct trigger on_replace_func = {
+struct lua_trigger on_replace_func = {
 	RLIST_LINK_INITIALIZER, on_replace_dd_func, NULL, NULL
 };
 
-struct trigger on_replace_collation = {
+struct lua_trigger on_replace_collation = {
 	RLIST_LINK_INITIALIZER, on_replace_dd_collation, NULL, NULL
 };
 
-struct trigger on_replace_priv = {
+struct lua_trigger on_replace_priv = {
 	RLIST_LINK_INITIALIZER, on_replace_dd_priv, NULL, NULL
 };
 
-struct trigger on_replace_cluster = {
+struct lua_trigger on_replace_cluster = {
 	RLIST_LINK_INITIALIZER, on_replace_dd_cluster, NULL, NULL
 };
 
-struct trigger on_replace_sequence = {
+struct lua_trigger on_replace_sequence = {
 	RLIST_LINK_INITIALIZER, on_replace_dd_sequence, NULL, NULL
 };
 
-struct trigger on_replace_sequence_data = {
+struct lua_trigger on_replace_sequence_data = {
 	RLIST_LINK_INITIALIZER, on_replace_dd_sequence_data, NULL, NULL
 };
 
-struct trigger on_replace_space_sequence = {
+struct lua_trigger on_replace_space_sequence = {
 	RLIST_LINK_INITIALIZER, on_replace_dd_space_sequence, NULL, NULL
 };
 
-struct trigger on_replace_trigger = {
+struct lua_trigger on_replace_trigger = {
 	RLIST_LINK_INITIALIZER, on_replace_dd_trigger, NULL, NULL
 };
 
-struct trigger on_replace_fk_constraint = {
+struct lua_trigger on_replace_fk_constraint = {
 	RLIST_LINK_INITIALIZER, on_replace_dd_fk_constraint, NULL, NULL
 };
 
-struct trigger on_replace_ck_constraint = {
+struct lua_trigger on_replace_ck_constraint = {
 	RLIST_LINK_INITIALIZER, on_replace_dd_ck_constraint, NULL, NULL
 };
 
-struct trigger on_replace_func_index = {
+struct lua_trigger on_replace_func_index = {
 	RLIST_LINK_INITIALIZER, on_replace_dd_func_index, NULL, NULL
 };
 

@@ -511,7 +511,7 @@ vy_scheduler_reset_stat(struct vy_scheduler *scheduler)
 }
 
 static void
-vy_scheduler_on_delete_lsm(struct trigger *trigger, void *event)
+vy_scheduler_on_delete_lsm(struct lua_trigger *trigger, void *event)
 {
 	struct vy_lsm *lsm = event;
 	struct vy_scheduler *scheduler = trigger->data;
@@ -532,7 +532,7 @@ vy_scheduler_add_lsm(struct vy_scheduler *scheduler, struct vy_lsm *lsm)
 	 * Register a trigger that will remove this LSM tree from
 	 * the scheduler queues on destruction.
 	 */
-	struct trigger *trigger = malloc(sizeof(*trigger));
+	struct lua_trigger *trigger = malloc(sizeof(*trigger));
 	if (trigger == NULL) {
 		diag_set(OutOfMemory, sizeof(*trigger), "malloc", "trigger");
 		return -1;

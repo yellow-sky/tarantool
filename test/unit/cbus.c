@@ -2,7 +2,7 @@
 #include "fiber.h"
 #include "cbus.h"
 #include "unit.h"
-#include "trigger.h"
+#include "lib/core/trigger.h"
 
 /**
  * Test triggers on cpipe flush. Cpipe flush send all buffered
@@ -31,7 +31,7 @@ struct cpipe pipe_to_main;
  * the direction from the main to the worker works in the same
  * way.
  */
-struct trigger on_flush_to_main;
+struct lua_trigger on_flush_to_main;
 
 /** Common callbacks. {{{ ------------------------------------- */
 
@@ -44,7 +44,7 @@ do_nothing(struct cmsg *m)
 
 /** Callback called on each flush to the main thread. */
 static void
-flush_cb(struct trigger *t, void *e)
+flush_cb(struct lua_trigger *t, void *e)
 {
 	(void) t;
 	(void) e;

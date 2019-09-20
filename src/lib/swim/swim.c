@@ -37,7 +37,7 @@
 #include "msgpuck.h"
 #include "assoc.h"
 #include "sio.h"
-#include "trigger.h"
+#include "lib/core/trigger.h"
 #include "errinj.h"
 #define HEAP_FORWARD_DECLARATION
 #include "salad/heap.h"

@@ -32,7 +32,7 @@
 
 #include <limits.h>
 #include "fiber.h"
-#include "trigger.h"
+#include "lib/core/trigger.h"
 
 /**
  * Cord interconnect.

@@ -38,7 +38,7 @@
 #include <small/ibuf.h>
 
 #include "fiber_cond.h"
-#include "trigger.h"
+#include "lib/core/trigger.h"
 #include "trivia/util.h"
 #include "uuid/tt_uuid.h"
 #include "uri/uri.h"

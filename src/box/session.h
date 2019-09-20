@@ -32,7 +32,7 @@
  */
 #include <inttypes.h>
 #include <stdbool.h>
-#include "trigger.h"
+#include "lib/core/trigger.h"
 #include "fiber.h"
 #include "user.h"
 #include "authentication.h"
@@ -104,7 +104,7 @@ struct session {
 	/** Session user id and global grants */
 	struct credentials credentials;
 	/** Trigger for fiber on_stop to cleanup created on-demand session */
-	struct trigger fiber_on_stop;
+	struct lua_trigger fiber_on_stop;
 };
 
 struct session_vtab {

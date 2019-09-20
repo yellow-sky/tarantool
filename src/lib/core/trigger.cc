@@ -29,14 +29,14 @@
  * SUCH DAMAGE.
  */
 
-#include "trigger.h"
+#include "lib/core/trigger.h"
 #include "exception.h"
 
 int
 trigger_run(struct rlist *list, void *event)
 {
 	try {
-		struct trigger *trigger, *tmp;
+		struct lua_trigger *trigger, *tmp;
 		rlist_foreach_entry_safe(trigger, list, link, tmp)
 			trigger->run(trigger, event);
 	} catch (Exception *e) {
@@ -49,7 +49,7 @@ int
 trigger_run_reverse(struct rlist *list, void *event)
 {
 	try {
-		struct trigger *trigger, *tmp;
+		struct lua_trigger *trigger, *tmp;
 		rlist_foreach_entry_safe_reverse(trigger, list, link, tmp)
 			trigger->run(trigger, event);
 	} catch (Exception *e) {

@@ -46,7 +46,7 @@
 #include "iproto_constants.h"
 #include "recovery.h"
 #include "replication.h"
-#include "trigger.h"
+#include "lib/core/trigger.h"
 #include "vclock.h"
 #include "version.h"
 #include "xrow.h"
@@ -412,7 +412,7 @@ tx_gc_advance(struct cmsg *msg)
 }
 
 static void
-relay_on_close_log_f(struct trigger *trigger, void * /* event */)
+relay_on_close_log_f(struct lua_trigger *trigger, void * /* event */)
 {
 	static const struct cmsg_hop route[] = {
 		{tx_gc_advance, NULL}
@@ -569,7 +569,7 @@ relay_subscribe_f(va_list ap)
 		  &relay->relay_pipe, NULL, NULL, cbus_process);
 
 	/* Setup garbage collection trigger. */
-	struct trigger on_close_log = {
+	struct lua_trigger on_close_log = {
 		RLIST_LINK_INITIALIZER, relay_on_close_log_f, relay, NULL
 	};
 	trigger_add(&r->on_close_log, &on_close_log);

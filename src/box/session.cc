@@ -32,7 +32,7 @@
 #include "fiber.h"
 #include "memory.h"
 #include "assoc.h"
-#include "trigger.h"
+#include "lib/core/trigger.h"
 #include "user.h"
 #include "error.h"
 #include "tt_static.h"
@@ -81,7 +81,7 @@ sid_max()
 }
 
 static void
-session_on_stop(struct trigger *trigger, void * /* event */)
+session_on_stop(struct lua_trigger *trigger, void * /* event */)
 {
 	/*
 	 * Remove on_stop trigger from the fiber, otherwise the

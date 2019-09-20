@@ -30,7 +30,7 @@
  * THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#include <trigger.h>
+#include "lib/core/trigger.h"
 
 #if defined(__cplusplus)
 extern "C" {

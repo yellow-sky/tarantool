@@ -42,7 +42,7 @@ struct space;
 struct space_def;
 struct sql_stmt;
 struct Expr;
-struct trigger;
+struct lua_trigger;
 
 /** Supported languages of ck constraint. */
 enum ck_constraint_language {
@@ -199,7 +199,7 @@ ck_constraint_delete(struct ck_constraint *ck_constraint);
  * The diag message is set.
  */
 void
-ck_constraint_on_replace_trigger(struct trigger *trigger, void *event);
+ck_constraint_on_replace_trigger(struct lua_trigger *trigger, void *event);
 
 /**
  * Find check constraint object in space by given name and

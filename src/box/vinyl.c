@@ -69,7 +69,7 @@
 #include "xstream.h"
 #include "info/info.h"
 #include "column_mask.h"
-#include "trigger.h"
+#include "lib/core/trigger.h"
 #include "wal.h" /* wal_mode() */
 
 /**
@@ -163,7 +163,7 @@ struct vinyl_iterator {
 	 */
 	struct vy_tx tx_autocommit;
 	/** Trigger invoked when tx ends to close the iterator. */
-	struct trigger on_tx_destroy;
+	struct lua_trigger on_tx_destroy;
 };
 
 struct vinyl_snapshot_iterator {
@@ -176,7 +176,7 @@ static const struct engine_vtab vinyl_engine_vtab;
 static const struct space_vtab vinyl_space_vtab;
 static const struct index_vtab vinyl_index_vtab;
 
-static struct trigger on_replace_vinyl_deferred_delete;
+static struct lua_trigger on_replace_vinyl_deferred_delete;
 
 /** Extract vy_env from an engine object. */
 static inline struct vy_env *
@@ -1011,7 +1011,7 @@ struct vy_check_format_ctx {
  * tuples against a new format.
  */
 static void
-vy_check_format_on_replace(struct trigger *trigger, void *event)
+vy_check_format_on_replace(struct lua_trigger *trigger, void *event)
 {
 	struct txn *txn = event;
 	struct txn_stmt *stmt = txn_current_stmt(txn);
@@ -1071,7 +1071,7 @@ vinyl_space_check_format(struct space *space, struct tuple_format *format)
 	/* See the comment in vinyl_space_build_index(). */
 	txn_can_yield(txn, true);
 
-	struct trigger on_replace;
+	struct lua_trigger on_replace;
 	struct vy_check_format_ctx ctx;
 	ctx.format = format;
 	ctx.is_failed = false;
@@ -3421,7 +3421,7 @@ fail:
 /* {{{ Cursor */
 
 static void
-vinyl_iterator_on_tx_destroy(struct trigger *trigger, void *event)
+vinyl_iterator_on_tx_destroy(struct lua_trigger *trigger, void *event)
 {
 	(void)event;
 	struct vinyl_iterator *it = container_of(trigger,
@@ -3792,7 +3792,7 @@ struct vy_build_ctx {
  * to the index that is currently being built.
  */
 static void
-vy_build_on_replace(struct trigger *trigger, void *event)
+vy_build_on_replace(struct lua_trigger *trigger, void *event)
 {
 	struct txn *txn = event;
 	struct txn_stmt *stmt = txn_current_stmt(txn);
@@ -4146,7 +4146,7 @@ vinyl_space_build_index(struct space *src_space, struct index *new_index,
 	 * may yield, we install an on_replace trigger to forward
 	 * DML requests issued during the build.
 	 */
-	struct trigger on_replace;
+	struct lua_trigger on_replace;
 	struct vy_build_ctx ctx;
 	ctx.lsm = new_lsm;
 	ctx.format = new_format;
@@ -4248,7 +4248,7 @@ out:
 /* {{{ Deferred DELETE handling */
 
 static void
-vy_deferred_delete_on_commit(struct trigger *trigger, void *event)
+vy_deferred_delete_on_commit(struct lua_trigger *trigger, void *event)
 {
 	struct txn *txn = event;
 	struct vy_mem *mem = trigger->data;
@@ -4263,7 +4263,7 @@ vy_deferred_delete_on_commit(struct trigger *trigger, void *event)
 }
 
 static void
-vy_deferred_delete_on_rollback(struct trigger *trigger, void *event)
+vy_deferred_delete_on_rollback(struct lua_trigger *trigger, void *event)
 {
 	(void)event;
 	struct vy_mem *mem = trigger->data;
@@ -4296,7 +4296,7 @@ vy_deferred_delete_on_rollback(struct trigger *trigger, void *event)
  * mistakenly skip both statements on recovery.
  */
 static void
-vy_deferred_delete_on_replace(struct trigger *trigger, void *event)
+vy_deferred_delete_on_replace(struct lua_trigger *trigger, void *event)
 {
 	(void)trigger;
 
@@ -4410,19 +4410,19 @@ vy_deferred_delete_on_replace(struct trigger *trigger, void *event)
 		 * which will propagate the WAL row LSN to
 		 * the LSM tree.
 		 */
-		struct trigger *on_commit = region_alloc(&txn->region,
+		struct lua_trigger *on_commit = region_alloc(&txn->region,
 							 sizeof(*on_commit));
 		if (on_commit == NULL) {
 			diag_set(OutOfMemory, sizeof(*on_commit),
-				 "region", "struct trigger");
+				 "region", "struct lua_trigger");
 			rc = -1;
 			break;
 		}
-		struct trigger *on_rollback = region_alloc(&txn->region,
+		struct lua_trigger *on_rollback = region_alloc(&txn->region,
 							   sizeof(*on_commit));
 		if (on_rollback == NULL) {
 			diag_set(OutOfMemory, sizeof(*on_commit),
-				 "region", "struct trigger");
+				 "region", "struct lua_trigger");
 			rc = -1;
 			break;
 		}
@@ -4443,7 +4443,7 @@ vy_deferred_delete_on_replace(struct trigger *trigger, void *event)
 		diag_raise();
 }
 
-static struct trigger on_replace_vinyl_deferred_delete = {
+static struct lua_trigger on_replace_vinyl_deferred_delete = {
 	RLIST_LINK_INITIALIZER, vy_deferred_delete_on_replace, NULL, NULL
 };
 

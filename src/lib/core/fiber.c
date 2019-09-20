@@ -40,7 +40,7 @@
 
 #include "assoc.h"
 #include "memory.h"
-#include "trigger.h"
+#include "lib/core/trigger.h"
 
 #include "third_party/valgrind/memcheck.h"
 
@@ -1299,7 +1299,7 @@ cord_cojoin(struct cord *cord)
 }
 
 void
-break_ev_loop_f(struct trigger *trigger, void *event)
+break_ev_loop_f(struct lua_trigger *trigger, void *event)
 {
 	(void) trigger;
 	(void) event;
@@ -1323,7 +1323,7 @@ cord_costart_thread_func(void *arg)
 	if (f == NULL)
 		return NULL;
 
-	struct trigger break_ev_loop = {
+	struct lua_trigger break_ev_loop = {
 		RLIST_LINK_INITIALIZER, break_ev_loop_f, NULL, NULL
 	};
 	/*

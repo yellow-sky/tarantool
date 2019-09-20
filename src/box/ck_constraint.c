@@ -176,7 +176,7 @@ ck_constraint_program_run(struct ck_constraint *ck_constraint,
 }
 
 void
-ck_constraint_on_replace_trigger(struct trigger *trigger, void *event)
+ck_constraint_on_replace_trigger(struct lua_trigger *trigger, void *event)
 {
 	(void) trigger;
 	struct txn *txn = (struct txn *) event;

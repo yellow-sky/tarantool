@@ -34,7 +34,7 @@
 #include <string.h>
 #include "bit/bit.h"
 #include "tuple_format.h"
-#include "trigger.h"
+#include "lib/core/trigger.h"
 #include "user.h"
 #include "session.h"
 #include "txn.h"
@@ -590,8 +590,8 @@ space_add_ck_constraint(struct space *space, struct ck_constraint *ck)
 {
 	rlist_add_entry(&space->ck_constraint, ck, link);
 	if (space->ck_constraint_trigger == NULL) {
-		struct trigger *ck_trigger =
-			(struct trigger *) malloc(sizeof(*ck_trigger));
+		struct lua_trigger *ck_trigger =
+			(struct lua_trigger *) malloc(sizeof(*ck_trigger));
 		if (ck_trigger == NULL) {
 			diag_set(OutOfMemory, sizeof(*ck_trigger), "malloc",
 				 "ck_trigger");
@@ -610,7 +610,7 @@ space_remove_ck_constraint(struct space *space, struct ck_constraint *ck)
 {
 	rlist_del_entry(ck, link);
 	if (rlist_empty(&space->ck_constraint)) {
-		struct trigger *ck_trigger = space->ck_constraint_trigger;
+		struct lua_trigger *ck_trigger = space->ck_constraint_trigger;
 		trigger_clear(ck_trigger);
 		ck_trigger->destroy(ck_trigger);
 		space->ck_constraint_trigger = NULL;

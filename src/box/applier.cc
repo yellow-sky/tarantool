@@ -42,7 +42,7 @@
 #include "replication.h"
 #include "iproto_constants.h"
 #include "version.h"
-#include "trigger.h"
+#include "lib/core/trigger.h"
 #include "xrow_io.h"
 #include "error.h"
 #include "session.h"
@@ -612,7 +612,7 @@ applier_read_tx(struct applier *applier, struct stailq *rows)
 }
 
 static void
-applier_txn_rollback_cb(struct trigger *trigger, void *event)
+applier_txn_rollback_cb(struct lua_trigger *trigger, void *event)
 {
 	(void) trigger;
 	/* Setup shared applier diagnostic area. */
@@ -625,7 +625,7 @@ applier_txn_rollback_cb(struct trigger *trigger, void *event)
 }
 
 static void
-applier_txn_commit_cb(struct trigger *trigger, void *event)
+applier_txn_commit_cb(struct lua_trigger *trigger, void *event)
 {
 	(void) trigger;
 	/* Broadcast the commit event across all appliers. */
@@ -712,11 +712,11 @@ applier_apply_tx(struct stailq *rows)
 	}
 
 	/* We are ready to submit txn to wal. */
-	struct trigger *on_rollback, *on_commit;
-	on_rollback = (struct trigger *)region_alloc(&txn->region,
-						     sizeof(struct trigger));
-	on_commit = (struct trigger *)region_alloc(&txn->region,
-						   sizeof(struct trigger));
+	struct lua_trigger *on_rollback, *on_commit;
+	on_rollback = (struct lua_trigger *)region_alloc(&txn->region,
+						     sizeof(struct lua_trigger));
+	on_commit = (struct lua_trigger *)region_alloc(&txn->region,
+						   sizeof(struct lua_trigger));
 	if (on_rollback == NULL || on_commit == NULL)
 		goto rollback;
 
@@ -746,7 +746,7 @@ fail:
  * A trigger to update an applier state after a replication commit.
  */
 static void
-applier_on_commit(struct trigger *trigger, void *event)
+applier_on_commit(struct lua_trigger *trigger, void *event)
 {
 	(void) event;
 	struct applier *applier = (struct applier *)trigger->data;
@@ -757,7 +757,7 @@ applier_on_commit(struct trigger *trigger, void *event)
  * A trigger to update an applier state after a replication rollback.
  */
 static void
-applier_on_rollback(struct trigger *trigger, void *event)
+applier_on_rollback(struct lua_trigger *trigger, void *event)
 {
 	(void) event;
 	struct applier *applier = (struct applier *)trigger->data;
@@ -873,11 +873,11 @@ applier_subscribe(struct applier *applier)
 	applier->lag = TIMEOUT_INFINITY;
 
 	/* Register triggers to handle replication commits and rollbacks. */
-	struct trigger on_commit;
+	struct lua_trigger on_commit;
 	trigger_create(&on_commit, applier_on_commit, applier, NULL);
 	trigger_add(&replicaset.applier.on_commit, &on_commit);
 
-	struct trigger on_rollback;
+	struct lua_trigger on_rollback;
 	trigger_create(&on_rollback, applier_on_rollback, applier, NULL);
 	trigger_add(&replicaset.applier.on_rollback, &on_rollback);
 
@@ -1125,14 +1125,14 @@ applier_pause(struct applier *applier)
 }
 
 struct applier_on_state {
-	struct trigger base;
+	struct lua_trigger base;
 	struct applier *applier;
 	enum applier_state desired_state;
 	struct fiber_cond wakeup;
 };
 
 static void
-applier_on_state_f(struct trigger *trigger, void *event)
+applier_on_state_f(struct lua_trigger *trigger, void *event)
 {
 	(void) event;
 	struct applier_on_state *on_state =

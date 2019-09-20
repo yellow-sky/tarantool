@@ -835,7 +835,7 @@ struct memtx_ddl_state {
 };
 
 static void
-memtx_check_on_replace(struct trigger *trigger, void *event)
+memtx_check_on_replace(struct lua_trigger *trigger, void *event)
 {
 	struct txn *txn = event;
 	struct memtx_ddl_state *state = trigger->data;
@@ -890,7 +890,7 @@ memtx_space_check_format(struct space *space, struct tuple_format *format)
 	state.rc = 0;
 	diag_create(&state.diag);
 
-	struct trigger on_replace;
+	struct lua_trigger on_replace;
 	trigger_create(&on_replace, memtx_check_on_replace, &state, NULL);
 	trigger_add(&space->on_replace, &on_replace);
 
@@ -958,7 +958,7 @@ memtx_init_ephemeral_space(struct space *space)
 }
 
 static void
-memtx_build_on_replace(struct trigger *trigger, void *event)
+memtx_build_on_replace(struct lua_trigger *trigger, void *event)
 {
 	struct txn *txn = event;
 	struct memtx_ddl_state *state = trigger->data;
@@ -1043,7 +1043,7 @@ memtx_space_build_index(struct space *src_space, struct index *new_index,
 	state.rc = 0;
 	diag_create(&state.diag);
 
-	struct trigger on_replace;
+	struct lua_trigger on_replace;
 	trigger_create(&on_replace, memtx_build_on_replace, &state, NULL);
 	trigger_add(&src_space->on_replace, &on_replace);
 

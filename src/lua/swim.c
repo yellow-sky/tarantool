@@ -29,8 +29,8 @@
  * SUCH DAMAGE.
  */
 #include "swim/swim.h"
-#include "trigger.h"
 #include "diag.h"
+#include "lua/trigger.h"
 #include "lua/utils.h"
 
 static uint32_t ctid_swim_member_ptr;

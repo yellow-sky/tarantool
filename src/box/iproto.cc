@@ -1506,7 +1506,7 @@ error:
 }
 
 static void
-tx_process_call_on_yield(struct trigger *trigger, void *event)
+tx_process_call_on_yield(struct lua_trigger *trigger, void *event)
 {
 	(void)event;
 	struct iproto_msg *msg = (struct iproto_msg *)trigger->data;
@@ -1527,7 +1527,7 @@ tx_process_call(struct cmsg *m)
 	 * input on yield to avoid stalling other connections by
 	 * a long polling request.
 	 */
-	struct trigger fiber_on_yield;
+	struct lua_trigger fiber_on_yield;
 	trigger_create(&fiber_on_yield, tx_process_call_on_yield, msg, NULL);
 	trigger_add(&fiber()->on_yield, &fiber_on_yield);
 

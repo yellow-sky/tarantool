@@ -41,10 +41,10 @@ double too_long_threshold;
 static struct stailq txn_cache = {NULL, &txn_cache.first};
 
 static void
-txn_on_stop(struct trigger *trigger, void *event);
+txn_on_stop(struct lua_trigger *trigger, void *event);
 
 static void
-txn_on_yield(struct trigger *trigger, void *event);
+txn_on_yield(struct lua_trigger *trigger, void *event);
 
 static void
 txn_run_rollback_triggers(struct txn *txn, struct rlist *triggers);
@@ -840,7 +840,7 @@ txn_savepoint_release(struct txn_savepoint *svp)
 }
 
 static void
-txn_on_stop(struct trigger *trigger, void *event)
+txn_on_stop(struct lua_trigger *trigger, void *event)
 {
 	(void) trigger;
 	(void) event;
@@ -865,7 +865,7 @@ txn_on_stop(struct trigger *trigger, void *event)
  * interactive transaction support in memtx.
  */
 static void
-txn_on_yield(struct trigger *trigger, void *event)
+txn_on_yield(struct lua_trigger *trigger, void *event)
 {
 	(void) trigger;
 	(void) event;

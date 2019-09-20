@@ -95,7 +95,7 @@ static struct fiber *on_shutdown_fiber = NULL;
 /** A flag restricting repeated execution of tarantool_exit(). */
 static bool is_shutting_down = false;
 /** A trigger which will break the event loop on shutdown. */
-static struct trigger break_loop_trigger;
+static struct lua_trigger break_loop_trigger;
 static int exit_code = 0;
 
 double
@@ -684,7 +684,7 @@ print_help(const char *program)
 }
 
 static void
-break_loop(struct trigger *, void *)
+break_loop(struct lua_trigger *, void *)
 {
 	ev_break(loop(), EVBREAK_ALL);
 }

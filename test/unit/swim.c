@@ -29,7 +29,7 @@
  * SUCH DAMAGE.
  */
 #include "swim_test_utils.h"
-#include "trigger.h"
+#include "lib/core/trigger.h"
 #include <math.h>
 
 /**
@@ -828,7 +828,7 @@ struct trigger_ctx {
 };
 
 static void
-swim_on_member_event_save(struct trigger *t, void *event)
+swim_on_member_event_save(struct lua_trigger *t, void *event)
 {
 	struct trigger_ctx *c = (struct trigger_ctx *) t->data;
 	++c->counter;
@@ -839,7 +839,7 @@ swim_on_member_event_save(struct trigger *t, void *event)
 }
 
 static void
-swim_on_member_event_yield(struct trigger *t, void *event)
+swim_on_member_event_yield(struct lua_trigger *t, void *event)
 {
 	struct trigger_ctx *c = (struct trigger_ctx *) t->data;
 	++c->counter;
@@ -849,7 +849,7 @@ swim_on_member_event_yield(struct trigger *t, void *event)
 }
 
 static void
-swim_trigger_destroy_cb(struct trigger *t)
+swim_trigger_destroy_cb(struct lua_trigger *t)
 {
 	((struct trigger_ctx *) t->data)->is_deleted = true;
 }
@@ -872,7 +872,7 @@ swim_test_triggers(void)
 	struct trigger_ctx tctx, tctx2;
 	memset(&tctx, 0, sizeof(tctx));
 	memset(&tctx2, 0, sizeof(tctx2));
-	struct trigger *t1 = (struct trigger *) malloc(sizeof(*t1));
+	struct lua_trigger *t1 = (struct lua_trigger *) malloc(sizeof(*t1));
 	assert(t1 != NULL);
 	trigger_create(t1, swim_on_member_event_save, (void *) &tctx,
 		       swim_trigger_destroy_cb);
@@ -925,7 +925,7 @@ swim_test_triggers(void)
 	 * middle of an event processing. SWIM object should not
 	 * be deleted, until all the triggers are done.
 	 */
-	struct trigger *t2 = (struct trigger *) malloc(sizeof(*t2));
+	struct lua_trigger *t2 = (struct lua_trigger *) malloc(sizeof(*t2));
 	assert(t2 != NULL);
 	tctx2.need_sleep = true;
 	trigger_create(t2, swim_on_member_event_yield, (void *) &tctx2, NULL);

@@ -264,7 +264,7 @@ static void
 sc_space_new(uint32_t id, const char *name,
 	     struct key_part_def *key_parts,
 	     uint32_t key_part_count,
-	     struct trigger *replace_trigger)
+	     struct lua_trigger *replace_trigger)
 {
 	struct key_def *key_def = key_def_new(key_parts, key_part_count, false);
 	if (key_def == NULL)

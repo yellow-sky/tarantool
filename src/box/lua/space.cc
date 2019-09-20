@@ -501,7 +501,7 @@ box_lua_space_delete(struct lua_State *L, uint32_t id)
 }
 
 static void
-box_lua_space_new_or_delete(struct trigger *trigger, void *event)
+box_lua_space_new_or_delete(struct lua_trigger *trigger, void *event)
 {
 	struct lua_State *L = (struct lua_State *) trigger->data;
 	struct space *space = (struct space *) event;
@@ -513,7 +513,7 @@ box_lua_space_new_or_delete(struct trigger *trigger, void *event)
 	}
 }
 
-static struct trigger on_alter_space_in_lua = {
+static struct lua_trigger on_alter_space_in_lua = {
 	RLIST_LINK_INITIALIZER, box_lua_space_new_or_delete, NULL, NULL
 };
 

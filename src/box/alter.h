@@ -30,23 +30,23 @@
  * THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#include "trigger.h"
+#include "lib/core/trigger.h"
 
-extern struct trigger alter_space_on_replace_space;
-extern struct trigger alter_space_on_replace_index;
-extern struct trigger on_replace_truncate;
-extern struct trigger on_replace_schema;
-extern struct trigger on_replace_user;
-extern struct trigger on_replace_func;
-extern struct trigger on_replace_collation;
-extern struct trigger on_replace_priv;
-extern struct trigger on_replace_cluster;
-extern struct trigger on_replace_sequence;
-extern struct trigger on_replace_sequence_data;
-extern struct trigger on_replace_space_sequence;
-extern struct trigger on_replace_trigger;
-extern struct trigger on_replace_fk_constraint;
-extern struct trigger on_replace_ck_constraint;
-extern struct trigger on_replace_func_index;
+extern struct lua_trigger alter_space_on_replace_space;
+extern struct lua_trigger alter_space_on_replace_index;
+extern struct lua_trigger on_replace_truncate;
+extern struct lua_trigger on_replace_schema;
+extern struct lua_trigger on_replace_user;
+extern struct lua_trigger on_replace_func;
+extern struct lua_trigger on_replace_collation;
+extern struct lua_trigger on_replace_priv;
+extern struct lua_trigger on_replace_cluster;
+extern struct lua_trigger on_replace_sequence;
+extern struct lua_trigger on_replace_sequence_data;
+extern struct lua_trigger on_replace_space_sequence;
+extern struct lua_trigger on_replace_trigger;
+extern struct lua_trigger on_replace_fk_constraint;
+extern struct lua_trigger on_replace_ck_constraint;
+extern struct lua_trigger on_replace_func_index;
 
 #endif /* INCLUDES_TARANTOOL_BOX_ALTER_H */

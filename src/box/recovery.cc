@@ -32,7 +32,7 @@
 
 #include "small/rlist.h"
 #include "scoped_guard.h"
-#include "trigger.h"
+#include "lib/core/trigger.h"
 #include "fiber.h"
 #include "xlog.h"
 #include "xrow.h"

@@ -31,7 +31,7 @@
  * SUCH DAMAGE.
  */
 #include "uuid/tt_uuid.h"
-#include "trigger.h"
+#include "lib/core/trigger.h"
 #include <stdint.h>
 #define RB_COMPACT 1
 #include <small/rb.h> /* replicaset_t */
@@ -276,7 +276,7 @@ struct replica {
 	/**
 	 * Trigger invoked when the applier changes its state.
 	 */
-	struct trigger on_applier_state;
+	struct lua_trigger on_applier_state;
 	/**
 	 * During initial connect or reconnect we require applier
 	 * to sync with the master before the replica can leave
