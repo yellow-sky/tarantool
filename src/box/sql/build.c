@@ -1282,6 +1282,88 @@ sqlEndTable(struct Parse *pParse)
 }
 
 void
+sql_create_trigger(struct Parse *parse_context)
+{
+	struct create_trigger_def *trigger_def =
+					&parse_context->create_trigger_def;
+	struct create_entity_def *create_def = &trigger_def->base;
+	struct alter_entity_def *alter_def = &create_def->base;
+	assert(alter_def->entity_type == ENTITY_TYPE_TRIGGER);
+	assert(alter_def->alter_action == ALTER_ACTION_CREATE);
+	struct sql *db = parse_context->db;
+
+	char *trigger_name = sql_name_from_token(db, &create_def->name);
+	if (trigger_name == NULL ||
+	    sqlCheckIdentifierName(parse_context, trigger_name) != 0) {
+		parse_context->is_aborted = true;
+		goto end;
+	}
+
+	struct Vdbe *v = sqlGetVdbe(parse_context);
+	if (v == NULL)
+		goto end;
+	sqlVdbeCountChanges(v);
+	const char *error_msg = tt_sprintf(tnt_errcode_desc(ER_TRIGGER_EXISTS),
+					   trigger_name);
+	int name_reg = ++parse_context->nMem;
+	sqlVdbeAddOp4(v, OP_String8, 0, name_reg, 0,
+		      sqlDbStrDup(db, trigger_name), P4_DYNAMIC);
+	if (vdbe_emit_halt_with_presence_test(parse_context, BOX_TRIGGER_ID, 0,
+					      name_reg, 1, ER_TRIGGER_EXISTS,
+					      error_msg,
+					      create_def->if_not_exist,
+					      OP_NoConflict) != 0) {
+		parse_context->is_aborted = true;
+		goto end;
+	}
+
+	const char *table_name = alter_def->entity_name->a[0].zName;
+	uint32_t space_id = box_space_id_by_name(table_name,
+						 strlen(table_name));
+	if (space_id == BOX_ID_NIL) {
+		diag_set(ClientError, ER_NO_SUCH_SPACE, table_name);
+		parse_context->is_aborted = true;
+		goto end;
+	}
+
+	struct space *_trigger = space_by_id(BOX_TRIGGER_ID);
+	assert(_trigger != NULL);
+
+	int first_col = parse_context->nMem + 1;
+	parse_context->nMem += 3;
+	int record = ++parse_context->nMem;
+
+	uint32_t opts_buff_sz = mp_sizeof_map(1) +
+				mp_sizeof_str(strlen("sql")) +
+				mp_sizeof_str(trigger_def->sql_len);
+	char *opts_buff = (char *) sqlDbMallocRaw(db, opts_buff_sz);
+	if (opts_buff == NULL) {
+		parse_context->is_aborted = true;
+		goto end;
+	}
+
+	char *data = mp_encode_map(opts_buff, 1);
+	data = mp_encode_str(data, "sql", strlen("sql"));
+	data = mp_encode_str(data, trigger_def->sql, trigger_def->sql_len);
+	sqlVdbeAddOp4(v, OP_String8, 0, first_col, 0, trigger_name, P4_DYNAMIC);
+	sqlVdbeAddOp2(v, OP_Integer, space_id, first_col + 1);
+	sqlVdbeAddOp4(v, OP_Blob, opts_buff_sz, first_col + 2,
+		      SQL_SUBTYPE_MSGPACK, opts_buff, P4_DYNAMIC);
+	sqlVdbeAddOp3(v, OP_MakeRecord, first_col, 3, record);
+	sqlVdbeAddOp4(v, OP_IdxInsert, record, 0, 0, (char *)_trigger,
+		      P4_SPACEPTR);
+	sqlVdbeChangeP5(v, OPFLAG_NCHANGE);
+	trigger_name = NULL;
+
+end:
+	sqlDbFree(db, trigger_name);
+	sqlSrcListDelete(db, alter_def->entity_name);
+	sqlIdListDelete(db, trigger_def->cols);
+	sql_expr_delete(db, trigger_def->when, false);
+	sqlDeleteTriggerStep(db, trigger_def->step_list);
+}
+
+void
 sql_create_view(struct Parse *parse_context)
 {
 	struct create_view_def *view_def = &parse_context->create_view_def;

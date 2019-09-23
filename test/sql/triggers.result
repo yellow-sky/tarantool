@@ -34,7 +34,7 @@ immutable_part(box.space._trigger:select())
 ---
 - - - T1T
     - {'sql': 'CREATE TRIGGER t1t AFTER INSERT ON t1 FOR EACH ROW BEGIN INSERT INTO
-        t2 VALUES(1); END; '}
+        t2 VALUES(1); END'}
 ...
 space_id = box.space._space.index["name"]:get('T1').id
 ---
@@ -68,7 +68,7 @@ immutable_part(box.space._trigger:select())
 ---
 - - - T1T
     - {'sql': 'CREATE TRIGGER t1t AFTER INSERT ON t1 FOR EACH ROW BEGIN INSERT INTO
-        t2 VALUES(1); END; '}
+        t2 VALUES(1); END'}
 ...
 box.execute("DROP TABLE T1;")
 ---
@@ -90,7 +90,7 @@ immutable_part(box.space._trigger:select())
 ---
 - - - T1T
     - {'sql': 'CREATE TRIGGER t1t AFTER INSERT ON t1 FOR EACH ROW BEGIN INSERT INTO
-        t2 VALUES(1); END; '}
+        t2 VALUES(1); END'}
 ...
 space_id = box.space._space.index["name"]:get('T1').id
 ---
@@ -129,7 +129,7 @@ immutable_part(box.space._trigger:select())
 ---
 - - - T1T
     - {'sql': 'CREATE TRIGGER t1t AFTER INSERT ON t1 FOR EACH ROW BEGIN INSERT INTO
-        t2 VALUES(1); END; '}
+        t2 VALUES(1); END'}
   - - T2T
     - {'sql': 'CREATE TRIGGER t2t AFTER INSERT ON t1 FOR EACH ROW BEGIN INSERT INTO
         t2 VALUES(2); END;'}
@@ -167,7 +167,7 @@ immutable_part(box.space._trigger:select())
 ---
 - - - T1T
     - {'sql': 'CREATE TRIGGER t1t AFTER INSERT ON t1 FOR EACH ROW BEGIN INSERT INTO
-        t2 VALUES(1); END; '}
+        t2 VALUES(1); END'}
 ...
 box.execute("INSERT INTO t1 VALUES(3);")
 ---
@@ -198,13 +198,13 @@ immutable_part(box.space._trigger:select())
 ---
 - - - T1T
     - {'sql': 'CREATE TRIGGER t1t AFTER INSERT ON t1 FOR EACH ROW BEGIN INSERT INTO
-        t2 VALUES(1); END; '}
+        t2 VALUES(1); END'}
   - - T2T
     - {'sql': 'CREATE TRIGGER t2t AFTER INSERT ON t1 FOR EACH ROW BEGIN INSERT INTO
-        t2 VALUES(2); END; '}
+        t2 VALUES(2); END'}
   - - T3T
     - {'sql': 'CREATE TRIGGER t3t AFTER INSERT ON t1 FOR EACH ROW BEGIN INSERT INTO
-        t2 VALUES(3); END; '}
+        t2 VALUES(3); END'}
 ...
 box.execute("INSERT INTO t1 VALUES(4);")
 ---

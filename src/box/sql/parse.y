@@ -1574,21 +1574,19 @@ plus_num(A) ::= number(A).
 minus_num(A) ::= MINUS number(X).     {A = X;}
 //////////////////////////// The CREATE TRIGGER command /////////////////////
 
-cmd ::= createkw trigger_decl(A) BEGIN trigger_cmd_list(S) END(Z). {
-  Token all;
-  all.z = A.z;
-  all.n = (int)(Z.z - A.z) + Z.n;
-  pParse->initiateTTrans = true;
-  sql_trigger_finish(pParse, S, &all);
-}
-
-trigger_decl(A) ::= TRIGGER ifnotexists(NOERR) nm(B)
-                    trigger_time(C) trigger_event(D)
-                    ON fullname(E) foreach_clause when_clause(G). {
+cmd ::= createkw(Y) TRIGGER ifnotexists(NOERR) nm(B) trigger_time(C)
+        trigger_event(D) ON fullname(E) foreach_clause when_clause(G)
+        BEGIN trigger_cmd_list(S) END(Z). {
+  int sql_len = (int)(Z.z - Y.z) + Z.n;
+  const char *sql = Y.z;
   create_trigger_def_init(&pParse->create_trigger_def, E, &B, C, D.a, D.b, G,
-                          NOERR);
-  sql_trigger_begin(pParse);
-  A = B; /*A-overwrites-T*/
+                          NOERR, sql, sql_len, S);
+  if (!pParse->parse_only) {
+    pParse->initiateTTrans = true;
+    sql_create_trigger(pParse);
+  } else {
+    sql_store_trigger(pParse);
+  }
 }
 
 %type trigger_time {int}

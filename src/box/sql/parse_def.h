@@ -278,6 +278,12 @@ struct create_trigger_def {
 	struct IdList *cols;
 	/** When clause. */
 	struct Expr *when;
+	/** Source SQL Expression. */
+	const char *sql;
+	/** Source SQL Expression length. */
+	uint32_t sql_len;
+	/** Steps describing SQL trigger program. */
+	struct TriggerStep *step_list;
 };
 
 struct create_constraint_def {
@@ -412,7 +418,9 @@ static inline void
 create_trigger_def_init(struct create_trigger_def *trigger_def,
 			struct SrcList *table_name, struct Token *name,
 			int tr_tm, int op, struct IdList *cols,
-			struct Expr *when, bool if_not_exists)
+			struct Expr *when, bool if_not_exists,
+			const char *sql, uint32_t sql_len,
+			struct TriggerStep *step_list)
 {
 	create_entity_def_init(&trigger_def->base, ENTITY_TYPE_TRIGGER,
 			       table_name, name, if_not_exists);
@@ -420,6 +428,9 @@ create_trigger_def_init(struct create_trigger_def *trigger_def,
 	trigger_def->event_manipulation = trigger_event_manipulation_by_op(op);
 	trigger_def->cols = cols;
 	trigger_def->when = when;
+	trigger_def->sql = sql;
+	trigger_def->sql_len = sql_len;
+	trigger_def->step_list = step_list;
 }
 
 static inline void

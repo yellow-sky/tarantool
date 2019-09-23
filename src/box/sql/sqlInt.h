@@ -3364,25 +3364,17 @@ sql_materialize_view(struct Parse *parse, const char *name, struct Expr *where,
  * statement up to the point of the BEGIN before the trigger
  * actions.  A sql_trigger structure is generated based on the
  * information available and stored in parse->parsed_ast.trigger.
- * After the trigger actions have been parsed, the
- * sql_trigger_finish() function is called to complete the trigger
- * construction process.
  */
 void
-sql_trigger_begin(struct Parse *parse);
+sql_store_trigger(struct Parse *parse);
 
 /**
- * This routine is called after all of the trigger actions have
- * been parsed in order to complete the process of building the
- * trigger.
- *
- * @param parse Parser context.
- * @param step_list The triggered program.
- * @param token Token that describes the complete CREATE TRIGGER.
+ * This function is called from parser to generate create trigger
+ * VDBE code.
+ * @param parser Parser context.
  */
 void
-sql_trigger_finish(struct Parse *parse, struct TriggerStep *step_list,
-		   struct Token *token);
+sql_create_trigger(struct Parse *parse);
 
 /**
  * This function is called from parser to generate drop trigger
