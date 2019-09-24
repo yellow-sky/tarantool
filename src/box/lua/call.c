@@ -438,6 +438,9 @@ box_process_lua(struct call_request *request, struct port *base,
 	lua_pushcfunction(L, handler);
 	lua_pushlightuserdata(L, request);
 	if (luaT_call(L, 1, LUA_MULTRET) != 0) {
+                if (diag_last_error(&fiber()->diag) == NULL) {
+                       diag_set(ClientError, ER_PROC_LUA, lua_tostring(L, -1));
+                }
 		port_lua_destroy(base);
 		return -1;
 	}
