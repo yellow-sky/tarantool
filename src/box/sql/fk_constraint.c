@@ -856,22 +856,27 @@ fk_constraint_action_trigger(struct Parse *pParse, struct space_def *def,
 							     sizeof(*trigger));
 	if (trigger != NULL) {
 		size_t step_size = sizeof(TriggerStep) + name_len + 1;
-		trigger->step_list = sqlDbMallocZero(db, step_size);
+		step = sqlDbMallocZero(db, step_size);
 		rlist_create(&trigger->link);
-		step = trigger->step_list;
+		if (step == NULL)
+			goto end;
 		step->zTarget = (char *) &step[1];
 		memcpy((char *) step->zTarget, space_name, name_len);
-
 		step->pWhere = sqlExprDup(db, where, EXPRDUP_REDUCE);
 		step->pExprList = sql_expr_list_dup(db, list, EXPRDUP_REDUCE);
 		step->pSelect = sqlSelectDup(db, select, EXPRDUP_REDUCE);
 		if (when != NULL) {
 			when = sqlPExpr(pParse, TK_NOT, when, 0);
-			trigger->pWhen =
-				sqlExprDup(db, when, EXPRDUP_REDUCE);
+			if (when == NULL)
+				goto end;
 		}
+		trigger->expr = sql_trigger_expr_new(db, NULL, when, step);
+		if (trigger->expr == NULL)
+			goto end;
+		when = NULL;
 	}
 
+end:
 	sql_expr_delete(db, where, false);
 	sql_expr_delete(db, when, false);
 	sql_expr_list_delete(db, list);

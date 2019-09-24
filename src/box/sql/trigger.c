@@ -106,14 +106,15 @@ sql_store_trigger(struct Parse *parse)
 	trigger_name = NULL;
 	trigger->event_manipulation = trigger_def->event_manipulation;
 	trigger->action_timing = trigger_def->action_timing;
-	trigger->pWhen = sqlExprDup(db, trigger_def->when, EXPRDUP_REDUCE);
-	trigger->pColumns = sqlIdListDup(db, trigger_def->cols);
 	rlist_create(&trigger->link);
-	if ((trigger_def->when != NULL && trigger->pWhen == NULL) ||
-	    (trigger_def->cols != NULL && trigger->pColumns == NULL))
+	trigger->expr = sql_trigger_expr_new(db, trigger_def->cols,
+					     trigger_def->when,
+					     trigger_def->step_list);
+	if (trigger->expr == NULL)
 		goto trigger_cleanup;
-	trigger->step_list = parse->create_trigger_def.step_list;
-	parse->create_trigger_def.step_list = NULL;
+	trigger_def->cols = NULL;
+	trigger_def->when = NULL;
+	trigger_def->step_list = NULL;
 
 	assert(parse->parsed_ast.trigger == NULL);
 	parse->parsed_ast.trigger = trigger;
@@ -247,15 +248,53 @@ sql_trigger_delete_step(struct sql *db, struct Token *table_name,
 	return trigger_step;
 }
 
+struct sql_trigger_expr *
+sql_trigger_expr_new(struct sql *db, struct IdList *cols, struct Expr *when,
+		     struct TriggerStep *step_list)
+{
+	struct sql_trigger_expr *trigger_expr =
+		(struct sql_trigger_expr *)malloc(sizeof(*trigger_expr));
+	if (trigger_expr == NULL) {
+		diag_set(OutOfMemory, sizeof(*trigger_expr),
+			 "malloc", "trigger_expr");
+		return NULL;
+	}
+	if (when != NULL) {
+		trigger_expr->when = sqlExprDup(db, when, EXPRDUP_REDUCE);
+		if (trigger_expr->when == NULL) {
+			diag_set(OutOfMemory,
+				 sql_expr_sizeof(when, EXPRDUP_REDUCE),
+				 "sqlExprDup", "trigger_expr->when");
+			free(trigger_expr);
+			return NULL;
+		}
+	} else {
+		trigger_expr->when = NULL;
+	}
+	/* Object refers to reduced copy of when expression. */
+	sql_expr_delete(db, when, false);
+	trigger_expr->cols = cols;
+	trigger_expr->step_list = step_list;
+	return trigger_expr;
+}
+
+void
+sql_trigger_expr_delete(struct sql *db, struct sql_trigger_expr *trigger_expr)
+{
+	sqlDeleteTriggerStep(db, trigger_expr->step_list);
+	sql_expr_delete(db, trigger_expr->when, false);
+	sqlIdListDelete(db, trigger_expr->cols);
+	free(trigger_expr);
+}
+
 void
 sql_trigger_delete(struct sql *db, struct sql_trigger *trigger)
 {
 	if (trigger == NULL)
 		return;
-	sqlDeleteTriggerStep(db, trigger->step_list);
+	if (trigger->expr != NULL)
+		sql_trigger_expr_delete(db, trigger->expr);
 	sqlDbFree(db, trigger->zName);
-	sql_expr_delete(db, trigger->pWhen, false);
-	sqlIdListDelete(db, trigger->pColumns);
 	sqlDbFree(db, trigger);
 }
 
@@ -427,7 +466,7 @@ sql_triggers_exist(struct space *space,
 	struct sql_trigger *p;
 	rlist_foreach_entry(p, trigger_list, link) {
 		if (p->event_manipulation == event_manipulation &&
-		    checkColumnOverlap(p->pColumns, changes_list) != 0)
+		    checkColumnOverlap(p->expr->cols, changes_list) != 0)
 			mask |= (1 << p->action_timing);
 	}
 	if (mask_ptr != NULL)
@@ -665,8 +704,8 @@ sql_row_trigger_program(struct Parse *parser, struct sql_trigger *trigger,
 		 * immediately halted by jumping to the OP_Halt
 		 * inserted at the end of the program.
 		 */
-		if (trigger->pWhen != NULL) {
-			pWhen = sqlExprDup(db, trigger->pWhen, 0);
+		if (trigger->expr->when != NULL) {
+			pWhen = sqlExprDup(db, trigger->expr->when, 0);
 			if (0 == sqlResolveExprNames(&sNC, pWhen)
 			    && db->mallocFailed == 0) {
 				iEndTrigger = sqlVdbeMakeLabel(v);
@@ -678,7 +717,7 @@ sql_row_trigger_program(struct Parse *parser, struct sql_trigger *trigger,
 		}
 
 		/* Code the trigger program into the sub-vdbe. */
-		codeTriggerProgram(pSubParse, trigger->step_list, orconf);
+		codeTriggerProgram(pSubParse, trigger->expr->step_list, orconf);
 
 		/* Insert an OP_Halt at the end of the sub-program. */
 		if (iEndTrigger)
@@ -814,7 +853,7 @@ vdbe_code_row_trigger(struct Parse *parser, struct rlist *trigger_list,
 		/* Determine whether we should code trigger. */
 		if (p->event_manipulation == event_manipulation &&
 		    p->action_timing == action_timing &&
-		    checkColumnOverlap(p->pColumns, changes_list)) {
+		    checkColumnOverlap(p->expr->cols, changes_list)) {
 			vdbe_code_row_trigger_direct(parser, p, space, reg,
 						     orconf, ignore_jump);
 		}
@@ -838,7 +877,7 @@ sql_trigger_colmask(Parse *parser, struct rlist *trigger_list,
 	rlist_foreach_entry(p, trigger_list, link) {
 		if (p->event_manipulation == event_manipulation &&
 		    ((action_timing_mask & (1 << p->action_timing)) != 0) &&
-		    checkColumnOverlap(p->pColumns, changes_list)) {
+		    checkColumnOverlap(p->expr->cols, changes_list)) {
 			TriggerPrg *prg =
 				sql_row_trigger(parser, p, space, orconf);
 			if (prg != NULL)

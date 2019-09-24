@@ -99,6 +99,32 @@ sql_expr_compile(struct sql *db, const char *expr, int expr_len);
 struct Select *
 sql_view_compile(struct sql *db, const char *view_stmt);
 
+/** The SQL Trigger AST runtime representation. */
+struct sql_trigger_expr {
+	/** The WHEN clause of the expression (may be NULL). */
+	struct Expr *when;
+	/**
+	 * If this is an UPDATE OF <column-list> trigger,
+	 * the <column-list> is stored here
+	 */
+	struct IdList *cols;
+	/** Link list of trigger program steps. */
+	struct TriggerStep *step_list;
+};
+
+/**
+ * Allocate a new SQL Trigger AST runtime object.
+ * In case of successfull construction, the constructed object
+ * start manipulate given arguments lifecycle.
+ */
+struct sql_trigger_expr *
+sql_trigger_expr_new(struct sql *db, struct IdList *cols, struct Expr *when,
+		     struct TriggerStep *step_list);
+
+/** Free SQL Trigger AST object. */
+void
+sql_trigger_expr_delete(struct sql *db, struct sql_trigger_expr *trigger_expr);
+
 /**
  * Perform parsing of provided SQL request and construct trigger AST.
  * @param db SQL context handle.
@@ -452,15 +478,8 @@ struct sql_trigger {
 	 * triggering event. The value is `BEFORE` or `AFTER`.
 	 */
 	enum trigger_action_timing action_timing;
-	/** The WHEN clause of the expression (may be NULL). */
-	struct Expr *pWhen;
-	/**
-	 * If this is an UPDATE OF <column-list> trigger,
-	 * the <column-list> is stored here
-	 */
-	struct IdList *pColumns;
-	/** Link list of trigger program steps. */
-	struct TriggerStep *step_list;
+	/** The SQL trigger AST. */
+	struct sql_trigger_expr *expr;
 	/**
 	 * Organize sql_trigger structs into linked list
 	 * with space::trigger_list.
