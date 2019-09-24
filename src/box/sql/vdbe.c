@@ -4730,7 +4730,7 @@ case OP_RenameTable: {
 	 * due to lack of transactional DDL, but just do the best
 	 * effort.
 	 */
-	struct sql_trigger *trigger, *tmp;
+	struct trigger *trigger, *tmp;
 	rlist_foreach_entry_safe(trigger, &space->trigger_list, link, tmp) {
 		/*
 		 * FIXME: In the case of error, part of triggers
@@ -4738,7 +4738,7 @@ case OP_RenameTable: {
 		 * not been persisted. Server could be restarted.
 		 * In this case, rename table back and try again.
 		 */
-		if (tarantoolsqlRenameTrigger(trigger->zName, zOldTableName,
+		if (tarantoolsqlRenameTrigger(trigger->def->name, zOldTableName,
 					      zNewTableName) != 0)
 			goto abort_due_to_error;
 	}

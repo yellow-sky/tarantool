@@ -35,6 +35,8 @@
 extern "C" {
 #endif /* defined(__cplusplus) */
 
+#include <inttypes.h>
+
 /**
  * The trigger event. This is the type of operation
  * on the associated space for which the trigger
@@ -66,6 +68,98 @@ enum trigger_action_timing {
 };
 
 extern const char *trigger_action_timing_strs[];
+
+/**
+ * The supported language of the stored function.
+ */
+enum trigger_language {
+	TRIGGER_LANGUAGE_SQL,
+	trigger_language_MAX,
+};
+
+extern const char *trigger_language_strs[];
+
+/**
+ * Trigger object definition.
+ * See trigger_def_sizeof() definition for implementation
+ * details and memory layout.
+ */
+struct trigger_def {
+	/**
+	 * The trigger event. This is the type of operation
+	 * on the associated space for which the trigger
+	 * activates. The value is `INSERT` (a row was inserted),
+	 * `DELETE` (a row was deleted), or `UPDATE` (a row was
+	 * modified).
+	 */
+	enum trigger_event_manipulation event_manipulation;
+	/**
+	 * Whether the trigger activates before or after the
+	 * triggering event. The value is `BEFORE` or `AFTER`.
+	 */
+	enum trigger_action_timing action_timing;
+	/** The ID of space the trigger refers to. */
+	uint32_t space_id;
+	/** The language of the stored trigger. */
+	enum trigger_language language;
+	/**
+	 * The 0-terminated string, a name of the check
+	 * constraint. Must be unique for a given space.
+	 */
+	char name[0];
+};
+
+/**
+ * Calculate trigger definition memory size and fields
+ * offsets for given arguments.
+ *
+ * Alongside with struct trigger_def itself, we reserve
+ * memory for the name string.
+ *
+ * Memory layout:
+ * +-----------------------------+ <- Allocated memory starts here
+ * |      struct trigger_def     |
+ * |-----------------------------|
+ * |          name + \0          |
+ * +-----------------------------+
+ *
+ * @param name_len The length of the name.
+ * @return The size of the trigger definition object for
+ *         given parameters.
+ */
+static inline uint32_t
+trigger_def_sizeof(uint32_t name_len)
+{
+	return sizeof(struct trigger_def) + name_len + 1;
+}
+
+/**
+ * Create a new trigger definition object with given fields.
+ *
+ * @param name The name string of a new trigger definition.
+ * @param name_len The length of @a name string.
+ * @param space_id The identifier of the target space.
+ * @param language The language of the @a trigger object.
+ * @param event_manipulation The type of operation on the
+ *                           associated space for which the
+ *                           trigger activates.
+ * @param action_timing Whether the trigger activates before or
+ *                      after the triggering event.
+ * @retval not NULL Trigger definition object pointer on success.
+ * @retval NULL Otherwise. The diag message is set.
+*/
+struct trigger_def *
+trigger_def_new(const char *name, uint32_t name_len, uint32_t space_id,
+		enum trigger_language language,
+		enum trigger_event_manipulation event_manipulation,
+		enum trigger_action_timing action_timing);
+
+/**
+ * Destroy trigger definition memory, release acquired resources.
+ * @param trigger_def The trigger definition object to destroy.
+ */
+void
+trigger_def_delete(struct trigger_def *trigger_def);
 
 #if defined(__cplusplus)
 } /* extern "C" */

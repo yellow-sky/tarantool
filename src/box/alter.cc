@@ -41,6 +41,7 @@
 #include "coll_id_cache.h"
 #include "coll_id_def.h"
 #include "txn.h"
+#include "trigger.h"
 #include "tuple.h"
 #include "fiber.h" /* for gc_pool */
 #include "scoped_guard.h"
@@ -3964,7 +3965,7 @@ on_create_trigger_rollback(struct lua_trigger *trigger, void * /* event */)
 	(void)rc;
 	assert(rc == 0);
 	assert(new_trigger == old_trigger);
-	sql_trigger_delete(sql_get(), new_trigger);
+	sql_trigger_delete(new_trigger);
 }
 
 /** Restore the old trigger on rollback of a DELETE statement. */
@@ -3995,7 +3996,7 @@ on_replace_trigger_rollback(struct lua_trigger *trigger, void * /* event */)
 				sql_trigger_space_id(old_trigger),
 				old_trigger, &new_trigger) != 0)
 		panic("Out of memory on insertion into trigger hash");
-	sql_trigger_delete(sql_get(), new_trigger);
+	sql_trigger_delete(new_trigger);
 }
 
 /**
@@ -4006,7 +4007,7 @@ static void
 on_replace_trigger_commit(struct lua_trigger *trigger, void * /* event */)
 {
 	struct sql_trigger *old_trigger = (struct sql_trigger *)trigger->data;
-	sql_trigger_delete(sql_get(), old_trigger);
+	sql_trigger_delete(old_trigger);
 }
 
 /**
@@ -4069,7 +4070,7 @@ on_replace_dd_trigger(struct lua_trigger * /* trigger */, void *event)
 			diag_raise();
 
 		auto new_trigger_guard = make_scoped_guard([=] {
-		    sql_trigger_delete(sql_get(), new_trigger);
+		    sql_trigger_delete(new_trigger);
 		});
 
 		const char *trigger_name = sql_trigger_name(new_trigger);

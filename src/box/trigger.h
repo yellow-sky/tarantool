@@ -1,5 +1,7 @@
+#ifndef INCLUDES_BOX_TRIGGER_H
+#define INCLUDES_BOX_TRIGGER_H
 /*
- * Copyright 2010-2018, Tarantool AUTHORS, please see AUTHORS file.
+ * Copyright 2010-2019, Tarantool AUTHORS, please see AUTHORS file.
  *
  * Redistribution and use in source and binary forms, with or
  * without modification, are permitted provided that the following
@@ -28,29 +30,30 @@
  * THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#include "fk_constraint.h"
-#include "sql.h"
-#include "sql/sqlInt.h"
 
-const char *fk_constraint_action_strs[] = {
-	/* [FKEY_ACTION_RESTRICT]    = */ "no_action",
-	/* [FKEY_ACTION_SET_NULL]    = */ "set_null",
-	/* [FKEY_ACTION_SET_DEFAULT] = */ "set_default",
-	/* [FKEY_ACTION_CASCADE]     = */ "cascade",
-	/* [FKEY_ACTION_NO_ACTION]   = */ "restrict"
+#if defined(__cplusplus)
+extern "C" {
+#endif /* defined(__cplusplus) */
+
+#include "small/rlist.h"
+
+struct trigger_def;
+
+/**
+ * Structure representing trigger.
+ */
+struct trigger {
+	/** The trigger definition. */
+	struct trigger_def *def;
+	/**
+	 * Organize sql_trigger structs into linked list
+	 * with space::trigger_list.
+	 */
+	struct rlist link;
 };
 
-const char *fk_constraint_match_strs[] = {
-	/* [FKEY_MATCH_SIMPLE]  = */ "simple",
-	/* [FKEY_MATCH_PARTIAL] = */ "partial",
-	/* [FKEY_MATCH_FULL]    = */ "full"
-};
+#if defined(__cplusplus)
+} /* extern "C" */
+#endif /* defined(__cplusplus) */
 
-void
-fk_constraint_delete(struct fk_constraint *fk)
-{
-	sql_trigger_delete(fk->on_delete_trigger);
-	sql_trigger_delete(fk->on_update_trigger);
-	free(fk->def);
-	free(fk);
-}
+#endif /* INCLUDES_BOX_TRIGGER_H */

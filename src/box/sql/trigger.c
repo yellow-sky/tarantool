@@ -65,8 +65,6 @@ sqlDeleteTriggerStep(sql * db, TriggerStep * pTriggerStep)
 void
 sql_store_trigger(struct Parse *parse)
 {
-	/* The new trigger. */
-	struct sql_trigger *trigger = NULL;
 	/* The database connection. */
 	struct sql *db = parse->db;
 	struct create_trigger_def *trigger_def = &parse->create_trigger_def;
@@ -75,17 +73,18 @@ sql_store_trigger(struct Parse *parse)
 	assert(alter_def->entity_type == ENTITY_TYPE_TRIGGER);
 	assert(alter_def->alter_action == ALTER_ACTION_CREATE);
 
-	char *trigger_name = NULL;
-	if (alter_def->entity_name == NULL || db->mallocFailed)
-		goto trigger_cleanup;
+	struct region *region = &parse->region;
+	size_t region_svp = region_used(region);
 	assert(alter_def->entity_name->nSrc == 1);
 	assert(create_def->name.n > 0);
-	trigger_name = sql_name_from_token(db, &create_def->name);
+	char *trigger_name =
+		sql_normalized_name_region_new(region, create_def->name.z,
+					       create_def->name.n);
 	if (trigger_name == NULL)
 		goto set_tarantool_error_and_cleanup;
-
 	if (sqlCheckIdentifierName(parse, trigger_name) != 0)
-		goto trigger_cleanup;
+		goto set_tarantool_error_and_cleanup;
+	uint32_t trigger_name_len = region_used(region) - region_svp;
 
 	const char *table_name = alter_def->entity_name->a[0].zName;
 	uint32_t space_id = box_space_id_by_name(table_name,
@@ -95,46 +94,39 @@ sql_store_trigger(struct Parse *parse)
 		goto set_tarantool_error_and_cleanup;
 	}
 
-	/* Build the Trigger object. */
-	trigger = (struct sql_trigger *)sqlDbMallocZero(db,
-							    sizeof(struct
-								   sql_trigger));
-	if (trigger == NULL)
-		goto trigger_cleanup;
-	trigger->space_id = space_id;
-	trigger->zName = trigger_name;
-	trigger_name = NULL;
-	trigger->event_manipulation = trigger_def->event_manipulation;
-	trigger->action_timing = trigger_def->action_timing;
-	rlist_create(&trigger->link);
-	trigger->expr = sql_trigger_expr_new(db, trigger_def->cols,
-					     trigger_def->when,
-					     trigger_def->step_list);
-	if (trigger->expr == NULL)
-		goto trigger_cleanup;
-	trigger_def->cols = NULL;
-	trigger_def->when = NULL;
-	trigger_def->step_list = NULL;
-
+	/* Construct a trigger object. */
+	struct trigger_def *def =
+		trigger_def_new(trigger_name, trigger_name_len,
+				space_id, TRIGGER_LANGUAGE_SQL,
+				trigger_def->event_manipulation,
+				trigger_def->action_timing);
+	if (def == NULL)
+		goto set_tarantool_error_and_cleanup;
+	struct sql_trigger_expr *expr =
+		sql_trigger_expr_new(db, trigger_def->cols, trigger_def->when,
+				     trigger_def->step_list);
+	if (expr == NULL) {
+		trigger_def_delete(def);
+		goto set_tarantool_error_and_cleanup;
+	}
 	assert(parse->parsed_ast.trigger == NULL);
-	parse->parsed_ast.trigger = trigger;
 	parse->parsed_ast_type = AST_TYPE_TRIGGER;
+	parse->parsed_ast.trigger = sql_trigger_new(def, expr, false);
+	if (parse->parsed_ast.trigger == NULL) {
+		sql_trigger_expr_delete(db, expr);
+		trigger_def_delete(def);
+		goto set_tarantool_error_and_cleanup;
+	}
 
- trigger_cleanup:
-	sqlDbFree(db, trigger_name);
+trigger_cleanup:
+	region_truncate(region, region_svp);
 	sqlSrcListDelete(db, alter_def->entity_name);
-	sqlIdListDelete(db, trigger_def->cols);
-	sql_expr_delete(db, trigger_def->when, false);
-	sqlDeleteTriggerStep(db, parse->create_trigger_def.step_list);
-	if (parse->parsed_ast.trigger == NULL)
-		sql_trigger_delete(db, trigger);
-	else
-		assert(parse->parsed_ast.trigger == trigger);
-
 	return;
-
 set_tarantool_error_and_cleanup:
 	parse->is_aborted = true;
+	sqlIdListDelete(db, trigger_def->cols);
+	sql_expr_delete(db, trigger_def->when, false);
+	sqlDeleteTriggerStep(db, trigger_def->step_list);
 	goto trigger_cleanup;
 }
 
@@ -287,15 +279,30 @@ sql_trigger_expr_delete(struct sql *db, struct sql_trigger_expr *trigger_expr)
 	free(trigger_expr);
 }
 
+struct sql_trigger *
+sql_trigger_new(struct trigger_def *def, struct sql_trigger_expr *expr,
+		bool is_fk_constraint_trigger)
+{
+	struct sql_trigger *trigger = malloc(sizeof(*trigger));
+	if (trigger == NULL) {
+		diag_set(OutOfMemory, sizeof(*trigger), "malloc", "trigger");
+		return NULL;
+	}
+	rlist_create(&trigger->base.link);
+	trigger->base.def = def;
+	trigger->expr = expr;
+	trigger->is_fk_constraint_trigger = is_fk_constraint_trigger;
+	return trigger;
+}
+
 void
-sql_trigger_delete(struct sql *db, struct sql_trigger *trigger)
+sql_trigger_delete(struct sql_trigger *trigger)
 {
 	if (trigger == NULL)
 		return;
-	if (trigger->expr != NULL)
-		sql_trigger_expr_delete(db, trigger->expr);
-	sqlDbFree(db, trigger->zName);
-	sqlDbFree(db, trigger);
+	trigger_def_delete(trigger->base.def);
+	sql_trigger_expr_delete(sql_get(), trigger->expr);
+	free(trigger);
 }
 
 void
@@ -362,10 +369,9 @@ sql_drop_trigger(struct Parse *parser)
 
 int
 sql_trigger_replace(const char *name, uint32_t space_id,
-		    struct sql_trigger *trigger,
-		    struct sql_trigger **old_trigger)
+		    struct sql_trigger *trigger, struct sql_trigger **old_trigger)
 {
-	assert(trigger == NULL || strcmp(name, trigger->zName) == 0);
+	assert(trigger == NULL || strcmp(name, trigger->base.def->name) == 0);
 
 	struct space *space = space_cache_find(space_id);
 	assert(space != NULL);
@@ -383,52 +389,58 @@ sql_trigger_replace(const char *name, uint32_t space_id,
 		 * views only support INSTEAD of triggers.
 		 */
 		if (space->def->opts.is_view &&
-		    trigger->action_timing != TRIGGER_ACTION_TIMING_INSTEAD) {
+		    trigger->base.def->action_timing !=
+		    TRIGGER_ACTION_TIMING_INSTEAD) {
 			const char *err_msg =
 				tt_sprintf("cannot create %s trigger on "
 					   "view: %s",
 					    trigger_action_timing_strs[
-						trigger->action_timing],
+						trigger->base.def->
+						action_timing],
 					    space->def->name);
 			diag_set(ClientError, ER_SQL_EXECUTE, err_msg);
 			return -1;
 		}
 		if (!space->def->opts.is_view &&
-		    trigger->action_timing == TRIGGER_ACTION_TIMING_INSTEAD) {
+		    trigger->base.def->action_timing ==
+		    TRIGGER_ACTION_TIMING_INSTEAD) {
 			diag_set(ClientError, ER_SQL_EXECUTE,
 				 tt_sprintf("cannot create "\
                          "INSTEAD OF trigger on space: %s", space->def->name));
 			return -1;
 		}
 
-		if (trigger->action_timing == TRIGGER_ACTION_TIMING_INSTEAD)
-			trigger->action_timing = TRIGGER_ACTION_TIMING_BEFORE;
+		if (trigger->base.def->action_timing ==
+		    TRIGGER_ACTION_TIMING_INSTEAD) {
+			trigger->base.def->action_timing =
+				TRIGGER_ACTION_TIMING_BEFORE;
+		}
 	}
 
-	struct sql_trigger *p;
+	struct trigger *p;
 	rlist_foreach_entry(p, &space->trigger_list, link) {
-		if (strcmp(p->zName, name) != 0)
+		if (strcmp(p->def->name, name) != 0)
 			continue;
-		*old_trigger = p;
+		*old_trigger = (struct sql_trigger *)p;
 		rlist_del(&p->link);
 		break;
 	}
 
 	if (trigger != NULL)
-		rlist_add(&space->trigger_list, &trigger->link);
+		rlist_add(&space->trigger_list, &trigger->base.link);
 	return 0;
 }
 
 const char *
 sql_trigger_name(struct sql_trigger *trigger)
 {
-	return trigger->zName;
+	return trigger->base.def->name;
 }
 
 uint32_t
 sql_trigger_space_id(struct sql_trigger *trigger)
 {
-	return trigger->space_id;
+	return trigger->base.def->space_id;
 }
 
 /*
@@ -463,11 +475,12 @@ sql_triggers_exist(struct space *space,
 	struct rlist *trigger_list = NULL;
 	if ((sql_flags & SQL_EnableTrigger) != 0)
 		trigger_list = &space->trigger_list;
-	struct sql_trigger *p;
+	struct trigger *p;
 	rlist_foreach_entry(p, trigger_list, link) {
-		if (p->event_manipulation == event_manipulation &&
-		    checkColumnOverlap(p->expr->cols, changes_list) != 0)
-			mask |= (1 << p->action_timing);
+		struct sql_trigger *trigger = (struct sql_trigger *) p;
+		if (p->def->event_manipulation == event_manipulation &&
+		    checkColumnOverlap(trigger->expr->cols, changes_list) != 0)
+			mask |= (1 << p->def->action_timing);
 	}
 	if (mask_ptr != NULL)
 		*mask_ptr = mask;
@@ -648,7 +661,6 @@ sql_row_trigger_program(struct Parse *parser, struct sql_trigger *trigger,
 	Parse *pSubParse;	/* Parse context for sub-vdbe */
 	int iEndTrigger = 0;	/* Label to jump to if WHEN is false */
 
-	assert(trigger->zName == NULL || space->def->id == trigger->space_id);
 	assert(pTop->pVdbe);
 
 	/* Allocate the TriggerPrg and SubProgram objects. To ensure that they
@@ -681,22 +693,25 @@ sql_row_trigger_program(struct Parse *parser, struct sql_trigger *trigger,
 	sNC.pParse = pSubParse;
 	pSubParse->triggered_space = space;
 	pSubParse->pToplevel = pTop;
-	pSubParse->trigger_event_manipulation = trigger->event_manipulation;
+	pSubParse->trigger_event_manipulation =
+		trigger->base.def->event_manipulation;
 	pSubParse->nQueryLoop = parser->nQueryLoop;
 
 	/* Temporary VM. */
 	struct Vdbe *v = sqlGetVdbe(pSubParse);
 	if (v != NULL) {
 		VdbeComment((v, "Start: %s.%s (%s %s ON %s)",
-			     trigger->zName, onErrorText(orconf),
-			     trigger_action_timing_strs[trigger->action_timing],
+			     trigger->base.def->name, onErrorText(orconf),
+			     trigger_action_timing_strs[trigger->base.
+							def->action_timing],
 			      trigger_event_manipulation_strs[
-						trigger->event_manipulation],
+						trigger->base.def->
+						event_manipulation],
 			      space->def->name));
 		sqlVdbeChangeP4(v, -1,
 				    sqlMPrintf(db, "-- TRIGGER %s",
-						   trigger->zName),
-				    P4_DYNAMIC);
+					       trigger->base.def->name),
+					       P4_DYNAMIC);
 
 		/*
 		 * If one was specified, code the WHEN clause. If
@@ -723,7 +738,7 @@ sql_row_trigger_program(struct Parse *parser, struct sql_trigger *trigger,
 		if (iEndTrigger)
 			sqlVdbeResolveLabel(v, iEndTrigger);
 		sqlVdbeAddOp0(v, OP_Halt);
-		VdbeComment((v, "End: %s.%s", trigger->zName,
+		VdbeComment((v, "End: %s.%s", trigger->base.def->name,
 			     onErrorText(orconf)));
 
 		if (!parser->is_aborted)
@@ -769,7 +784,8 @@ sql_row_trigger(struct Parse *parser, struct sql_trigger *trigger,
 	Parse *pRoot = sqlParseToplevel(parser);
 	TriggerPrg *pPrg;
 
-	assert(trigger->zName == NULL || space->def->id == trigger->space_id);
+	assert(trigger->base.def == NULL ||
+	       space->def->id == trigger->base.def->space_id);
 
 	/*
 	 * It may be that this trigger has already been coded (or
@@ -813,13 +829,14 @@ vdbe_code_row_trigger_direct(struct Parse *parser, struct sql_trigger *trigger,
 		return;
 
 	bool is_recursive =
-		trigger->zName && (parser->sql_flags & SQL_RecTriggers) == 0;
+		!trigger->is_fk_constraint_trigger &&
+		(parser->sql_flags & SQL_RecTriggers) == 0;
 
 	sqlVdbeAddOp4(v, OP_Program, reg, ignore_jump,
 			  ++parser->nMem, (const char *)pPrg->pProgram,
 			  P4_SUBPROGRAM);
-	VdbeComment((v, "Call: %s.%s", (trigger->zName ? trigger->zName :
-					"fk_constraint"),
+	VdbeComment((v, "Call: %s.%s", (trigger->base.def ?
+			trigger->base.def->name : "fk_constraint"),
 		     onErrorText(orconf)));
 
 	/*
@@ -848,14 +865,15 @@ vdbe_code_row_trigger(struct Parse *parser, struct rlist *trigger_list,
 	if (trigger_list == NULL)
 		return;
 
-	struct sql_trigger *p;
+	struct trigger *p;
 	rlist_foreach_entry(p, trigger_list, link) {
 		/* Determine whether we should code trigger. */
-		if (p->event_manipulation == event_manipulation &&
-		    p->action_timing == action_timing &&
-		    checkColumnOverlap(p->expr->cols, changes_list)) {
-			vdbe_code_row_trigger_direct(parser, p, space, reg,
-						     orconf, ignore_jump);
+		struct sql_trigger *trigger = (struct sql_trigger *) p;
+		if (p->def->event_manipulation == event_manipulation &&
+		    p->def->action_timing == action_timing &&
+		    checkColumnOverlap(trigger->expr->cols, changes_list)) {
+			vdbe_code_row_trigger_direct(parser, trigger, space,
+						     reg, orconf, ignore_jump);
 		}
 	}
 }
@@ -873,13 +891,14 @@ sql_trigger_colmask(Parse *parser, struct rlist *trigger_list,
 		return mask;
 
 	assert(new == 1 || new == 0);
-	struct sql_trigger *p;
+	struct trigger *p;
 	rlist_foreach_entry(p, trigger_list, link) {
-		if (p->event_manipulation == event_manipulation &&
-		    ((action_timing_mask & (1 << p->action_timing)) != 0) &&
-		    checkColumnOverlap(p->expr->cols, changes_list)) {
+		struct sql_trigger *trigger = (struct sql_trigger *)p;
+		if (p->def->event_manipulation == event_manipulation &&
+		    ((action_timing_mask & (1 << p->def->action_timing)) != 0) &&
+		    checkColumnOverlap(trigger->expr->cols, changes_list)) {
 			TriggerPrg *prg =
-				sql_row_trigger(parser, p, space, orconf);
+				sql_row_trigger(parser, trigger, space, orconf);
 			if (prg != NULL)
 				mask |= prg->column_mask[new];
 		}

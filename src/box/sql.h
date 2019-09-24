@@ -33,6 +33,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "box/trigger.h"
 #include "box/trigger_def.h"
 #include "small/rlist.h"
 
@@ -125,8 +126,13 @@ sql_trigger_expr_new(struct sql *db, struct IdList *cols, struct Expr *when,
 void
 sql_trigger_expr_delete(struct sql *db, struct sql_trigger_expr *trigger_expr);
 
+struct sql_trigger *
+sql_trigger_new(struct trigger_def *def, struct sql_trigger_expr *expr,
+		bool is_fk_constraint_trigger);
+
 /**
- * Perform parsing of provided SQL request and construct trigger AST.
+ * Perform parsing of provided SQL request and construct
+ * sql_trigger_expr AST.
  * @param db SQL context handle.
  * @param sql request to parse.
  *
@@ -138,11 +144,10 @@ sql_trigger_compile(struct sql *db, const char *sql);
 
 /**
  * Free AST pointed by trigger.
- * @param db SQL handle.
  * @param trigger AST object.
  */
 void
-sql_trigger_delete(struct sql *db, struct sql_trigger *trigger);
+sql_trigger_delete(struct sql_trigger *trigger);
 
 /**
  * Get server triggers list by space_id.
@@ -461,30 +466,14 @@ vdbe_field_ref_prepare_tuple(struct vdbe_field_ref *field_ref,
  * program.
  */
 struct sql_trigger {
-	/** The name of the trigger. */
-	char *zName;
-	/** The ID of space the trigger refers to. */
-	uint32_t space_id;
+	struct trigger base;
 	/**
-	 * The trigger event. This is the type of operation
-	 * on the associated space for which the trigger
-	 * activates. The value is `INSERT` (a row was inserted),
-	 * `DELETE` (a row was deleted), or `UPDATE` (a row was
-	 * modified).
+	 * Whether this trigger implements FK
+	 * constraint logic.
 	 */
-	enum trigger_event_manipulation event_manipulation;
-	/**
-	 * Whether the trigger activates before or after the
-	 * triggering event. The value is `BEFORE` or `AFTER`.
-	 */
-	enum trigger_action_timing action_timing;
+	bool is_fk_constraint_trigger;
 	/** The SQL trigger AST. */
 	struct sql_trigger_expr *expr;
-	/**
-	 * Organize sql_trigger structs into linked list
-	 * with space::trigger_list.
-	 */
-	struct rlist link;
 };
 
 /**

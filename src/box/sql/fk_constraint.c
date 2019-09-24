@@ -35,6 +35,7 @@
  */
 #include "coll/coll.h"
 #include "sqlInt.h"
+#include "box/trigger_def.h"
 #include "box/fk_constraint.h"
 #include "box/schema.h"
 
@@ -688,6 +689,70 @@ sql_expr_new_2part_id(struct Parse *parser, const struct Token *main,
 }
 
 /**
+ * Allocate a new trigger object for given fk constraint
+ * definition and parsed context. Function duplicates all given
+ * data to store data in reduced form.
+ *
+ * In case of success not NULL value is returned, NULL otherwise.
+*/
+static struct sql_trigger *
+sql_trigger_for_fk_constrint_new(struct Parse *parser,
+		const char *child_space_name, uint32_t child_space_name_len,
+		uint32_t parent_space_id, struct ExprList *action_list,
+		struct Select *select, struct Expr *where, struct Expr *when)
+{
+	struct sql *db = parser->db;
+	size_t step_size = sizeof(TriggerStep) + child_space_name_len + 1;
+	struct TriggerStep *step = sqlDbMallocZero(db, step_size);
+	if (step == NULL)
+		goto halt;
+	step->zTarget = (char *) &step[1];
+	memcpy((char *) step->zTarget, child_space_name, child_space_name_len);
+	step->pWhere = sqlExprDup(db, where, EXPRDUP_REDUCE);
+	step->pExprList = sql_expr_list_dup(db, action_list, EXPRDUP_REDUCE);
+	step->pSelect = sqlSelectDup(db, select, EXPRDUP_REDUCE);
+	struct Expr *cond_expr = NULL;
+	if (when != NULL) {
+		struct Expr *when_copy = sqlExprDup(db, when, 0);
+		if (when_copy != NULL)
+			cond_expr = sqlPExpr(parser, TK_NOT, when_copy, NULL);
+		if (cond_expr == NULL) {
+			sql_expr_delete(db, when_copy, false);
+			sqlDeleteTriggerStep(db, step);
+			goto halt;
+		}
+	}
+	struct sql_trigger_expr *expr =
+		sql_trigger_expr_new(db, NULL, cond_expr, step);
+	if (expr == NULL) {
+		sql_expr_delete(db, cond_expr, false);
+		sqlDeleteTriggerStep(db, step);
+		goto halt;
+	}
+
+	const char *trigger_name = tt_sprintf("fk_trigger_%p", expr);
+	struct trigger_def *def =
+		trigger_def_new(trigger_name, strlen(trigger_name),
+				parent_space_id, TRIGGER_LANGUAGE_SQL,
+				TRIGGER_EVENT_MANIPULATION_UPDATE,
+				TRIGGER_ACTION_TIMING_BEFORE);
+	if (def == NULL) {
+		sql_trigger_expr_delete(db, expr);
+		goto halt;
+	}
+	struct sql_trigger *trigger = sql_trigger_new(def, expr, true);
+	if (trigger == NULL) {
+		trigger_def_delete(def);
+		sql_trigger_expr_delete(db, expr);
+		goto halt;
+	}
+	return trigger;
+halt:
+	parser->is_aborted = true;
+	return NULL;
+}
+
+/**
  * This function is called when an UPDATE or DELETE operation is
  * being compiled on table pTab, which is the parent table of
  * foreign-key fk_constraint.
@@ -739,7 +804,6 @@ fk_constraint_action_trigger(struct Parse *pParse, struct space_def *def,
 						  fk->on_delete_trigger;
 	if (action == FKEY_NO_ACTION || trigger != NULL)
 		return trigger;
-	struct TriggerStep *step = NULL;
 	struct Expr *where = NULL, *when = NULL;
 	struct ExprList *list = NULL;
 	struct Select *select = NULL;
@@ -852,62 +916,41 @@ fk_constraint_action_trigger(struct Parse *pParse, struct space_def *def,
 		where = NULL;
 	}
 
-	trigger = (struct sql_trigger *) sqlDbMallocZero(db,
-							     sizeof(*trigger));
-	if (trigger != NULL) {
-		size_t step_size = sizeof(TriggerStep) + name_len + 1;
-		step = sqlDbMallocZero(db, step_size);
-		rlist_create(&trigger->link);
-		if (step == NULL)
-			goto end;
-		step->zTarget = (char *) &step[1];
-		memcpy((char *) step->zTarget, space_name, name_len);
-		step->pWhere = sqlExprDup(db, where, EXPRDUP_REDUCE);
-		step->pExprList = sql_expr_list_dup(db, list, EXPRDUP_REDUCE);
-		step->pSelect = sqlSelectDup(db, select, EXPRDUP_REDUCE);
-		if (when != NULL) {
-			when = sqlPExpr(pParse, TK_NOT, when, 0);
-			if (when == NULL)
-				goto end;
-		}
-		trigger->expr = sql_trigger_expr_new(db, NULL, when, step);
-		if (trigger->expr == NULL)
-			goto end;
-		when = NULL;
-	}
-
-end:
+	trigger = sql_trigger_for_fk_constrint_new(pParse, space_name, name_len,
+						   fk_def->parent_id, list,
+						   select, where, when);
 	sql_expr_delete(db, where, false);
 	sql_expr_delete(db, when, false);
 	sql_expr_list_delete(db, list);
 	sql_select_delete(db, select);
-	if (db->mallocFailed) {
-		sql_trigger_delete(db, trigger);
+
+	if (db->mallocFailed || trigger == NULL) {
+		sql_trigger_delete(trigger);
 		return NULL;
 	}
-	assert(step != NULL);
 
 	switch (action) {
 	case FKEY_ACTION_RESTRICT:
-		step->op = TK_SELECT;
+		trigger->expr->step_list->op = TK_SELECT;
 		break;
 	case FKEY_ACTION_CASCADE:
 		if (! is_update) {
-			step->op = TK_DELETE;
+			trigger->expr->step_list->op = TK_DELETE;
 			break;
 		}
 		FALLTHROUGH;
 	default:
-		step->op = TK_UPDATE;
+		trigger->expr->step_list->op = TK_UPDATE;
 	}
 
 	if (is_update) {
 		fk->on_update_trigger = trigger;
-		trigger->event_manipulation =
+		trigger->base.def->event_manipulation =
 			TRIGGER_EVENT_MANIPULATION_UPDATE;
+
 	} else {
 		fk->on_delete_trigger = trigger;
-		trigger->event_manipulation =
+		trigger->base.def->event_manipulation =
 			TRIGGER_EVENT_MANIPULATION_DELETE;
 	}
 	return trigger;
