@@ -135,20 +135,23 @@ static_build:
 # Performance testing
 # ###################
 
-perf_sysbench:
+perf_chroot:
+	chroot /var/chroot/u1804 /bin/bash
+
+perf_sysbench: perf_chroot
 	/opt/runners/sysbench-benchmarking/run.sh
 
-perf_tpcc:
+perf_tpcc: perf_chroot
 	/opt/runners/tpcc-benchmarking/run.sh
 
-perf_ycsb:
+perf_ycsb: perf_chroot
 	/opt/runners/ycsb-benchmarking/run.sh ${RUNS}
 
-perf_nosqlbench:
+perf_nosqlbench: perf_chroot
 	/opt/runners/nosqlbench-benchmarking/run.sh
 
-perf_cbench:
+perf_cbench: perf_chroot
 	/opt/runners/cbench-benchmarking/run.sh
 
-perf_linkbench:
+perf_linkbench: perf_chroot
 	/opt/runners/linkbench-benchmarking/run.sh
