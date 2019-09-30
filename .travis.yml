@@ -57,7 +57,7 @@ jobs:
         if: branch = "master"
       - name: "Ubuntu Xenial (16.04) build + deploy DEB"
         env: OS=ubuntu DIST=xenial
-        #if: branch = "master"
+        if: branch = "master"
       - name: "Ubuntu Bionic (18.04) build + deploy DEB"
         env: OS=ubuntu DIST=bionic
         if: branch = "master"

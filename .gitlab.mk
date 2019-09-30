@@ -118,8 +118,7 @@ endif
 ifeq ($(MINOR_VERSION),1)
 BUCKET=$(MAJOR_VERSION)x
 endif
-REPOBASE=tarantool_repo/${BUCKET}/${OS}
-REPOPATH=${REPOBASE}/pool/${DIST}/main/t/tarantool
+REPODEB=build/pool/${DIST}/main/t/tarantool
 
 # prepare the packpack repository sources
 packpack_setup:
@@ -131,12 +130,15 @@ packpack_setup:
 .PHONY: package
 package: git_submodule_update packpack_setup
 	PACKPACK_EXTRA_DOCKER_RUN_PARAMS='--network=host' ./packpack/packpack
-	mkdir -p ${REPOPATH}
-	for packfile in `ls build/*.rpm build/*.deb build/*.dsc build/*.tar.*z 2>/dev/null` ; \
-		do cp $$packfile ${REPOPATH}/. ; done
-	mkdir ${REPOBASE}/conf
-	cp distributions ${REPOBASE}/conf
-	cd ${REPOBASE} && BUCKET=${BUCKET} OS=${OS} DISTS=${DIST} ../../../pub_packs_s3.sh .
+
+package_deploy_deb: package
+	mkdir -p ${REPODEB}
+	for packfile in `ls build/*.deb build/*.dsc build/*.tar.*z 2>/dev/null` ; \
+		do cp $$packfile ${REPODEB}/. ; done
+	BUCKET=${BUCKET} OS=${OS} DISTS=${DIST} ./pub_packs_s3_deb.sh build
+
+package_deploy_rpm: package
+	BUCKET=${BUCKET} OS=${OS} RELEASE=${DIST} ./pub_packs_s3_rpm.sh build
 
 # ############
 # Static build

@@ -24,21 +24,29 @@ variables:
   tags:
     - docker_test
 
-.deploy_template: &deploy_definition
-  #<<: *release_only_definition
+.deploy_deb_template: &deploy_deb_definition
+  <<: *release_only_definition
   stage: test
   tags:
-    - deploy_s3
+    - deploy
   script:
-    - ${GITLAB_MAKE} package
+    - ${GITLAB_MAKE} package_deploy_deb
 
-.deploy_test_template: &deploy_test_definition
+.deploy_rpm_template: &deploy_rpm_definition
+  <<: *release_only_definition
+  stage: test
+  tags:
+    - deploy
+  script:
+    - ${GITLAB_MAKE} package_deploy_rpm
+
+.deploy_test_rpm_template: &deploy_test_rpm_definition
   <<: *release_only_definition
   stage: test
   tags:
     - deploy_test
   script:
-    - ${GITLAB_MAKE} package
+    - ${GITLAB_MAKE} package_deploy_rpm
 
 .vbox_template: &vbox_definition
   stage: test
@@ -49,14 +57,80 @@ variables:
 
 # Packs
 
-#centos_7:
-#  <<: *deploy_test_definition
-#  variables:
-#    OS: 'el'
-#    DIST: '7'
+centos_6:
+  <<: *deploy_rpm_definition
+  variables:
+    OS: 'el'
+    DIST: '6'
+
+centos_7:
+  <<: *deploy_test_rpm_definition
+  variables:
+    OS: 'el'
+    DIST: '7'
+
+fedora_28:
+  <<: *deploy_test_rpm_definition
+  variables:
+    OS: 'fedora'
+    DIST: '28'
+
+fedora_29:
+  <<: *deploy_test_rpm_definition
+  variables:
+    OS: 'fedora'
+    DIST: '29'
+
+fedora_30:
+  <<: *deploy_test_rpm_definition
+  variables:
+    OS: 'fedora'
+    DIST: '30'
 
 ubuntu_14_04:
-  <<: *deploy_definition
+  <<: *deploy_deb_definition
   variables:
     OS: 'ubuntu'
     DIST: 'trusty'
+
+ubuntu_16_04:
+  <<: *deploy_deb_definition
+  variables:
+    OS: 'ubuntu'
+    DIST: 'xenial'
+
+ubuntu_18_04:
+  <<: *deploy_deb_definition
+  variables:
+    OS: 'ubuntu'
+    DIST: 'bionic'
+
+ubuntu_18_10:
+  <<: *deploy_deb_definition
+  variables:
+    OS: 'ubuntu'
+    DIST: 'cosmic'
+
+ubuntu_19_04:
+  <<: *deploy_deb_definition
+  variables:
+    OS: 'ubuntu'
+    DIST: 'disco'
+
+debian_8:
+  <<: *deploy_deb_definition
+  variables:
+    OS: 'debian'
+    DIST: 'jessie'
+
+debian_9:
+  <<: *deploy_deb_definition
+  variables:
+    OS: 'debian'
+    DIST: 'stretch'
+
+debian_10:
+  <<: *deploy_deb_definition
+  variables:
+    OS: 'debian'
+    DIST: 'buster'

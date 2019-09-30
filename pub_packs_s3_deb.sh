@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -xe
 
 # manual configuration
 if [ "$BUCKET" == "" ]; then
@@ -15,11 +15,11 @@ if [ "$OS" == "" ]; then
     exit 1
 fi
 os=$OS
-if [ "$DIST" == "" ]; then
-    echo "ERROR: need to set DIST env variable to any like <bionic,cosmic,disco,trusty,xenial>"
+if [ "$DISTS" == "" ]; then
+    echo "ERROR: need to set DISTS env variable to any set of <bionic,cosmic,disco,trusty,xenial>"
     exit 1
 fi
-dists=$DIST
+dists=$DISTS
 component=main
 debdir=pool
 aws='aws --endpoint-url https://hb.bizmrg.com'
@@ -29,28 +29,57 @@ s3="s3://tarantool_repo/$branch/$os"
 repo=$1
 if [ "$repo" == "" ] ; then
     repo=/var/spool/apt-mirror/mirror/packagecloud.io/tarantool/$branch/$os
-    # local workspace
-    cd /mnt/tarantool_repo
-    rm -rf dists pool
 fi
-debpath=$repo/$debdir
-if [ ! -d $debpath ] ; then
+if [ ! -d $repo/$debdir ] ; then
     echo "Error: Current '$repo' has:"
     ls -al $repo
     echo "Usage: $0 [path to repository with '$debdir' directory in root path]"
     exit 1
 fi
 
+# temporary lock the publication to the repository
+ws=/tmp/tarantool_repo_s3_${branch}_${os}
+wslock=$ws.lock
+lockfile -l 1000 $wslock
+
+# create temporary workspace with repository copy
+rm -rf $ws
+mkdir -p $ws
+cp -rf $repo/$debdir $ws/.
+cd $ws
+
+# create the configuration file
+confpath=$ws/conf
+rm -rf $confpath
+mkdir -p $confpath
+
+for dist in $dists ; do
+    cat <<EOF >>$confpath/distributions
+Origin: Tarantool
+Label: tarantool.org
+Suite: stable
+Codename: $dist
+Architectures: amd64 source
+Components: main
+Description: Unofficial Ubuntu Packages maintained by Tarantool
+SignWith: 91B625E5
+DebIndices: Packages Release . .gz .bz2
+UDebIndices: Packages . .gz .bz2
+DscIndices: Sources Release .gz .bz2
+
+EOF
+done
+
 # create standalone repository with separate components
-for dist in $DISTS ; do
+for dist in $dists ; do
     echo =================== DISTRIBUTION: $dist =========================
     updated_deb=0
     updated_dsc=0
 
     # 1(binaries). use reprepro tool to generate Packages file
-    for deb in $debpath/$dist/$component/*/*/*.deb ; do
+    for deb in $ws/$debdir/$dist/$component/*/*/*.deb ; do
         [ -f $deb ] || continue
-        locdeb=`echo $deb | sed "s#^$repo\/##g"`
+        locdeb=`echo $deb | sed "s#^$ws\/##g"`
         echo "DEB: $deb"
         # register DEB file to Packages file
         reprepro -Vb . includedeb $dist $deb
@@ -81,9 +110,9 @@ for dist in $DISTS ; do
     done
 
     # 1(sources). use reprepro tool to generate Sources file
-    for dsc in $debpath/$dist/$component/*/*/*.dsc ; do
+    for dsc in $ws/$debdir/$dist/$component/*/*/*.dsc ; do
         [ -f $dsc ] || continue
-        locdsc=`echo $dsc | sed "s#^$repo\/##g"`
+        locdsc=`echo $dsc | sed "s#^$ws\/##g"`
         echo "DSC: $dsc"
         # register DSC file to Sources file
         reprepro -Vb . includedsc $dist $dsc
@@ -113,9 +142,9 @@ for dist in $DISTS ; do
         # save the registered DSC file to S3
         $aws s3 cp --acl public-read $dsc $s3/$locdsc
         tarxz=`echo $locdsc | sed 's#\.dsc$#.debian.tar.xz#g'`
-        $aws s3 cp --acl public-read $repo/$tarxz "$s3/$tarxz"
+        $aws s3 cp --acl public-read $ws/$tarxz "$s3/$tarxz"
         orig=`echo $locdsc | sed 's#-1\.dsc$#.orig.tar.xz#g'`
-        $aws s3 cp --acl public-read $repo/$orig "$s3/$orig"
+        $aws s3 cp --acl public-read $ws/$orig "$s3/$orig"
         updated_dsc=1
     done
 
@@ -160,7 +189,7 @@ for dist in $DISTS ; do
                 } else {print $0}
             }' p="$file" s="$sz" md="$md5" sh1="$sha1" sh2="$sha256" \
             Release >Release.new
-	mv Release.new Release
+        mv Release.new Release
     done
     # resign the selfsigned InRelease file
     rm -rf InRelease
@@ -173,3 +202,6 @@ for dist in $DISTS ; do
     # 4. sync the latest distribution path changes to S3
     $aws s3 sync --acl public-read dists/$dist "$s3/dists/$dist"
 done
+
+# unlock the publishing
+rm -rf $wslock
