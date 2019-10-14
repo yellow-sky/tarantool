@@ -102,6 +102,7 @@ add_library(box STATIC
     fk_constraint.c
     func.c
     func_def.c
+    trigger.c
     trigger_def.c
     key_list.c
     alter.cc

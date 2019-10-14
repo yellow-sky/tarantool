@@ -580,8 +580,11 @@ int tarantoolsqlRenameTrigger(const char *trig_name,
 	uint32_t trig_name_len = strlen(trig_name);
 	uint32_t old_table_name_len = strlen(old_table_name);
 	uint32_t new_table_name_len = strlen(new_table_name);
+
+	struct region *region = &fiber()->gc;
+	size_t region_svp = region_used(region);
 	uint32_t key_len = mp_sizeof_str(trig_name_len) + mp_sizeof_array(1);
-	char *key_begin = (char*) region_alloc(&fiber()->gc, key_len);
+	char *key_begin = (char*) region_alloc(region, key_len);
 	if (key_begin == NULL) {
 		diag_set(OutOfMemory, key_len, "region_alloc", "key_begin");
 		return -1;
@@ -591,54 +594,44 @@ int tarantoolsqlRenameTrigger(const char *trig_name,
 	if (box_index_get(BOX_TRIGGER_ID, 0, key_begin, key, &tuple) != 0)
 		return -1;
 	assert(tuple != NULL);
-	assert(tuple_field_count(tuple) == 3);
-	const char *field = tuple_field(tuple, BOX_TRIGGER_FIELD_SPACE_ID);
-	assert(mp_typeof(*field) == MP_UINT);
-	uint32_t space_id = mp_decode_uint(&field);
-	field = tuple_field(tuple, BOX_TRIGGER_FIELD_OPTS);
-	assert(mp_typeof(*field) == MP_MAP);
-	mp_decode_map(&field);
-	const char *sql_str = mp_decode_str(&field, &key_len);
-	if (sqlStrNICmp(sql_str, "sql", 3) != 0) {
-		diag_set(ClientError, ER_SQL_EXECUTE, "can't modify name of "\
-			 "space created not via SQL facilities");
-		return -1;
-	}
-	uint32_t trigger_stmt_len;
-	const char *trigger_stmt_old = mp_decode_str(&field, &trigger_stmt_len);
-	char *trigger_stmt = (char*)region_alloc(&fiber()->gc,
-						 trigger_stmt_len + 1);
-	if (trigger_stmt == NULL) {
-		diag_set(OutOfMemory, trigger_stmt_len + 1, "region_alloc",
+	assert(tuple_field_count(tuple) == 8);
+
+	uint32_t code_str_len;
+	const char *code_str = tuple_field_str(tuple, BOX_TRIGGER_FIELD_CODE,
+					       &code_str_len);
+	assert(code_str != NULL);
+	char *old_stmt = (char *) region_alloc(region, code_str_len + 1);
+	if (old_stmt == NULL) {
+		diag_set(OutOfMemory, code_str_len + 1, "region_alloc",
 			 "trigger_stmt");
 		return -1;
 	}
-	memcpy(trigger_stmt, trigger_stmt_old, trigger_stmt_len);
-	trigger_stmt[trigger_stmt_len] = '\0';
-	bool is_quoted = false;
-	trigger_stmt = rename_trigger(db, trigger_stmt, new_table_name, &is_quoted);
+	memcpy(old_stmt, code_str, code_str_len);
+	old_stmt[code_str_len] = '\0';
 
-	uint32_t trigger_stmt_new_len = trigger_stmt_len + new_table_name_len -
-					old_table_name_len + 2 * (!is_quoted);
-	assert(trigger_stmt_new_len > 0);
-	key_len = mp_sizeof_array(3) + mp_sizeof_str(trig_name_len) +
-		  mp_sizeof_map(1) + mp_sizeof_str(3) +
-		  mp_sizeof_str(trigger_stmt_new_len) +
-		  mp_sizeof_uint(space_id);
-	char *new_tuple = (char*)region_alloc(&fiber()->gc, key_len);
+	bool is_quoted = false;
+	char *stmt = rename_trigger(db, old_stmt, new_table_name, &is_quoted);
+	uint32_t stmt_len = code_str_len + new_table_name_len -
+			    old_table_name_len + 2 * (!is_quoted);
+	uint32_t prefix_sz = code_str - tuple_data(tuple) -
+			     mp_sizeof_strl(code_str_len);
+	uint32_t new_tuple_sz = prefix_sz + mp_sizeof_str(stmt_len);
+	char *new_tuple = (char *) region_alloc(region, new_tuple_sz);
 	if (new_tuple == NULL) {
-		diag_set(OutOfMemory, key_len, "region_alloc", "new_tuple");
+		sqlDbFree(db, stmt);
+		region_truncate(region, region_svp);
+		diag_set(OutOfMemory, new_tuple_sz, "region_alloc",
+			 "new_tuple");
 		return -1;
 	}
-	char *new_tuple_end = mp_encode_array(new_tuple, 3);
-	new_tuple_end = mp_encode_str(new_tuple_end, trig_name, trig_name_len);
-	new_tuple_end = mp_encode_uint(new_tuple_end, space_id);
-	new_tuple_end = mp_encode_map(new_tuple_end, 1);
-	new_tuple_end = mp_encode_str(new_tuple_end, "sql", 3);
-	new_tuple_end = mp_encode_str(new_tuple_end, trigger_stmt,
-				      trigger_stmt_new_len);
+	memcpy(new_tuple, tuple_data(tuple), prefix_sz);
+	char *new_tuple_end = mp_encode_str(new_tuple + prefix_sz,
+					    stmt, stmt_len);
+	sqlDbFree(db, stmt);
 
-	return box_replace(BOX_TRIGGER_ID, new_tuple, new_tuple_end, NULL);
+	int rc = box_replace(BOX_TRIGGER_ID, new_tuple, new_tuple_end, NULL);
+	region_truncate(region, region_svp);
+	return rc;
 }
 
 int

@@ -1330,26 +1330,33 @@ sql_create_trigger(struct Parse *parse_context)
 	assert(_trigger != NULL);
 
 	int first_col = parse_context->nMem + 1;
-	parse_context->nMem += 3;
+	parse_context->nMem += 8;
 	int record = ++parse_context->nMem;
 
-	uint32_t opts_buff_sz = mp_sizeof_map(1) +
-				mp_sizeof_str(strlen("sql")) +
-				mp_sizeof_str(trigger_def->sql_len);
-	char *opts_buff = (char *) sqlDbMallocRaw(db, opts_buff_sz);
+	sqlVdbeAddOp4(v, OP_String8, 0, first_col, 0, trigger_name, P4_DYNAMIC);
+	sqlVdbeAddOp2(v, OP_Integer, space_id, first_col + 1);
+	char *opts_buff = (char *) sqlDbMallocRaw(db, mp_sizeof_map(1));
 	if (opts_buff == NULL) {
 		parse_context->is_aborted = true;
 		goto end;
 	}
-
-	char *data = mp_encode_map(opts_buff, 1);
-	data = mp_encode_str(data, "sql", strlen("sql"));
-	data = mp_encode_str(data, trigger_def->sql, trigger_def->sql_len);
-	sqlVdbeAddOp4(v, OP_String8, 0, first_col, 0, trigger_name, P4_DYNAMIC);
-	sqlVdbeAddOp2(v, OP_Integer, space_id, first_col + 1);
-	sqlVdbeAddOp4(v, OP_Blob, opts_buff_sz, first_col + 2,
+	mp_encode_map(opts_buff, 0);
+	sqlVdbeAddOp4(v, OP_Blob, mp_sizeof_map(1), first_col + 2,
 		      SQL_SUBTYPE_MSGPACK, opts_buff, P4_DYNAMIC);
-	sqlVdbeAddOp3(v, OP_MakeRecord, first_col, 3, record);
+	sqlVdbeAddOp4(v, OP_String8, 0, first_col + 3, 0,
+		      trigger_language_strs[TRIGGER_LANGUAGE_SQL], P4_STATIC);
+	sqlVdbeAddOp4(v, OP_String8, 0, first_col + 4, 0,
+		      trigger_type_strs[TRIGGER_TYPE_REPLACE], P4_STATIC);
+	sqlVdbeAddOp4(v, OP_String8, 0, first_col + 5, 0,
+		trigger_event_manipulation_strs[trigger_def->event_manipulation],
+		P4_STATIC);
+	sqlVdbeAddOp4(v, OP_String8, 0, first_col + 6, 0,
+		trigger_action_timing_strs[trigger_def->action_timing],
+		P4_STATIC);
+	sqlVdbeAddOp4(v, OP_String8, 0, first_col + 7, 0,
+		sqlDbStrNDup(db, trigger_def->sql, trigger_def->sql_len),
+		P4_DYNAMIC);
+	sqlVdbeAddOp3(v, OP_MakeRecord, first_col, 8, record);
 	sqlVdbeAddOp4(v, OP_IdxInsert, record, 0, 0, (char *)_trigger,
 		      P4_SPACEPTR);
 	sqlVdbeChangeP5(v, OPFLAG_NCHANGE);

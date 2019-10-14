@@ -29,9 +29,9 @@ box.space._space.index['name']:get('T_OUT')
 t1t = box.space._trigger:get('T1T')
 t2t = box.space._trigger:get('T2T')
 t1t.name
-t1t.opts
+t1t.code
 t2t.name
-t2t.opts
+t2t.code
 assert(t1t.space_id == t2t.space_id)
 assert(t1t.space_id == box.space.T.id)
 

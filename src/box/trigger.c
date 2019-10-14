@@ -1,5 +1,5 @@
-/*
- * Copyright 2010-2018, Tarantool AUTHORS, please see AUTHORS file.
+/**
+ * Copyright 2010-2019, Tarantool AUTHORS, please see AUTHORS file.
  *
  * Redistribution and use in source and binary forms, with or
  * without modification, are permitted provided that the following
@@ -28,31 +28,46 @@
  * THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#include "fk_constraint.h"
+#include "trigger.h"
+
+#include <stdbool.h>
+#include "space.h"
 #include "sql.h"
-#include "sql/sqlInt.h"
+#include "trigger_def.h"
+#include "trivia/util.h"
 
-const char *fk_constraint_action_strs[] = {
-	/* [FKEY_ACTION_RESTRICT]    = */ "no_action",
-	/* [FKEY_ACTION_SET_NULL]    = */ "set_null",
-	/* [FKEY_ACTION_SET_DEFAULT] = */ "set_default",
-	/* [FKEY_ACTION_CASCADE]     = */ "cascade",
-	/* [FKEY_ACTION_NO_ACTION]   = */ "restrict"
-};
-
-const char *fk_constraint_match_strs[] = {
-	/* [FKEY_MATCH_SIMPLE]  = */ "simple",
-	/* [FKEY_MATCH_PARTIAL] = */ "partial",
-	/* [FKEY_MATCH_FULL]    = */ "full"
-};
+struct trigger *
+trigger_new(struct trigger_def *def)
+{
+	struct trigger *trigger = NULL;
+	switch (def->language) {
+	case TRIGGER_LANGUAGE_SQL: {
+		trigger = (struct trigger *) sql_trigger_new(def, NULL, false);
+		break;
+	}
+	default: {
+		unreachable();
+	}
+	}
+	return trigger;
+}
 
 void
-fk_constraint_delete(struct fk_constraint *fk)
+trigger_delete(struct trigger *base)
 {
-	if (fk->on_delete_trigger != NULL)
-		trigger_delete((struct trigger *)fk->on_delete_trigger);
-	if (fk->on_update_trigger != NULL)
-		trigger_delete((struct trigger *)fk->on_update_trigger);
-	free(fk->def);
-	free(fk);
+	struct trigger_def *def = base->def;
+	base->vtab->destroy(base);
+	trigger_def_delete(def);
+}
+
+struct trigger *
+space_trigger_by_name(struct space *space, const char *name, uint32_t name_len)
+{
+	struct trigger *trigger = NULL;
+	rlist_foreach_entry(trigger, &space->trigger_list, link) {
+		if (trigger->def->name_len == name_len &&
+		    memcmp(trigger->def->name, name, name_len) == 0)
+			return trigger;
+	}
+	return NULL;
 }

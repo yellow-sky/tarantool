@@ -73,61 +73,23 @@ sql_store_trigger(struct Parse *parse)
 	assert(alter_def->entity_type == ENTITY_TYPE_TRIGGER);
 	assert(alter_def->alter_action == ALTER_ACTION_CREATE);
 
-	struct region *region = &parse->region;
-	size_t region_svp = region_used(region);
 	assert(alter_def->entity_name->nSrc == 1);
 	assert(create_def->name.n > 0);
-	char *trigger_name =
-		sql_normalized_name_region_new(region, create_def->name.z,
-					       create_def->name.n);
-	if (trigger_name == NULL)
-		goto set_tarantool_error_and_cleanup;
-	if (sqlCheckIdentifierName(parse, trigger_name) != 0)
-		goto set_tarantool_error_and_cleanup;
-	uint32_t trigger_name_len = region_used(region) - region_svp;
+	sqlSrcListDelete(db, alter_def->entity_name);
 
-	const char *table_name = alter_def->entity_name->a[0].zName;
-	uint32_t space_id = box_space_id_by_name(table_name,
-						 strlen(table_name));
-	if (space_id == BOX_ID_NIL) {
-		diag_set(ClientError, ER_NO_SUCH_SPACE, table_name);
-		goto set_tarantool_error_and_cleanup;
-	}
-
-	/* Construct a trigger object. */
-	struct trigger_def *def =
-		trigger_def_new(trigger_name, trigger_name_len,
-				space_id, TRIGGER_LANGUAGE_SQL,
-				trigger_def->event_manipulation,
-				trigger_def->action_timing);
-	if (def == NULL)
-		goto set_tarantool_error_and_cleanup;
-	struct sql_trigger_expr *expr =
+	assert(parse->parsed_ast.trigger_expr == NULL);
+	parse->parsed_ast_type = AST_TYPE_TRIGGER_EXPR;
+	parse->parsed_ast.trigger_expr =
 		sql_trigger_expr_new(db, trigger_def->cols, trigger_def->when,
 				     trigger_def->step_list);
-	if (expr == NULL) {
-		trigger_def_delete(def);
+	if (parse->parsed_ast.trigger_expr == NULL)
 		goto set_tarantool_error_and_cleanup;
-	}
-	assert(parse->parsed_ast.trigger == NULL);
-	parse->parsed_ast_type = AST_TYPE_TRIGGER;
-	parse->parsed_ast.trigger = sql_trigger_new(def, expr, false);
-	if (parse->parsed_ast.trigger == NULL) {
-		sql_trigger_expr_delete(db, expr);
-		trigger_def_delete(def);
-		goto set_tarantool_error_and_cleanup;
-	}
-
-trigger_cleanup:
-	region_truncate(region, region_svp);
-	sqlSrcListDelete(db, alter_def->entity_name);
 	return;
 set_tarantool_error_and_cleanup:
 	parse->is_aborted = true;
 	sqlIdListDelete(db, trigger_def->cols);
 	sql_expr_delete(db, trigger_def->when, false);
 	sqlDeleteTriggerStep(db, trigger_def->step_list);
-	goto trigger_cleanup;
 }
 
 struct TriggerStep *
@@ -279,6 +241,8 @@ sql_trigger_expr_delete(struct sql *db, struct sql_trigger_expr *trigger_expr)
 	free(trigger_expr);
 }
 
+static struct trigger_vtab sql_trigger_vtab;
+
 struct sql_trigger *
 sql_trigger_new(struct trigger_def *def, struct sql_trigger_expr *expr,
 		bool is_fk_constraint_trigger)
@@ -288,22 +252,35 @@ sql_trigger_new(struct trigger_def *def, struct sql_trigger_expr *expr,
 		diag_set(OutOfMemory, sizeof(*trigger), "malloc", "trigger");
 		return NULL;
 	}
+	if (expr == NULL) {
+		assert(def->code != NULL);
+		expr = sql_trigger_expr_compile(sql_get(), def->code);
+		if (expr == NULL) {
+			free(trigger);
+			return NULL;
+		}
+	}
 	rlist_create(&trigger->base.link);
 	trigger->base.def = def;
+	trigger->base.vtab = &sql_trigger_vtab;
 	trigger->expr = expr;
 	trigger->is_fk_constraint_trigger = is_fk_constraint_trigger;
 	return trigger;
 }
 
-void
-sql_trigger_delete(struct sql_trigger *trigger)
+static void
+sql_trigger_delete(struct trigger *base)
 {
-	if (trigger == NULL)
-		return;
-	trigger_def_delete(trigger->base.def);
+	assert(base->vtab == &sql_trigger_vtab);
+	assert(base != NULL && base->def->language == TRIGGER_LANGUAGE_SQL);
+	struct sql_trigger *trigger = (struct sql_trigger *) base;
 	sql_trigger_expr_delete(sql_get(), trigger->expr);
 	free(trigger);
 }
+
+static struct trigger_vtab sql_trigger_vtab = {
+	.destroy = sql_trigger_delete,
+};
 
 void
 vdbe_code_drop_trigger(struct Parse *parser, const char *trigger_name,
@@ -365,82 +342,6 @@ sql_drop_trigger(struct Parse *parser)
 
  drop_trigger_cleanup:
 	sqlSrcListDelete(db, name);
-}
-
-int
-sql_trigger_replace(const char *name, uint32_t space_id,
-		    struct sql_trigger *trigger, struct sql_trigger **old_trigger)
-{
-	assert(trigger == NULL || strcmp(name, trigger->base.def->name) == 0);
-
-	struct space *space = space_cache_find(space_id);
-	assert(space != NULL);
-	*old_trigger = NULL;
-
-	if (trigger != NULL) {
-		/* Do not create a trigger on a system space. */
-		if (space_is_system(space)) {
-			diag_set(ClientError, ER_SQL_EXECUTE,
-				 "cannot create trigger on system table");
-			return -1;
-		}
-		/*
-		 * INSTEAD of triggers are only for views and
-		 * views only support INSTEAD of triggers.
-		 */
-		if (space->def->opts.is_view &&
-		    trigger->base.def->action_timing !=
-		    TRIGGER_ACTION_TIMING_INSTEAD) {
-			const char *err_msg =
-				tt_sprintf("cannot create %s trigger on "
-					   "view: %s",
-					    trigger_action_timing_strs[
-						trigger->base.def->
-						action_timing],
-					    space->def->name);
-			diag_set(ClientError, ER_SQL_EXECUTE, err_msg);
-			return -1;
-		}
-		if (!space->def->opts.is_view &&
-		    trigger->base.def->action_timing ==
-		    TRIGGER_ACTION_TIMING_INSTEAD) {
-			diag_set(ClientError, ER_SQL_EXECUTE,
-				 tt_sprintf("cannot create "\
-                         "INSTEAD OF trigger on space: %s", space->def->name));
-			return -1;
-		}
-
-		if (trigger->base.def->action_timing ==
-		    TRIGGER_ACTION_TIMING_INSTEAD) {
-			trigger->base.def->action_timing =
-				TRIGGER_ACTION_TIMING_BEFORE;
-		}
-	}
-
-	struct trigger *p;
-	rlist_foreach_entry(p, &space->trigger_list, link) {
-		if (strcmp(p->def->name, name) != 0)
-			continue;
-		*old_trigger = (struct sql_trigger *)p;
-		rlist_del(&p->link);
-		break;
-	}
-
-	if (trigger != NULL)
-		rlist_add(&space->trigger_list, &trigger->base.link);
-	return 0;
-}
-
-const char *
-sql_trigger_name(struct sql_trigger *trigger)
-{
-	return trigger->base.def->name;
-}
-
-uint32_t
-sql_trigger_space_id(struct sql_trigger *trigger)
-{
-	return trigger->base.def->space_id;
 }
 
 /*

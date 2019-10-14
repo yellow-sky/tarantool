@@ -735,7 +735,7 @@ sql_trigger_for_fk_constrint_new(struct Parse *parser,
 		trigger_def_new(trigger_name, strlen(trigger_name),
 				parent_space_id, TRIGGER_LANGUAGE_SQL,
 				TRIGGER_EVENT_MANIPULATION_UPDATE,
-				TRIGGER_ACTION_TIMING_BEFORE);
+				TRIGGER_ACTION_TIMING_BEFORE, NULL, 0);
 	if (def == NULL) {
 		sql_trigger_expr_delete(db, expr);
 		goto halt;
@@ -925,7 +925,8 @@ fk_constraint_action_trigger(struct Parse *pParse, struct space_def *def,
 	sql_select_delete(db, select);
 
 	if (db->mallocFailed || trigger == NULL) {
-		sql_trigger_delete(trigger);
+		if (trigger != NULL)
+			trigger_delete((struct trigger *)trigger);
 		return NULL;
 	}
 

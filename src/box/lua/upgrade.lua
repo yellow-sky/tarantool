@@ -927,6 +927,22 @@ local function upgrade_to_2_3_0()
                                         datetime, datetime})
         _priv:replace{ADMIN, PUBLIC, 'function', t.id, box.priv.X}
     end
+
+    log.info("Migrate SQL Triggers")
+    local _trigger = box.space[box.schema.TRIGGER_ID]
+    for _, v in _trigger:pairs() do
+        _trigger:delete(v.name)
+        box.execute(v.opts.sql)
+    end
+    local format = {{name='name', type='string'},
+                    {name='space_id', type='unsigned'},
+                    {name='opts', type='map'},
+                    {name='language', type='string'},
+                    {name='type', type='string'},
+                    {name='event_manipulation', type='string'},
+                    {name='action_timing', type='string'},
+                    {name='code', type='string'}}
+    _trigger:format(format)
 end
 
 --------------------------------------------------------------------------------

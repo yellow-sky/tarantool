@@ -79,6 +79,13 @@ enum trigger_language {
 
 extern const char *trigger_language_strs[];
 
+enum trigger_type {
+	TRIGGER_TYPE_REPLACE,
+	trigger_type_MAX,
+};
+
+extern const char *trigger_type_strs[];
+
 /**
  * Trigger object definition.
  * See trigger_def_sizeof() definition for implementation
@@ -102,6 +109,13 @@ struct trigger_def {
 	uint32_t space_id;
 	/** The language of the stored trigger. */
 	enum trigger_language language;
+	/**
+	 * The language-dependent code defining trigger
+	 * operations.
+	 */
+	char *code;
+	/** The length of the trigger name. */
+	uint32_t name_len;
 	/**
 	 * The 0-terminated string, a name of the check
 	 * constraint. Must be unique for a given space.
@@ -128,9 +142,14 @@ struct trigger_def {
  *         given parameters.
  */
 static inline uint32_t
-trigger_def_sizeof(uint32_t name_len)
+trigger_def_sizeof(uint32_t name_len, uint32_t code_len,
+		   uint32_t *code_offset)
 {
-	return sizeof(struct trigger_def) + name_len + 1;
+	uint32_t sz = sizeof(struct trigger_def) + name_len + 1;
+	*code_offset = sz;
+	if (code_len != 0)
+		sz += code_len + 1;
+	return sz;
 }
 
 /**
@@ -145,6 +164,8 @@ trigger_def_sizeof(uint32_t name_len)
  *                           trigger activates.
  * @param action_timing Whether the trigger activates before or
  *                      after the triggering event.
+ * @param code The trigger program function code string.
+ * @param code_len The length of the @a code string.
  * @retval not NULL Trigger definition object pointer on success.
  * @retval NULL Otherwise. The diag message is set.
 */
@@ -152,7 +173,8 @@ struct trigger_def *
 trigger_def_new(const char *name, uint32_t name_len, uint32_t space_id,
 		enum trigger_language language,
 		enum trigger_event_manipulation event_manipulation,
-		enum trigger_action_timing action_timing);
+		enum trigger_action_timing action_timing, const char *code,
+		uint32_t code_len);
 
 /**
  * Destroy trigger definition memory, release acquired resources.
@@ -160,6 +182,10 @@ trigger_def_new(const char *name, uint32_t name_len, uint32_t space_id,
  */
 void
 trigger_def_delete(struct trigger_def *trigger_def);
+
+/** Check if a non-empty trigger body is correct. */
+int
+trigger_def_check(struct trigger_def *def);
 
 #if defined(__cplusplus)
 } /* extern "C" */

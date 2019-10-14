@@ -466,7 +466,7 @@ sqlRunParser(Parse * pParse, const char *zSql)
 		return -1;
 	}
 	assert(pParse->create_table_def.new_space == NULL);
-	assert(pParse->parsed_ast.trigger == NULL);
+	assert(pParse->parsed_ast.trigger_expr == NULL);
 	assert(pParse->nVar == 0);
 	assert(pParse->pVList == 0);
 	while (1) {
@@ -578,19 +578,19 @@ sql_view_compile(struct sql *db, const char *view_stmt)
 	return select;
 }
 
-struct sql_trigger *
-sql_trigger_compile(struct sql *db, const char *sql)
+struct sql_trigger_expr *
+sql_trigger_expr_compile(struct sql *db, const char *sql)
 {
 	struct Parse parser;
 	sql_parser_create(&parser, db, default_flags);
 	parser.parse_only = true;
-	struct sql_trigger *trigger = NULL;
+	struct sql_trigger_expr *trigger_expr = NULL;
 	if (sqlRunParser(&parser, sql) == 0 &&
-	    parser.parsed_ast_type == AST_TYPE_TRIGGER) {
-		trigger = parser.parsed_ast.trigger;
-		parser.parsed_ast.trigger = NULL;
+	    parser.parsed_ast_type == AST_TYPE_TRIGGER_EXPR) {
+		trigger_expr = parser.parsed_ast.trigger_expr;
+		parser.parsed_ast.trigger_expr = NULL;
 	}
 
 	sql_parser_destroy(&parser);
-	return trigger;
+	return trigger_expr;
 }

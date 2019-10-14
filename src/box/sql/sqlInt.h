@@ -2091,7 +2091,7 @@ enum ast_type {
 	AST_TYPE_UNDEFINED = 0,
 	AST_TYPE_SELECT,
 	AST_TYPE_EXPR,
-	AST_TYPE_TRIGGER,
+	AST_TYPE_TRIGGER_EXPR,
 	ast_type_MAX
 };
 
@@ -2225,7 +2225,7 @@ struct Parse {
 	union {
 		struct Expr *expr;
 		struct Select *select;
-		struct sql_trigger *trigger;
+		struct sql_trigger_expr *trigger_expr;
 	} parsed_ast;
 };
 

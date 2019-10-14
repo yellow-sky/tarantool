@@ -27,7 +27,9 @@ test_run:switch('upgrade')
 box.space._space.index['name']:get('_trigger')
 ---
 - [328, 1, '_trigger', 'memtx', 0, {}, [{'name': 'name', 'type': 'string'}, {'name': 'space_id',
-      'type': 'unsigned'}, {'name': 'opts', 'type': 'map'}]]
+      'type': 'unsigned'}, {'name': 'opts', 'type': 'map'}, {'name': 'language', 'type': 'string'},
+    {'name': 'type', 'type': 'string'}, {'name': 'event_manipulation', 'type': 'string'},
+    {'name': 'action_timing', 'type': 'string'}, {'name': 'code', 'type': 'string'}]]
 ...
 box.space._index:get({box.space._space.index['name']:get('_trigger').id, 0})
 ---
@@ -83,19 +85,19 @@ t1t.name
 ---
 - T1T
 ...
-t1t.opts
+t1t.code
 ---
-- {'sql': 'CREATE TRIGGER t1t AFTER INSERT ON t FOR EACH ROW BEGIN INSERT INTO t_out
-    VALUES(1); END'}
+- CREATE TRIGGER t1t AFTER INSERT ON t FOR EACH ROW BEGIN INSERT INTO t_out VALUES(1);
+  END
 ...
 t2t.name
 ---
 - T2T
 ...
-t2t.opts
+t2t.code
 ---
-- {'sql': 'CREATE TRIGGER t2t AFTER INSERT ON t FOR EACH ROW BEGIN INSERT INTO t_out
-    VALUES(2); END'}
+- CREATE TRIGGER t2t AFTER INSERT ON t FOR EACH ROW BEGIN INSERT INTO t_out VALUES(2);
+  END
 ...
 assert(t1t.space_id == t2t.space_id)
 ---

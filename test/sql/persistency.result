@@ -317,16 +317,16 @@ box.execute("CREATE TRIGGER tfoobar AFTER INSERT ON foobar FOR EACH ROW BEGIN IN
 ---
 - row_count: 1
 ...
-box.execute("SELECT \"name\", \"opts\" FROM \"_trigger\"");
+box.execute("SELECT \"name\", \"code\" FROM \"_trigger\"");
 ---
 - metadata:
   - name: name
     type: string
-  - name: opts
-    type: map
+  - name: code
+    type: string
   rows:
-  - ['TFOOBAR', {'sql': 'CREATE TRIGGER tfoobar AFTER INSERT ON foobar FOR EACH ROW
-        BEGIN INSERT INTO barfoo VALUES (''trigger test'', 9999); END'}]
+  - ['TFOOBAR', 'CREATE TRIGGER tfoobar AFTER INSERT ON foobar FOR EACH ROW BEGIN
+      INSERT INTO barfoo VALUES (''trigger test'', 9999); END']
 ...
 -- Many entries
 box.execute("CREATE TABLE t1(a INT,b INT,c INT,PRIMARY KEY(b,c));")
@@ -356,16 +356,16 @@ box.execute("SELECT a FROM t1 ORDER BY b, a LIMIT 10 OFFSET 20;");
 ...
 test_run:cmd('restart server default');
 -- prove that trigger survived
-box.execute("SELECT \"name\", \"opts\" FROM \"_trigger\"");
+box.execute("SELECT \"name\", \"code\" FROM \"_trigger\"");
 ---
 - metadata:
   - name: name
     type: string
-  - name: opts
-    type: map
+  - name: code
+    type: string
   rows:
-  - ['TFOOBAR', {'sql': 'CREATE TRIGGER tfoobar AFTER INSERT ON foobar FOR EACH ROW
-        BEGIN INSERT INTO barfoo VALUES (''trigger test'', 9999); END'}]
+  - ['TFOOBAR', 'CREATE TRIGGER tfoobar AFTER INSERT ON foobar FOR EACH ROW BEGIN
+      INSERT INTO barfoo VALUES (''trigger test'', 9999); END']
 ...
 -- ... functional
 box.execute("INSERT INTO foobar VALUES ('foobar trigger test', 8888)")
@@ -383,16 +383,16 @@ box.execute("SELECT * FROM barfoo WHERE foo = 9999");
   rows: []
 ...
 -- and still persistent
-box.execute("SELECT \"name\", \"opts\" FROM \"_trigger\"")
+box.execute("SELECT \"name\", \"code\" FROM \"_trigger\"")
 ---
 - metadata:
   - name: name
     type: string
-  - name: opts
-    type: map
+  - name: code
+    type: string
   rows:
-  - ['TFOOBAR', {'sql': 'CREATE TRIGGER tfoobar AFTER INSERT ON foobar FOR EACH ROW
-        BEGIN INSERT INTO barfoo VALUES (''trigger test'', 9999); END'}]
+  - ['TFOOBAR', 'CREATE TRIGGER tfoobar AFTER INSERT ON foobar FOR EACH ROW BEGIN
+      INSERT INTO barfoo VALUES (''trigger test'', 9999); END']
 ...
 -- and can be dropped just once
 box.execute("DROP TRIGGER tfoobar")
@@ -406,13 +406,13 @@ box.execute("DROP TRIGGER tfoobar")
 - Trigger 'TFOOBAR' doesn't exist
 ...
 -- Should be empty
-box.execute("SELECT \"name\", \"opts\" FROM \"_trigger\"")
+box.execute("SELECT \"name\", \"code\" FROM \"_trigger\"")
 ---
 - metadata:
   - name: name
     type: string
-  - name: opts
-    type: map
+  - name: code
+    type: string
   rows: []
 ...
 -- prove barfoo2 still exists

@@ -13,10 +13,10 @@ box.execute("CREATE TRIGGER tt_bd BEFORE DELETE ON t FOR EACH ROW BEGIN SELECT 1
 box.execute("CREATE TRIGGER tt_ad AFTER DELETE ON t FOR EACH ROW BEGIN SELECT 1; END")
 
 -- check that these triggers exist
-box.execute("SELECT \"name\", \"opts\" FROM \"_trigger\"")
+box.execute("SELECT \"name\", \"code\" FROM \"_trigger\"")
 
 -- drop table
 box.execute("DROP TABLE t")
 
 -- check that triggers were dropped with deleted table
-box.execute("SELECT \"name\", \"opts\" FROM \"_trigger\"")
+box.execute("SELECT \"name\", \"code\" FROM \"_trigger\"")

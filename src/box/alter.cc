@@ -3957,30 +3957,27 @@ on_replace_dd_space_sequence(struct lua_trigger * /* trigger */, void *event)
 static void
 on_create_trigger_rollback(struct lua_trigger *trigger, void * /* event */)
 {
-	struct sql_trigger *old_trigger = (struct sql_trigger *)trigger->data;
-	struct sql_trigger *new_trigger;
-	int rc = sql_trigger_replace(sql_trigger_name(old_trigger),
-				     sql_trigger_space_id(old_trigger),
-				     NULL, &new_trigger);
-	(void)rc;
-	assert(rc == 0);
-	assert(new_trigger == old_trigger);
-	sql_trigger_delete(new_trigger);
+	struct trigger *new_trigger = (struct trigger *) trigger->data;
+	struct space *space = space_by_id(new_trigger->def->space_id);
+	assert(space != NULL);
+	assert(space_trigger_by_name(space, new_trigger->def->name,
+				new_trigger->def->name_len) == new_trigger);
+	rlist_del(&new_trigger->link);
+	trigger_delete(new_trigger);
 }
 
 /** Restore the old trigger on rollback of a DELETE statement. */
 static void
 on_drop_trigger_rollback(struct lua_trigger *trigger, void * /* event */)
 {
-	struct sql_trigger *old_trigger = (struct sql_trigger *)trigger->data;
-	struct sql_trigger *new_trigger;
+	struct trigger *old_trigger = (struct trigger *) trigger->data;
 	if (old_trigger == NULL)
 		return;
-	if (sql_trigger_replace(sql_trigger_name(old_trigger),
-				sql_trigger_space_id(old_trigger),
-				old_trigger, &new_trigger) != 0)
-		panic("Out of memory on insertion into trigger hash");
-	assert(new_trigger == NULL);
+	struct space *space = space_by_id(old_trigger->def->space_id);
+	assert(space != NULL);
+	assert(space_trigger_by_name(space, old_trigger->def->name,
+				     old_trigger->def->name_len) == NULL);
+	rlist_add(&space->trigger_list, &old_trigger->link);
 }
 
 /**
@@ -3990,13 +3987,18 @@ on_drop_trigger_rollback(struct lua_trigger *trigger, void * /* event */)
 static void
 on_replace_trigger_rollback(struct lua_trigger *trigger, void * /* event */)
 {
-	struct sql_trigger *old_trigger = (struct sql_trigger *)trigger->data;
-	struct sql_trigger *new_trigger;
-	if (sql_trigger_replace(sql_trigger_name(old_trigger),
-				sql_trigger_space_id(old_trigger),
-				old_trigger, &new_trigger) != 0)
-		panic("Out of memory on insertion into trigger hash");
-	sql_trigger_delete(new_trigger);
+	struct trigger *old_trigger = (struct trigger *) trigger->data;
+	struct space *space = space_by_id(old_trigger->def->space_id);
+	assert(space != NULL);
+	struct trigger *new_trigger =
+		space_trigger_by_name(space, old_trigger->def->name,
+				      old_trigger->def->name_len);
+	assert(new_trigger != NULL);
+	rlist_del(&new_trigger->link);
+	rlist_add(&space->trigger_list, &old_trigger->link);
+	assert(space_trigger_by_name(space, old_trigger->def->name,
+				old_trigger->def->name_len) == old_trigger);
+	trigger_delete(new_trigger);
 }
 
 /**
@@ -4006,8 +4008,72 @@ on_replace_trigger_rollback(struct lua_trigger *trigger, void * /* event */)
 static void
 on_replace_trigger_commit(struct lua_trigger *trigger, void * /* event */)
 {
-	struct sql_trigger *old_trigger = (struct sql_trigger *)trigger->data;
-	sql_trigger_delete(old_trigger);
+	struct trigger *old_trigger = (struct trigger *) trigger->data;
+	if (old_trigger != NULL)
+		trigger_delete(old_trigger);
+}
+
+/** Create a trigger definition from tuple. */
+static struct trigger_def *
+trigger_def_new_from_tuple(struct tuple *tuple)
+{
+	uint32_t name_len;
+	const char *name = tuple_field_str_xc(tuple, BOX_TRIGGER_FIELD_NAME,
+					      &name_len);
+	uint32_t space_id =
+		tuple_field_u32_xc(tuple, BOX_TRIGGER_FIELD_SPACE_ID);
+	const char *language_str =
+		tuple_field_cstr_xc(tuple, BOX_TRIGGER_FIELD_LANGUAGE);
+	enum trigger_language language = STR2ENUM(trigger_language,
+						  language_str);
+	if (language == trigger_language_MAX) {
+		tnt_raise(ClientError, ER_CREATE_TRIGGER,
+			  tt_cstr(name, name_len), "invalid language");
+	}
+	const char *type_str = tuple_field_cstr_xc(tuple,
+						   BOX_TRIGGER_FIELD_TYPE);
+	enum trigger_type type = STR2ENUM(trigger_type, type_str);
+	if (type == trigger_type_MAX) {
+		tnt_raise(ClientError, ER_CREATE_TRIGGER,
+			  tt_cstr(name, name_len), "invalid type");
+	}
+	const char *event_manipulation_str =
+		tuple_field_cstr_xc(tuple, BOX_TRIGGER_FIELD_EVENT_MANIPULATION);
+	enum trigger_event_manipulation event_manipulation =
+		STR2ENUM(trigger_event_manipulation, event_manipulation_str);
+	if (event_manipulation == trigger_event_manipulation_MAX) {
+		tnt_raise(ClientError, ER_CREATE_TRIGGER,
+			  tt_cstr(name, name_len),
+			  "invalid event_manipulation value");
+	}
+	const char *action_timing_str =
+		tuple_field_cstr_xc(tuple, BOX_TRIGGER_FIELD_ACTION_TIMING);
+	enum trigger_action_timing action_timing =
+		STR2ENUM(trigger_action_timing, action_timing_str);
+	if (action_timing == trigger_action_timing_MAX) {
+		tnt_raise(ClientError, ER_CREATE_TRIGGER,
+			  tt_cstr(name, name_len),
+			  "invalid action_timing value");
+	}
+	uint32_t code_len;
+	const char *code = tuple_field_str_xc(tuple, BOX_TRIGGER_FIELD_CODE,
+					      &code_len);
+
+	struct trigger_def *def =
+		trigger_def_new(name, name_len, space_id, language,
+				event_manipulation, action_timing,
+				code, code_len);
+	if (def == NULL)
+		diag_raise();
+	if (trigger_def_check(def) != 0) {
+		trigger_def_delete(def);
+		diag_raise();
+	}
+	assert(def->action_timing != TRIGGER_ACTION_TIMING_INSTEAD ||
+	       def->language == TRIGGER_LANGUAGE_SQL);
+	if (def->action_timing == TRIGGER_ACTION_TIMING_INSTEAD)
+		def->action_timing = TRIGGER_ACTION_TIMING_BEFORE;
+	return def;
 }
 
 /**
@@ -4021,6 +4087,12 @@ on_replace_dd_trigger(struct lua_trigger * /* trigger */, void *event)
 	struct txn_stmt *stmt = txn_current_stmt(txn);
 	struct tuple *old_tuple = stmt->old_tuple;
 	struct tuple *new_tuple = stmt->new_tuple;
+	/* Ignore legacy tuples. */
+	if ((old_tuple != NULL &&
+	     tuple_field_count(old_tuple) <= BOX_TRIGGER_FIELD_CODE) ||
+	    (new_tuple != NULL &&
+	     tuple_field_count(new_tuple) <= BOX_TRIGGER_FIELD_CODE))
+		return;
 
 	struct lua_trigger *on_rollback = txn_alter_trigger_new(NULL, NULL);
 	struct lua_trigger *on_commit =
@@ -4028,73 +4100,42 @@ on_replace_dd_trigger(struct lua_trigger * /* trigger */, void *event)
 
 	if (old_tuple != NULL && new_tuple == NULL) {
 		/* DROP trigger. */
-		uint32_t trigger_name_len;
-		const char *trigger_name_src =
-			tuple_field_str_xc(old_tuple, BOX_TRIGGER_FIELD_NAME,
-					   &trigger_name_len);
-		uint32_t space_id =
-			tuple_field_u32_xc(old_tuple,
-					   BOX_TRIGGER_FIELD_SPACE_ID);
-		char *trigger_name =
-			(char *)region_alloc_xc(&fiber()->gc,
-						trigger_name_len + 1);
-		memcpy(trigger_name, trigger_name_src, trigger_name_len);
-		trigger_name[trigger_name_len] = 0;
-
-		struct sql_trigger *old_trigger;
-		int rc = sql_trigger_replace(trigger_name, space_id, NULL,
-					     &old_trigger);
-		(void)rc;
-		assert(rc == 0);
+		struct trigger_def *def = trigger_def_new_from_tuple(old_tuple);
+		auto trigger_def_guard = make_scoped_guard([=] {
+			trigger_def_delete(def);
+		});
+		struct space *space = space_by_id(def->space_id);
+		assert(space != NULL);
+		struct trigger *old_trigger =
+			space_trigger_by_name(space, def->name, def->name_len);
+		assert(old_trigger != NULL);
+		rlist_del(&old_trigger->link);
 
 		on_commit->data = old_trigger;
 		on_rollback->data = old_trigger;
 		on_rollback->run = on_drop_trigger_rollback;
 	} else {
 		/* INSERT, REPLACE trigger. */
-		uint32_t trigger_name_len;
-		const char *trigger_name_src =
-			tuple_field_str_xc(new_tuple, BOX_TRIGGER_FIELD_NAME,
-					   &trigger_name_len);
-
-		const char *space_opts =
-			tuple_field_with_type_xc(new_tuple,
-						 BOX_TRIGGER_FIELD_OPTS,
-						 MP_MAP);
-		struct space_opts opts;
-		struct region *region = &fiber()->gc;
-		space_opts_decode(&opts, space_opts, region);
-		struct sql_trigger *new_trigger =
-			sql_trigger_compile(sql_get(), opts.sql);
+		struct trigger_def *def = trigger_def_new_from_tuple(new_tuple);
+		auto trigger_def_guard = make_scoped_guard([=] {
+			trigger_def_delete(def);
+		});
+		struct trigger *new_trigger = trigger_new(def);
 		if (new_trigger == NULL)
 			diag_raise();
-
 		auto new_trigger_guard = make_scoped_guard([=] {
-		    sql_trigger_delete(new_trigger);
+			trigger_delete(new_trigger);
 		});
+		trigger_def_guard.is_active = false;
 
-		const char *trigger_name = sql_trigger_name(new_trigger);
-		if (strlen(trigger_name) != trigger_name_len ||
-		    memcmp(trigger_name_src, trigger_name,
-			   trigger_name_len) != 0) {
-			tnt_raise(ClientError, ER_SQL_EXECUTE,
-				  "trigger name does not match extracted "
-				  "from SQL");
-		}
-		uint32_t space_id =
-			tuple_field_u32_xc(new_tuple,
-					   BOX_TRIGGER_FIELD_SPACE_ID);
-		if (space_id != sql_trigger_space_id(new_trigger)) {
-			tnt_raise(ClientError, ER_SQL_EXECUTE,
-				  "trigger space_id does not match the value "
-				  "resolved on AST building from SQL");
-		}
+		struct space *space = space_by_id(def->space_id);
+		assert(space != NULL);
+		struct trigger *old_trigger =
+			space_trigger_by_name(space, def->name, def->name_len);
 
-		struct sql_trigger *old_trigger;
-		if (sql_trigger_replace(trigger_name,
-					sql_trigger_space_id(new_trigger),
-					new_trigger, &old_trigger) != 0)
-			diag_raise();
+		if (old_trigger != NULL)
+			rlist_del(&old_trigger->link);
+		rlist_add(&space->trigger_list, &new_trigger->link);
 
 		on_commit->data = old_trigger;
 		if (old_tuple != NULL) {

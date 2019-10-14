@@ -139,55 +139,8 @@ sql_trigger_new(struct trigger_def *def, struct sql_trigger_expr *expr,
  * @retval NULL on error
  * @retval not NULL sql_trigger AST pointer on success.
  */
-struct sql_trigger *
-sql_trigger_compile(struct sql *db, const char *sql);
-
-/**
- * Free AST pointed by trigger.
- * @param trigger AST object.
- */
-void
-sql_trigger_delete(struct sql_trigger *trigger);
-
-/**
- * Get server triggers list by space_id.
- * @param space_id valid Space ID.
- *
- * @retval trigger AST list.
- */
-struct sql_trigger *
-space_trigger_list(uint32_t space_id);
-
-/**
- * Perform replace trigger in SQL internals with new AST object.
- * @param name a name of the trigger.
- * @param space_id of the space to insert trigger.
- * @param trigger AST object to insert.
- * @param[out] old_trigger Old object if exists.
- *
- * @retval 0 on success.
- * @retval -1 on error.
- */
-int
-sql_trigger_replace(const char *name, uint32_t space_id,
-		    struct sql_trigger *trigger,
-		    struct sql_trigger **old_trigger);
-
-/**
- * Get trigger name by trigger AST object.
- * @param trigger AST object.
- * @return trigger name string.
- */
-const char *
-sql_trigger_name(struct sql_trigger *trigger);
-
-/**
- * Get space_id of the space that trigger has been built for.
- * @param trigger AST object.
- * @return space identifier.
- */
-uint32_t
-sql_trigger_space_id(struct sql_trigger *trigger);
+struct sql_trigger_expr *
+sql_trigger_expr_compile(struct sql *db, const char *sql);
 
 /**
  * Store duplicate of a parsed expression into @a parser.

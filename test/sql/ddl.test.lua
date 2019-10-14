@@ -98,16 +98,16 @@ box.execute([[CREATE TRIGGER t1t AFTER INSERT ON t1 FOR EACH ROW
 
 box.begin()
 box.execute('ALTER TABLE t1 RENAME TO t1_new;')
-sql = _trigger_index:select(box.space.T1_NEW.id)[1].opts.sql
+sql = _trigger_index:select(box.space.T1_NEW.id)[1].code
 assert(sql:find('T1_NEW'))
 box.rollback()$
 test_run:cmd("setopt delimiter ''")$
 
-sql = _trigger_index:select(box.space.T1.id)[1].opts.sql
+sql = _trigger_index:select(box.space.T1.id)[1].code
 not sql:find('T1_NEW') and sql:find('t1') ~= nil
 
 box.execute('ALTER TABLE t1 RENAME TO t1_new;')
-sql = _trigger_index:select(box.space.T1_NEW.id)[1].opts.sql
+sql = _trigger_index:select(box.space.T1_NEW.id)[1].code
 sql:find('T1_NEW') ~= nil
 
 box.execute('DROP TABLE t1_new')
