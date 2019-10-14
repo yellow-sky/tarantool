@@ -1,5 +1,5 @@
 # Enable systemd for on RHEL >= 7 and Fedora >= 15
-%if (0%{?fedora} >= 15 || 0%{?rhel} >= 7)
+%if (0%{?fedora} >= 15 || 0%{?rhel} >= 7 || 0%{?sle_version} >= 1500)
 %bcond_without systemd
 %else
 %bcond_with systemd
@@ -7,7 +7,7 @@
 
 BuildRequires: cmake >= 2.8
 BuildRequires: make
-%if (0%{?fedora} >= 22 || 0%{?rhel} >= 7)
+%if (0%{?fedora} >= 22 || 0%{?rhel} >= 7 || 0%{?sle_version} >= 1500)
 # RHEL 6 requires devtoolset
 BuildRequires: gcc >= 4.5
 BuildRequires: gcc-c++ >= 4.5
@@ -64,7 +64,7 @@ BuildRequires: libunwind-devel
 %endif
 
 # For tests
-%if (0%{?fedora} >= 22 || 0%{?rhel} >= 7)
+%if (0%{?fedora} >= 22 || 0%{?rhel} >= 7 || 0%{?sle_version} >= 1500)
 BuildRequires: python >= 2.7
 BuildRequires: python-six >= 1.9.0
 BuildRequires: python-gevent >= 1.0
@@ -90,7 +90,7 @@ Requires: /etc/services
 # Deps for built-in package manager
 # https://github.com/tarantool/tarantool/issues/2612
 Requires: openssl
-%if (0%{?fedora} >= 22 || 0%{?rhel} >= 8)
+%if (0%{?fedora} >= 22 || 0%{?rhel} >= 8 || 0%{?sle_version} >= 1500)
 # RHEL <= 7 doesn't support Recommends:
 Recommends: tarantool-devel
 Recommends: git-core
@@ -148,7 +148,7 @@ make %{?_smp_mflags}
 rm -rf %{buildroot}%{_datarootdir}/doc/tarantool/
 
 %check
-%if (0%{?fedora} >= 22 || 0%{?rhel} >= 7)
+%if (0%{?fedora} >= 22 || 0%{?rhel} >= 7 || 0%{?sle_version} >= 1500)
 # https://github.com/tarantool/tarantool/issues/1227
 echo "self.skip = True" > ./test/app/socket.skipcond
 # https://github.com/tarantool/tarantool/issues/1322
