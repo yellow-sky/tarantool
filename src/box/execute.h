@@ -46,6 +46,23 @@ enum sql_info_key {
 	sql_info_key_MAX,
 };
 
+/**
+ * One of possible formats used to dump msgpack/Lua.
+ * For details see port_sql_dump_msgpack() and port_sql_dump_lua().
+ */
+enum sql_dump_format {
+	DQL_EXECUTE = 0,
+	DML_EXECUTE = 1,
+	DQL_PREPARE = 2,
+	DML_PREPARE = 3,
+};
+
+enum sql_request_type {
+	PREPARE_AND_EXECUTE = 0,
+	PREPARE = 1,
+	EXECUTE_PREPARED = 2
+};
+
 extern const char *sql_info_key_strs[];
 
 struct region;
@@ -85,6 +102,13 @@ struct port_sql {
 	struct port_tuple port_tuple;
 	/* Prepared SQL statement. */
 	struct sql_stmt *stmt;
+	/**
+	 * Dump format depends on type of SQL query: DML or DQL;
+	 * and on type of SQL request: execute or prepare.
+	 */
+	uint8_t dump_format;
+	/** enum sql_request_type */
+	uint8_t request;
 };
 
 extern const struct port_vtab port_sql_vtab;
