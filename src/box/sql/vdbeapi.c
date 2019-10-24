@@ -798,6 +798,12 @@ sql_column_decltype(sql_stmt * pStmt, int N)
 			  COLNAME_DECLTYPE);
 }
 
+uint32_t
+sql_schema_version(sql_stmt *stmt)
+{
+	return ((struct Vdbe *)stmt)->schema_ver;
+}
+
 /******************************* sql_bind_  **************************
  *
  * Routines used to attach values to wildcards in a compiled SQL statement.

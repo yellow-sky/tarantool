@@ -561,6 +561,9 @@ sql_column_name(sql_stmt *, int N);
 const char *
 sql_column_datatype(sql_stmt *, int N);
 
+uint32_t
+sql_schema_version(sql_stmt *stmt);
+
 int
 sql_initialize(void);
 
