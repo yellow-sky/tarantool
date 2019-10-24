@@ -686,6 +686,13 @@ int
 sql_bind_parameter_count(sql_stmt *stmt);
 
 /**
+ * Return the name of a wildcard parameter. Return NULL if the index
+ * is out of range or if the wildcard is unnamed.
+ */
+const char *
+sql_bind_parameter_name(sql_stmt *stmt, int i);
+
+/**
  * Perform pointer parameter binding for the prepared sql
  * statement.
  * @param stmt Prepared statement.
