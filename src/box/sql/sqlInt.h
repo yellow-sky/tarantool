@@ -459,6 +459,19 @@ typedef void (*sql_destructor_type) (void *);
 #define SQL_STATIC      ((sql_destructor_type)0)
 #define SQL_TRANSIENT   ((sql_destructor_type)-1)
 
+/**
+ * Compile the UTF-8 encoded SQL statement zSql into a statement handle.
+ *
+ * @param sql UTF-8 encoded SQL statement.
+ * @param sql_len Length of @sql in bytes.
+ * @param re_prepared VM being re-compiled. Can be NULL.
+ * @param[out] stmt A pointer to the compiled statement.
+ * @param[out] sql_tail End of parsed string.
+ */
+int
+sql_compile(const char *sql, int bytes_count, struct Vdbe *re_prepared,
+	    sql_stmt **stmt, const char **sql_tail);
+
 int
 sql_step(sql_stmt *);
 
