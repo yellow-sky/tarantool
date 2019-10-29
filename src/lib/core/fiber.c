@@ -41,6 +41,7 @@
 #include "assoc.h"
 #include "memory.h"
 #include "trigger.h"
+#include "backtrace.h"
 
 #include "third_party/valgrind/memcheck.h"
 
@@ -459,6 +460,20 @@ fiber_join(struct fiber *fiber)
 }
 
 /**
+ * The LuaJIT is not always available in tests and libs for core
+ * hence making a weakref symbol to substitute the real interface
+ **/
+
+bool
+luaT_VMinGC() __attribute__((weak));
+
+bool
+luaT_VMinGC()
+{
+        return false;
+}
+
+/**
  * @note: this is not a cancellation point (@sa fiber_testcancel())
  * but it is considered good practice to call testcancel()
  * after each yield.
@@ -469,6 +484,10 @@ fiber_yield(void)
 	struct cord *cord = cord();
 	struct fiber *caller = cord->fiber;
 	struct fiber *callee = caller->caller;
+        if (cord_is_main() && luaT_VMinGC()) {
+                print_backtrace();
+                panic("Trying to yield while LuaJIT is in GC state");
+        }
 	caller->caller = &cord->sched;
 
 	/** By convention, these triggers must not throw. */
