@@ -6,6 +6,12 @@ local private = require('box.internal')
 local urilib = require('uri')
 local math = require('math')
 local fiber = require('fiber')
+local ffi = require('ffi')
+
+ffi.cdef([[
+bool
+box_is_configured(void);
+]])
 
 -- Function decorator that is used to prevent box.cfg() from
 -- being called concurrently by different fibers.
@@ -558,15 +564,41 @@ local function load_cfg(cfg)
 end
 box.cfg = locked(load_cfg)
 
+local function box_is_configured()
+    return ffi.C.box_is_configured()
+end
+
 --
--- This makes possible do box.execute without calling box.cfg
--- manually. The load_cfg call overwrites following table and
--- metatable.
+-- box.execute is <box_load_and_execute> when box is not loaded,
+-- <lbox_execute> otherwise. See also <box_configured> variable.
+-- <box_load_and_execute> loads box and calls <lbox_execute>.
 --
-function box.execute(...)
-    load_cfg()
+local box_load_and_execute
+box_load_and_execute = function(...)
+    -- Configure box if it is not configured, no-op otherwise (not
+    -- reconfiguration).
+    -- We should check whether box is configured, because a user
+    -- may save <box_load_and_execute> function before box loading
+    -- and call it afterwards.
+    if not box_is_configured() then
+        locked(function()
+            -- Re-check, because after releasing of the lock the
+            -- box state may be changed. We should call load_cfg()
+            -- only once.
+            if not box_is_configured() then
+                load_cfg()
+            end
+        end)()
+    end
+
+    -- At this point box should be configured and box.execute()
+    -- function should be replaced with lbox_execute().
+    assert(type(box.cfg) ~= 'function')
+    assert(box.execute ~= box_load_and_execute)
+
     return box.execute(...)
 end
+box.execute = box_load_and_execute
 
 -- gh-810:
 -- hack luajit default cpath
