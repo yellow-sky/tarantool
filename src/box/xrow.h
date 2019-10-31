@@ -526,10 +526,12 @@ int
 iproto_reply_error(struct obuf *out, const struct error *e, uint64_t sync,
 		   uint32_t schema_version);
 
-/** EXECUTE request. */
+/** EXECUTE/PREPARE request. */
 struct sql_request {
 	/** SQL statement text. */
 	const char *sql_text;
+	/** Id of prepared statement. In this case @sql_text == NULL. */
+	const char *query_id;
 	/** MessagePack array of parameters. */
 	const char *bind;
 };

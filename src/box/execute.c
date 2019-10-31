@@ -326,6 +326,65 @@ sql_get_metadata(struct sql_stmt *stmt, struct obuf *out, int column_count)
 	return 0;
 }
 
+static inline int
+sql_get_params_metadata(struct sql_stmt *stmt, struct obuf *out)
+{
+	int bind_count = sql_bind_parameter_count(stmt);
+	int size = mp_sizeof_uint(IPROTO_BIND_METADATA) +
+		   mp_sizeof_array(bind_count);
+	char *pos = (char *) obuf_alloc(out, size);
+	if (pos == NULL) {
+		diag_set(OutOfMemory, size, "obuf_alloc", "pos");
+		return -1;
+	}
+	pos = mp_encode_uint(pos, IPROTO_BIND_METADATA);
+	pos = mp_encode_array(pos, bind_count);
+	for (int i = 0; i < bind_count; ++i) {
+		size_t size = mp_sizeof_map(2) +
+			      mp_sizeof_uint(IPROTO_FIELD_NAME) +
+			      mp_sizeof_uint(IPROTO_FIELD_TYPE);
+		const char *name = sql_bind_parameter_name(stmt, i);
+		if (name == NULL)
+			name = "?";
+		const char *type = "ANY";
+		size += mp_sizeof_str(strlen(name));
+		size += mp_sizeof_str(strlen(type));
+		char *pos = (char *) obuf_alloc(out, size);
+		if (pos == NULL) {
+			diag_set(OutOfMemory, size, "obuf_alloc", "pos");
+			return -1;
+		}
+		pos = mp_encode_map(pos, 2);
+		pos = mp_encode_uint(pos, IPROTO_FIELD_NAME);
+		pos = mp_encode_str(pos, name, strlen(name));
+		pos = mp_encode_uint(pos, IPROTO_FIELD_TYPE);
+		pos = mp_encode_str(pos, type, strlen(type));
+	}
+	return 0;
+}
+
+static int
+sql_get_prepare_common_keys(struct sql_stmt *stmt, struct obuf *out, int keys,
+			    uint32_t query_id)
+{
+	int size = mp_sizeof_map(keys) +
+		mp_sizeof_uint(IPROTO_QUERY_ID) + mp_sizeof_uint(query_id) +
+		mp_sizeof_uint(IPROTO_BIND_COUNT) + mp_sizeof_uint(sql_bind_parameter_count(stmt));
+	char *pos = (char *) obuf_alloc(out, size);
+	if (pos == NULL) {
+		diag_set(OutOfMemory, size, "obuf_alloc", "pos");
+		return -1;
+	}
+	pos = mp_encode_map(pos, keys);
+	pos = mp_encode_uint(pos, IPROTO_QUERY_ID);
+	pos = mp_encode_uint(pos, query_id);
+	pos = mp_encode_uint(pos, IPROTO_BIND_COUNT);
+	pos = mp_encode_uint(pos, sql_bind_parameter_count(stmt));
+	if (sql_get_params_metadata(stmt, out) != 0)
+		return -1;
+	return 0;
+}
+
 static int
 port_sql_dump_msgpack(struct port *port, struct obuf *out)
 {
@@ -407,6 +466,33 @@ port_sql_dump_msgpack(struct port *port, struct obuf *out)
 		}
 		break;
 	}
+	case DQL_PREPARE: {
+		/* Format is following:
+		 * query_id,
+		 * param_count,
+		 * params {name, type},
+		 * metadata {name, type}
+		 */
+		int keys = 4;
+		if (sql_get_prepare_common_keys(stmt, out, keys,
+						sql_port->query_id) != 0)
+			return -1;
+		if (sql_get_metadata(stmt, out, sql_column_count(stmt)) != 0)
+			return -1;
+		break;
+	}
+	case DML_PREPARE: {
+		/* Format is following:
+		 * query_id,
+		 * param_count,
+		 * params {name, type},
+		 */
+		int keys = 3;
+		if (sql_get_prepare_common_keys(stmt, out, keys,
+						sql_port->query_id) != 0)
+			return -1;
+		break;
+		}
 	default: unreachable();
 	}
 	return 0;
