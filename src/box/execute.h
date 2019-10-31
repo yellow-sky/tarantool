@@ -117,6 +117,14 @@ int
 sql_finalize(struct sql_stmt *stmt);
 
 /**
+ * Calculate estimated size of memory occupied by VM.
+ * See sqlVdbeMakeReady() for details concerning allocated
+ * memory.
+ */
+size_t
+sql_stmt_sizeof(const struct sql_stmt *stmt);
+
+/**
  * Prepare (compile into VDBE byte-code) statement.
  *
  * @param sql UTF-8 encoded SQL statement.
