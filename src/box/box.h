@@ -235,6 +235,7 @@ void box_set_replication_sync_lag(void);
 void box_set_replication_sync_timeout(void);
 void box_set_replication_skip_conflict(void);
 void box_set_net_msg_max(void);
+void box_set_prepared_stmt_cache_size(void);
 
 extern "C" {
 #endif /* defined(__cplusplus) */

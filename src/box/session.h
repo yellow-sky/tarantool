@@ -36,6 +36,7 @@
 #include "fiber.h"
 #include "user.h"
 #include "authentication.h"
+#include "prep_stmt.h"
 
 #if defined(__cplusplus)
 extern "C" {
@@ -105,6 +106,7 @@ struct session {
 	struct credentials credentials;
 	/** Trigger for fiber on_stop to cleanup created on-demand session */
 	struct trigger fiber_on_stop;
+	struct prep_stmt_cache prepared_stmt_cache;
 };
 
 struct session_vtab {

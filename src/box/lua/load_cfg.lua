@@ -81,6 +81,7 @@ local default_cfg = {
     feedback_host         = "https://feedback.tarantool.io",
     feedback_interval     = 3600,
     net_msg_max           = 768,
+    sql_cache_size        = 5 * 1024 * 1024,
 }
 
 -- types of available options
@@ -144,6 +145,7 @@ local template_cfg = {
     feedback_host         = 'string',
     feedback_interval     = 'number',
     net_msg_max           = 'number',
+    sql_cache_size        = 'number',
 }
 
 local function normalize_uri(port)
@@ -250,6 +252,7 @@ local dynamic_cfg = {
     instance_uuid           = check_instance_uuid,
     replicaset_uuid         = check_replicaset_uuid,
     net_msg_max             = private.cfg_set_net_msg_max,
+    sql_cache_size          = private.cfg_set_sql_cache_size,
 }
 
 local dynamic_cfg_skip_at_load = {

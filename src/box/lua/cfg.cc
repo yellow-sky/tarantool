@@ -275,6 +275,17 @@ lbox_cfg_set_net_msg_max(struct lua_State *L)
 }
 
 static int
+lbox_set_prepared_stmt_cache_size(struct lua_State *L)
+{
+	try {
+		box_set_prepared_stmt_cache_size();
+	} catch (Exception *) {
+		luaT_error(L);
+	}
+	return 0;
+}
+
+static int
 lbox_cfg_set_worker_pool_threads(struct lua_State *L)
 {
 	(void) L;
@@ -378,6 +389,7 @@ box_lua_cfg_init(struct lua_State *L)
 		{"cfg_set_replication_sync_timeout", lbox_cfg_set_replication_sync_timeout},
 		{"cfg_set_replication_skip_conflict", lbox_cfg_set_replication_skip_conflict},
 		{"cfg_set_net_msg_max", lbox_cfg_set_net_msg_max},
+		{"cfg_set_sql_cache_size", lbox_set_prepared_stmt_cache_size},
 		{NULL, NULL}
 	};
 

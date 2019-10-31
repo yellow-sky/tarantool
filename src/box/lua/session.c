@@ -366,6 +366,15 @@ lbox_push_on_access_denied_event(struct lua_State *L, void *event)
 	return 3;
 }
 
+static int
+lbox_session_sql_cache_erase(struct lua_State *L)
+{
+	(void) L;
+	struct session *session = current_session();
+	sql_stmt_cache_erase(&session->prepared_stmt_cache);
+	return 0;
+}
+
 /**
  * Push a message using a protocol, depending on a session type.
  * @param L Lua state. First argument on the stack is data to
@@ -476,6 +485,7 @@ box_lua_session_init(struct lua_State *L)
 		{"on_auth", lbox_session_on_auth},
 		{"on_access_denied", lbox_session_on_access_denied},
 		{"push", lbox_session_push},
+		{"sql_cache_erase", lbox_session_sql_cache_erase},
 		{NULL, NULL}
 	};
 	luaL_register_module(L, sessionlib_name, sessionlib);

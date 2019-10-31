@@ -36,6 +36,7 @@
 #include "user.h"
 #include "error.h"
 #include "tt_static.h"
+#include "execute.h"
 
 const char *session_type_strs[] = {
 	"background",
@@ -147,6 +148,17 @@ session_create(enum session_type type)
 	struct mh_i64ptr_node_t node;
 	node.key = session->id;
 	node.val = session;
+	session->prepared_stmt_cache.mem_quota = prep_stmt_cache_size;
+	session->prepared_stmt_cache.mem_used =
+		sizeof(session->prepared_stmt_cache);
+	session->prepared_stmt_cache.hash = mh_i32ptr_new();
+	if (session->prepared_stmt_cache.hash == NULL) {
+		diag_set(OutOfMemory, 0, "mh_i32ptr_new",
+			  "prepared statement cache");
+		mempool_free(&session_pool, session);
+		return NULL;
+	}
+	session->prepared_stmt_cache.current_id = 0;
 
 	mh_int_t k = mh_i64ptr_put(session_registry, &node, NULL, NULL);
 
@@ -232,6 +244,8 @@ session_destroy(struct session *session)
 	session_storage_cleanup(session->id);
 	struct mh_i64ptr_node_t node = { session->id, NULL };
 	mh_i64ptr_remove(session_registry, &node, NULL);
+	sql_stmt_cache_erase(&session->prepared_stmt_cache);
+	mh_i32ptr_delete(session->prepared_stmt_cache.hash);
 	mempool_free(&session_pool, session);
 }
 

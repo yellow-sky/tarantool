@@ -124,6 +124,7 @@ add_library(box STATIC
     sql.c
     bind.c
     execute.c
+    prep_stmt.c
     wal.c
     call.c
     merger.c
