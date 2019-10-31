@@ -45,6 +45,7 @@
 #include "tuple.h"
 #include "sql/vdbe.h"
 #include "box/lua/execute.h"
+#include "box/sql_stmt_cache.h"
 
 const char *sql_info_key_strs[] = {
 	"row_count",
@@ -413,6 +414,52 @@ port_sql_dump_msgpack(struct port *port, struct obuf *out)
 	return 0;
 }
 
+static bool
+sql_stmt_check_schema_version(struct sql_stmt *stmt)
+{
+	return sql_stmt_schema_version(stmt) == box_schema_version();
+}
+
+static int
+sql_reprepare(struct sql_stmt **stmt)
+{
+	const char *sql_str = sql_stmt_query_str(*stmt);
+	struct sql_stmt *new_stmt;
+	if (sql_stmt_compile(sql_str, strlen(sql_str), NULL,
+			     &new_stmt, NULL) != 0)
+		return -1;
+	if (sql_stmt_cache_update(*stmt, new_stmt) != 0)
+		return -1;
+	*stmt = new_stmt;
+	return 0;
+}
+
+int
+sql_prepare(const char *sql, int len, struct port *port)
+{
+	struct sql_stmt *stmt = sql_stmt_cache_find(sql, len);
+	if (stmt == NULL) {
+		if (sql_stmt_compile(sql, len, NULL, &stmt, NULL) != 0)
+			return -1;
+		if (sql_stmt_cache_insert(stmt) != 0) {
+			sql_stmt_finalize(stmt);
+			return -1;
+		}
+	} else {
+		if (! sql_stmt_check_schema_version(stmt)) {
+			if (sql_reprepare(&stmt) != 0)
+				return -1;
+		} else {
+			sql_stmt_cache_refresh(stmt);
+		}
+	}
+	enum sql_serialization_format format = sql_column_count(stmt) > 0 ?
+					   DQL_PREPARE : DML_PREPARE;
+	port_sql_create(port, stmt, format, false);
+
+	return 0;
+}
+
 /**
  * Execute prepared SQL statement.
  *
@@ -450,12 +497,47 @@ sql_execute(struct sql_stmt *stmt, struct port *port, struct region *region)
 	return 0;
 }
 
+static int
+sql_execute_prepared(struct sql_stmt *stmt, const struct sql_bind *bind,
+		     uint32_t bind_count, struct port *port,
+		     struct region *region)
+{
+	if (sql_bind(stmt, bind, bind_count) != 0)
+		return -1;
+	enum sql_serialization_format format = sql_column_count(stmt) > 0 ?
+					   DQL_EXECUTE : DML_EXECUTE;
+	port_sql_create(port, stmt, format, false);
+	if (sql_execute(stmt, port, region) != 0) {
+		port_destroy(port);
+		sql_stmt_reset(stmt);
+		return -1;
+	}
+	sql_stmt_reset(stmt);
+
+	return 0;
+}
+
 int
 sql_prepare_and_execute(const char *sql, int len, const struct sql_bind *bind,
 			uint32_t bind_count, struct port *port,
 			struct region *region)
 {
-	struct sql_stmt *stmt;
+	struct sql_stmt *stmt = sql_stmt_cache_find(sql, len);
+	if (stmt != NULL) {
+		if (! sql_stmt_check_schema_version(stmt)) {
+			if (sql_reprepare(&stmt) != 0)
+				return -1;
+		}
+		if (! sql_stmt_busy(stmt)) {
+			return sql_execute_prepared(stmt, bind, bind_count,
+						    port, region);
+		}
+	}
+	/*
+	 * In case statement is evicted from cache or it is executed
+	 * right now by another fiber, EXECUTE_PREPARED request results
+	 * in casual PREPARE + EXECUTE.
+	 */
 	if (sql_stmt_compile(sql, len, NULL, &stmt, NULL) != 0)
 		return -1;
 	assert(stmt != NULL);

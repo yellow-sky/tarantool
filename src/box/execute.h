@@ -135,13 +135,11 @@ sql_stmt_busy(const struct sql_stmt *stmt);
  * Prepare (compile into VDBE byte-code) statement.
  *
  * @param sql UTF-8 encoded SQL statement.
- * @param length Length of @param sql in bytes.
- * @param[out] stmt A pointer to the prepared statement.
- * @param[out] sql_tail End of parsed string.
+ * @param len Length of @param sql in bytes.
+ * @param port Port to store request response.
  */
 int
-sql_prepare(const char *sql, int length, struct sql_stmt **stmt,
-	    const char **sql_tail);
+sql_prepare(const char *sql, int len, struct port *port);
 
 #if defined(__cplusplus)
 } /* extern "C" { */

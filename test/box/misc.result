@@ -73,6 +73,7 @@ t
   - on_commit
   - on_rollback
   - once
+  - prepare
   - priv
   - rollback
   - rollback_to_savepoint
