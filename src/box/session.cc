@@ -36,6 +36,7 @@
 #include "user.h"
 #include "error.h"
 #include "tt_static.h"
+#include "execute.h"
 
 const char *session_type_strs[] = {
 	"background",
