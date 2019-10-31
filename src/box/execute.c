@@ -45,6 +45,7 @@
 #include "tuple.h"
 #include "sql/vdbe.h"
 #include "box/lua/execute.h"
+#include "box/prep_stmt.h"
 
 const char *sql_info_key_strs[] = {
 	"row_count",
@@ -411,6 +412,35 @@ port_sql_dump_msgpack(struct port *port, struct obuf *out)
 	return 0;
 }
 
+int
+sql_prepare(const char *sql, int len, struct port *port)
+{
+	struct sql_stmt *stmt;
+	if (sql_compile(sql, len, NULL, &stmt, NULL) != 0)
+		return -1;
+	uint32_t stmt_id;
+	if (sql_prepared_stmt_cache_insert(stmt, &stmt_id) != 0)
+		return -1;
+	enum sql_dump_format dump_format = sql_column_count(stmt) > 0 ?
+					   DQL_PREPARE : DML_PREPARE;
+	port_sql_create(port, stmt, dump_format, PREPARE);
+	((struct port_sql *)port)->query_id = stmt_id;
+
+	return 0;
+}
+
+int
+sql_unprepare(uint32_t query_id)
+{
+	struct sql_stmt *stmt = sql_prepared_stmt_cache_find(query_id);
+	if (stmt == NULL) {
+		diag_set(ClientError, ER_WRONG_QUERY_ID, query_id);
+		return -1;
+	}
+	sql_prepared_stmt_cache_delete(stmt, query_id);
+	return 0;
+}
+
 /**
  * Execute prepared SQL statement.
  *
@@ -426,7 +456,7 @@ port_sql_dump_msgpack(struct port *port, struct obuf *out)
  * @retval  0 Success.
  * @retval -1 Error.
  */
-static inline int
+static int
 sql_execute(struct sql_stmt *stmt, struct port *port, struct region *region)
 {
 	int rc, column_count = sql_column_count(stmt);
@@ -445,6 +475,46 @@ sql_execute(struct sql_stmt *stmt, struct port *port, struct region *region)
 	}
 	if (rc != SQL_DONE)
 		return -1;
+	return 0;
+}
+
+int
+sql_execute_prepared(uint32_t query_id, const struct sql_bind *bind,
+		     uint32_t bind_count, struct port *port,
+		     struct region *region)
+{
+	struct sql_stmt *stmt = sql_prepared_stmt_cache_find(query_id);
+	if (stmt == NULL) {
+		diag_set(ClientError, ER_WRONG_QUERY_ID, query_id);
+		return -1;
+	}
+	if (sql_schema_version(stmt) != box_schema_version()) {
+		diag_set(ClientError, ER_SQL_EXECUTE, "statement has expired");
+		return -1;
+	}
+	/*
+	 * Each fiber has its own session so even if during statement
+	 * execution yield occurs, another fiber can't access this
+	 * particular statement.
+	 */
+	if (sql_stmt_busy(stmt)) {
+		panic("Prepared statement is malformed: "
+		      "its status is RUN before execution");
+	}
+	if (sql_bind(stmt, bind, bind_count) != 0)
+		return -1;
+	enum sql_dump_format dump_format = sql_column_count(stmt) > 0 ?
+					   DQL_EXECUTE : DML_EXECUTE;
+	port_sql_create(port, stmt, dump_format, EXECUTE_PREPARED);
+	if (sql_bind(stmt, bind, bind_count) != 0)
+		return -1;
+	if (sql_execute(stmt, port, region) != 0) {
+		port_destroy(port);
+		sql_reset(stmt);
+		return -1;
+	}
+	sql_reset(stmt);
+
 	return 0;
 }
 

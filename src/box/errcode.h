@@ -259,6 +259,7 @@ struct errcode_record {
 	/*204 */_(ER_SQL_FUNC_WRONG_RET_COUNT,	"SQL expects exactly one argument returned from %s, got %d")\
 	/*205 */_(ER_FUNC_INVALID_RETURN_TYPE,	"Function '%s' returned value of invalid type: expected %s got %s") \
 	/*206 */_(ER_SQL_PREPARE,		"Failed to prepare SQL statement: %s") \
+	/*207 */_(ER_WRONG_QUERY_ID,		"Prepared statement with corresponding id %d does not exist") \
 
 /*
  * !IMPORTANT! Please follow instructions at start of the file

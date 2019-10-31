@@ -109,6 +109,11 @@ struct port_sql {
 	uint8_t dump_format;
 	/** enum sql_request_type */
 	uint8_t request;
+	/**
+	 * In case of "prepare" request user receives id of query
+	 * using which query can be executed later.
+	 */
+	uint32_t query_id;
 };
 
 extern const struct port_vtab port_sql_vtab;
@@ -128,13 +133,27 @@ sql_stmt_sizeof(const struct sql_stmt *stmt);
  * Prepare (compile into VDBE byte-code) statement.
  *
  * @param sql UTF-8 encoded SQL statement.
- * @param length Length of @param sql in bytes.
- * @param[out] stmt A pointer to the prepared statement.
- * @param[out] sql_tail End of parsed string.
+ * @param len Length of @param sql in bytes.
+ * @param port Port to store request response.
  */
 int
-sql_prepare(const char *sql, int length, struct sql_stmt **stmt,
-	    const char **sql_tail);
+sql_prepare(const char *sql, int len, struct port *port);
+
+/**
+ * Remove entry from cache and release any occupied resources.
+ * In case of wrong query id the error is raised.
+ */
+int
+sql_unprepare(uint32_t query_id);
+
+/**
+ * Execute prepared statement via given id. At the end statement
+ * is not destroyed. Otherwise this function is similar to sql_execute().
+ */
+int
+sql_execute_prepared(uint32_t query_id, const struct sql_bind *bind,
+		     uint32_t bind_count, struct port *port,
+		     struct region *region);
 
 #if defined(__cplusplus)
 } /* extern "C" { */
