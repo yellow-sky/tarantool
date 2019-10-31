@@ -178,7 +178,7 @@ struct iproto_msg
 		struct call_request call;
 		/** Authentication request. */
 		struct auth_request auth;
-		/* SQL request, if this is the EXECUTE request. */
+		/* SQL request, if this is the EXECUTE/PREPARE request. */
 		struct sql_request sql;
 		/** In case of iproto parse error, saved diagnostics. */
 		struct diag diag;
@@ -1209,6 +1209,7 @@ static const struct cmsg_hop *dml_route[IPROTO_TYPE_STAT_MAX] = {
 	call_route,                             /* IPROTO_CALL */
 	sql_route,                              /* IPROTO_EXECUTE */
 	NULL,                                   /* IPROTO_NOP */
+	sql_route,                              /* IPROTO_PREPARE */
 };
 
 static const struct cmsg_hop join_route[] = {
@@ -1264,6 +1265,7 @@ iproto_msg_decode(struct iproto_msg *msg, const char **pos, const char *reqend,
 		cmsg_init(&msg->base, call_route);
 		break;
 	case IPROTO_EXECUTE:
+	case IPROTO_PREPARE:
 		if (xrow_decode_sql(&msg->header, &msg->sql) != 0)
 			goto error;
 		cmsg_init(&msg->base, sql_route);
@@ -1715,7 +1717,8 @@ tx_process_sql(struct cmsg *m)
 
 	if (tx_check_schema(msg->header.schema_version))
 		goto error;
-	assert(msg->header.type == IPROTO_EXECUTE);
+	assert(msg->header.type == IPROTO_EXECUTE ||
+	       msg->header.type == IPROTO_PREPARE);
 	tx_inject_delay();
 	if (msg->sql.bind != NULL) {
 		bind_count = sql_bind_list_decode(msg->sql.bind, &bind);
@@ -1724,9 +1727,16 @@ tx_process_sql(struct cmsg *m)
 	}
 	sql = msg->sql.sql_text;
 	sql = mp_decode_str(&sql, &len);
-	if (sql_prepare_and_execute(sql, len, bind, bind_count, &port,
-				    &fiber()->gc) != 0)
-		goto error;
+	if (msg->header.type == IPROTO_EXECUTE) {
+		if (sql_prepare_and_execute(sql, len, bind, bind_count,
+					    &port, &fiber()->gc) != 0)
+			goto error;
+	} else {
+		/* IPROTO_PREPARE */
+		if (sql_prepare(sql, len, &port) != 0)
+			goto error;
+	}
+
 	/*
 	 * Take an obuf only after execute(). Else the buffer can
 	 * become out of date during yield.
@@ -1738,6 +1748,7 @@ tx_process_sql(struct cmsg *m)
 		port_destroy(&port);
 		goto error;
 	}
+	/* Nothing to dump in case of UNPREPARE request. */
 	if (port_dump_msgpack(&port, out) != 0) {
 		port_destroy(&port);
 		obuf_rollback_to_svp(out, &header_svp);

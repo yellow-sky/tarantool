@@ -5,20 +5,32 @@ fiber = require('fiber')
 -- Wrappers to make remote and local execution interface return
 -- same result pattern.
 --
+is_remote = test_run:get_cfg('remote') == 'true'
+execute = nil
+prepare = nil
+
 test_run:cmd("setopt delimiter ';'")
-execute = function(...)
-    local res, err = box.execute(...)
-    if err ~= nil then
-        error(err)
+if is_remote then
+    box.schema.user.grant('guest','read, write, execute', 'universe')
+    box.schema.user.grant('guest', 'create', 'space')
+    cn = remote.connect(box.cfg.listen)
+    execute = function(...) return cn:execute(...) end
+    prepare = function(...) return cn:prepare(...) end
+else
+    execute = function(...)
+        local res, err = box.execute(...)
+        if err ~= nil then
+            error(err)
+        end
+        return res
     end
-    return res
-end;
-prepare = function(...)
-    local res, err = box.prepare(...)
-    if err ~= nil then
-        error(err)
+    prepare = function(...)
+        local res, err = box.prepare(...)
+        if err ~= nil then
+            error(err)
+        end
+        return res
     end
-    return res
 end;
 
 test_run:cmd("setopt delimiter ''");
@@ -39,8 +51,15 @@ s.params
 s.param_count
 execute(s.sql_str, {1, 2})
 execute(s.sql_str, {1, 3})
-s:execute({1, 2})
-s:execute({1, 3})
+
+test_run:cmd("setopt delimiter ';'")
+if not is_remote then
+    res = s:execute({1, 2})
+    assert(res ~= nil)
+    res = s:execute({1, 3})
+    assert(res ~= nil)
+end;
+test_run:cmd("setopt delimiter ''");
 
 -- Test preparation of different types of queries.
 -- Let's start from DDL. It doesn't make much sense since
@@ -94,10 +113,17 @@ space:replace{4, 5, '6'}
 space:replace{7, 8.5, '9'}
 _ = prepare("SELECT a FROM test WHERE b = '3';")
 s = prepare("SELECT a FROM test WHERE b = '3';")
+
 execute(s.sql_str)
 execute(s.sql_str)
-s:execute()
-s:execute()
+test_run:cmd("setopt delimiter ';'")
+if not is_remote then
+    res = s:execute()
+    assert(res ~= nil)
+    res = s:execute()
+    assert(res ~= nil)
+end;
+test_run:cmd("setopt delimiter ''");
 
 s = prepare("SELECT count(*), count(a - 3), max(b), abs(id) FROM test WHERE b = '3';")
 execute(s.sql_str)
@@ -191,6 +217,11 @@ f2:set_joinable(true)
 f1:join();
 f2:join();
 
+if is_remote then
+    cn:close()
+    box.schema.user.revoke('guest', 'read, write, execute', 'universe')
+    box.schema.user.revoke('guest', 'create', 'space')
+end;
 test_run:cmd("setopt delimiter ''");
 
 box.cfg{sql_cache_size = 5 * 1024 * 1024}

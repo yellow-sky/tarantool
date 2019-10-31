@@ -12,25 +12,41 @@ fiber = require('fiber')
 -- Wrappers to make remote and local execution interface return
 -- same result pattern.
 --
+is_remote = test_run:get_cfg('remote') == 'true'
+ | ---
+ | ...
+execute = nil
+ | ---
+ | ...
+prepare = nil
+ | ---
+ | ...
+
 test_run:cmd("setopt delimiter ';'")
  | ---
  | - true
  | ...
-execute = function(...)
-    local res, err = box.execute(...)
-    if err ~= nil then
-        error(err)
+if is_remote then
+    box.schema.user.grant('guest','read, write, execute', 'universe')
+    box.schema.user.grant('guest', 'create', 'space')
+    cn = remote.connect(box.cfg.listen)
+    execute = function(...) return cn:execute(...) end
+    prepare = function(...) return cn:prepare(...) end
+else
+    execute = function(...)
+        local res, err = box.execute(...)
+        if err ~= nil then
+            error(err)
+        end
+        return res
     end
-    return res
-end;
- | ---
- | ...
-prepare = function(...)
-    local res, err = box.prepare(...)
-    if err ~= nil then
-        error(err)
+    prepare = function(...)
+        local res, err = box.prepare(...)
+        if err ~= nil then
+            error(err)
+        end
+        return res
     end
-    return res
 end;
  | ---
  | ...
@@ -119,28 +135,22 @@ execute(s.sql_str, {1, 3})
  |     type: string
  |   rows: []
  | ...
-s:execute({1, 2})
+
+test_run:cmd("setopt delimiter ';'")
  | ---
- | - metadata:
- |   - name: ID
- |     type: integer
- |   - name: A
- |     type: number
- |   - name: B
- |     type: string
- |   rows:
- |   - [1, 2, '3']
+ | - true
  | ...
-s:execute({1, 3})
+if not is_remote then
+    res = s:execute({1, 2})
+    assert(res ~= nil)
+    res = s:execute({1, 3})
+    assert(res ~= nil)
+end;
  | ---
- | - metadata:
- |   - name: ID
- |     type: integer
- |   - name: A
- |     type: number
- |   - name: B
- |     type: string
- |   rows: []
+ | ...
+test_run:cmd("setopt delimiter ''");
+ | ---
+ | - true
  | ...
 
 -- Test preparation of different types of queries.
@@ -290,6 +300,7 @@ _ = prepare("SELECT a FROM test WHERE b = '3';")
 s = prepare("SELECT a FROM test WHERE b = '3';")
  | ---
  | ...
+
 execute(s.sql_str)
  | ---
  | - metadata:
@@ -306,21 +317,21 @@ execute(s.sql_str)
  |   rows:
  |   - [2]
  | ...
-s:execute()
+test_run:cmd("setopt delimiter ';'")
  | ---
- | - metadata:
- |   - name: A
- |     type: number
- |   rows:
- |   - [2]
+ | - true
  | ...
-s:execute()
+if not is_remote then
+    res = s:execute()
+    assert(res ~= nil)
+    res = s:execute()
+    assert(res ~= nil)
+end;
  | ---
- | - metadata:
- |   - name: A
- |     type: number
- |   rows:
- |   - [2]
+ | ...
+test_run:cmd("setopt delimiter ''");
+ | ---
+ | - true
  | ...
 
 s = prepare("SELECT count(*), count(a - 3), max(b), abs(id) FROM test WHERE b = '3';")
@@ -564,6 +575,13 @@ f2:join();
  | - true
  | ...
 
+if is_remote then
+    cn:close()
+    box.schema.user.revoke('guest', 'read, write, execute', 'universe')
+    box.schema.user.revoke('guest', 'create', 'space')
+end;
+ | ---
+ | ...
 test_run:cmd("setopt delimiter ''");
  | ---
  | - true

@@ -591,7 +591,7 @@ error:
 		else
 			request->sql_text = value;
 	}
-	if (request->sql_text == NULL) {
+	if (request->sql_text == NULL ) {
 		xrow_on_decode_err(row->body[0].iov_base, end, ER_MISSING_REQUEST_FIELD,
 			 iproto_key_name(IPROTO_SQL_TEXT));
 		return -1;
