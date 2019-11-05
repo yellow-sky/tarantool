@@ -37,23 +37,6 @@ local function test_offsets(test, s)
     test:ok(not pcall(s.decode, dump, offset), "invalid offset")
 end
 
-local function test_types(test, s)
-    test:plan(2)
-    -- gh-3926: decode result cannot be assigned to buffer.rpos
-    local encoded_data = s.encode(0)
-    local len = encoded_data:len()
-    local buf = buffer.ibuf()
-    buf:reserve(len)
-    local p = buf:alloc(len)
-    ffi.copy(p, encoded_data, len)
-    local _, new_buf = s.decode(ffi.cast(p, 'const char *'))
-    test:iscdata(new_buf, 'const char *', 'cdata const char * type')
-    _, new_buf = s.decode(p)
-    test:iscdata(new_buf, 'char *', 'cdata char * type')
-    buf.rpos = new_buf
-    buf:recycle()
-end
-
 local function test_other(test, s)
     test:plan(24)
     local buf = string.char(0x93, 0x6e, 0xcb, 0x42, 0x2b, 0xed, 0x30, 0x47,
@@ -134,6 +117,45 @@ local function test_other(test, s)
                  encode_max_depth = max_depth})
 end
 
+-- gh-3926: Ensure that a returned pointer has the same cdata type
+-- as passed argument.
+local function test_decode_buffer(test, s)
+    local cases = {
+        {
+            'decode_unchecked(cdata<const char *>)',
+            data = ffi.cast('const char *', '\x93\x01\x02\x03'),
+            exp_res = {1, 2, 3},
+            exp_rewind = 4,
+        },
+        {
+            'decode_unchecked(cdata<char *>)',
+            data = ffi.cast('char *', '\x93\x01\x02\x03'),
+            exp_res = {1, 2, 3},
+            exp_rewind = 4,
+        },
+    }
+
+    test:plan(#cases)
+
+    for _, case in ipairs(cases) do
+        test:test(case[1], function(test)
+            test:plan(4)
+            local res, res_buf = s.decode_unchecked(case.data)
+            test:is_deeply(res, case.exp_res, 'verify result')
+            local rewind = res_buf - case.data
+            test:is(rewind, case.exp_rewind, 'verify resulting buffer')
+            -- test:iscdata() is not sufficient here, because it
+            -- ignores 'const' qualifier (because of using
+            -- ffi.istype()).
+            test:is(type(res_buf), 'cdata', 'verify resulting buffer type')
+            local data_ctype = tostring(ffi.typeof(case.data))
+            local res_buf_ctype = tostring(ffi.typeof(res_buf))
+            test:is(res_buf_ctype, data_ctype, 'verify resulting buffer ctype')
+        end)
+    end
+end
+
+
 tap.test("msgpackffi", function(test)
     local serializer = require('msgpackffi')
     test:plan(11)
@@ -149,5 +171,5 @@ tap.test("msgpackffi", function(test)
     --test:test("ucdata", common.test_ucdata, serializer)
     test:test("offsets", test_offsets, serializer)
     test:test("other", test_other, serializer)
-    test:test("types", test_types, serializer)
+    test:test("decode_buffer", test_decode_buffer, serializer)
 end)
