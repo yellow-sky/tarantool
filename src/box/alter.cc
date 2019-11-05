@@ -4110,6 +4110,7 @@ on_replace_dd_trigger(struct trigger * /* trigger */, void *event)
 
 	txn_stmt_on_rollback(stmt, on_rollback);
 	txn_stmt_on_commit(stmt, on_commit);
+	++schema_version;
 }
 
 /**
@@ -4565,6 +4566,7 @@ on_replace_dd_fk_constraint(struct trigger * /* trigger*/, void *event)
 		space_reset_fk_constraint_mask(child_space);
 		space_reset_fk_constraint_mask(parent_space);
 	}
+	++schema_version;
 }
 
 /** Create an instance of check constraint definition by tuple. */
@@ -4777,6 +4779,7 @@ on_replace_dd_ck_constraint(struct trigger * /* trigger*/, void *event)
 	txn_stmt_on_commit(stmt, on_commit);
 
 	trigger_run_xc(&on_alter_space, space);
+	++schema_version;
 }
 
 /** A trigger invoked on replace in the _func_index space. */
