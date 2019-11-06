@@ -41,12 +41,6 @@
 #include "scoped_guard.h"
 #include "coio_task.h" /* coio_resolve() */
 
-struct CoioGuard {
-	struct ev_io *ev_io;
-	CoioGuard(struct ev_io *arg) :ev_io(arg) {}
-	~CoioGuard() { ev_io_stop(loop(), ev_io); }
-};
-
 typedef void (*ev_stat_cb)(ev_loop *, ev_stat *, int);
 
 /** Note: this function does not throw */
@@ -65,12 +59,14 @@ coio_fiber_yield_timeout(struct ev_io *coio, ev_tstamp delay)
 	coio->data = fiber();
 	bool is_timedout = fiber_yield_timeout(delay);
 	coio->data = NULL;
+	if (is_timedout)
+		diag_set(TimedOut);
 	return is_timedout;
 }
 
 /**
  * Connect to a host with a specified timeout.
- * @retval -1 timeout
+ * @retval -1 error or timeout
  * @retval 0 connected
  */
 static int
@@ -79,36 +75,46 @@ coio_connect_addr(struct ev_io *coio, struct sockaddr *addr,
 {
 	ev_loop *loop = loop();
 	if (evio_socket(coio, addr->sa_family, SOCK_STREAM, 0) != 0)
-		diag_raise();
-	auto coio_guard = make_scoped_guard([=]{ evio_close(loop, coio); });
-	if (sio_connect(coio->fd, addr, len) == 0) {
-		coio_guard.is_active = false;
+		return -1;
+	if (sio_connect(coio->fd, addr, len) == 0)
 		return 0;
+	if (errno != EINPROGRESS) {
+		evio_close(loop, coio);
+		return -1;
 	}
-	if (errno != EINPROGRESS)
-		diag_raise();
 	/*
 	 * Wait until socket is ready for writing or
 	 * timed out.
 	 */
 	ev_io_set(coio, coio->fd, EV_WRITE);
 	ev_io_start(loop, coio);
-	bool is_timedout = coio_fiber_yield_timeout(coio, timeout);
+	bool is_timedout;
+	is_timedout = coio_fiber_yield_timeout(coio, timeout);
 	ev_io_stop(loop, coio);
-	fiber_testcancel();
-	if (is_timedout)
-		tnt_raise(TimedOut);
+	if (fiber_is_cancelled()) {
+		diag_set(FiberIsCancelled);
+		evio_close(loop, coio);
+		return -1;
+	}
+	if (is_timedout) {
+		evio_close(loop, coio);
+		return -1;
+	}
 	int error = EINPROGRESS;
 	socklen_t sz = sizeof(error);
 	if (sio_getsockopt(coio->fd, SOL_SOCKET, SO_ERROR,
-		       &error, &sz))
-		diag_raise();
+			   &error, &sz)) {
+		evio_close(loop, coio);
+		return -1;
+	}
 	if (error != 0) {
 		errno = error;
-		tnt_raise(SocketError, sio_socketname(coio->fd), "connect");
+		diag_set(SocketError, sio_socketname(coio->fd), "connect");
+		evio_close(loop, coio);
+		return -1;
 	}
-	coio_guard.is_active = false;
 	return 0;
+
 }
 
 void
@@ -152,7 +158,7 @@ coio_fill_addrinfo(struct addrinfo *ai_local, const char *host,
  * This function also supports UNIX domain sockets if uri->path is not NULL and
  * uri->service is NULL.
  *
- * @retval -1 timeout
+ * @retval -1 error or timeout
  * @retval 0 connected
  */
 int
@@ -201,52 +207,55 @@ coio_connect_timeout(struct ev_io *coio, struct uri *uri, struct sockaddr *addr,
 	    hints.ai_flags = AI_ADDRCONFIG|AI_NUMERICSERV|AI_PASSIVE;
 	    hints.ai_protocol = 0;
 	    int rc = coio_getaddrinfo(host, service, &hints, &ai, delay);
-	    if (rc != 0) {
-		    diag_raise();
-		    panic("unspecified getaddrinfo error");
-	    }
+	    if (rc != 0)
+			return -1;
 	}
-	auto addrinfo_guard = make_scoped_guard([=] {
-		if (!uri->host_hint) freeaddrinfo(ai);
-		else free(ai_local.ai_addr);
-	});
+	struct addrinfo *first_ai = ai;
 	evio_timeout_update(loop(), &start, &delay);
 
 	coio_timeout_init(&start, &delay, timeout);
 	assert(! evio_has_fd(coio));
-	while (ai) {
-		try {
-			if (coio_connect_addr(coio, ai->ai_addr,
-					      ai->ai_addrlen, delay))
-				return -1;
+	while (ai && delay >= 0) {
+		if (coio_connect_addr(coio, ai->ai_addr,
+				      ai->ai_addrlen, delay) == 0) {
 			if (addr != NULL) {
 				assert(addr_len != NULL);
 				*addr_len = MIN(ai->ai_addrlen, *addr_len);
 				memcpy(addr, ai->ai_addr, *addr_len);
 			}
+			if (!uri->host_hint)
+				freeaddrinfo(first_ai);
+			else
+				free(ai_local.ai_addr);
 			return 0; /* connected */
-		} catch (SocketError *e) {
-			if (ai->ai_next == NULL)
-				throw;
-			/* ignore exception and try the next address */
 		}
 		ai = ai->ai_next;
 		ev_now_update(loop);
 		coio_timeout_update(&start, &delay);
 	}
 
-	tnt_raise(SocketError, sio_socketname(coio->fd), "connection failed");
+	/* Set an error if not timedout. */
+	if (delay >= 0)
+		diag_set(SocketError, sio_socketname(coio->fd),
+			 "connection failed");
+	if (!uri->host_hint)
+		freeaddrinfo(first_ai);
+	else
+		free(ai_local.ai_addr);
+	return -1;
 }
 
 /* Do not allow to reuse coio by different fiber. */
-static inline void
+static inline int
 check_coio_in_use(struct ev_io *coio)
 {
 	if (ev_is_active(coio)) {
 		errno = EINPROGRESS;
-		tnt_raise(SocketError, sio_socketname(coio->fd),
-			  "already in use");
+		diag_set(SocketError, sio_socketname(coio->fd),
+			 "already in use");
+		return -1;
 	}
+	return 0;
 }
 
 /**
@@ -260,45 +269,61 @@ coio_accept(struct ev_io *coio, struct sockaddr *addr,
 	ev_tstamp start, delay;
 	coio_timeout_init(&start, &delay, timeout);
 
-	check_coio_in_use(coio);
-	CoioGuard coio_guard(coio);
+	if (check_coio_in_use(coio) != 0)
+		return -1;
 
-	while (true) {
-		/* Assume that there are waiting clients
-		 * available */
-		int fd = sio_accept(coio->fd, addr, &addrlen);
-		if (fd >= 0) {
-			if (evio_setsockopt_client(fd, addr->sa_family,
-						   SOCK_STREAM) != 0) {
-				close(fd);
-				diag_raise();
-			}
-			return fd;
+	/* Assume that there are waiting clients available */
+	int fd = sio_accept(coio->fd, addr, &addrlen);
+
+	if (fd >= 0) {
+		if (evio_setsockopt_client(fd, addr->sa_family,
+					   SOCK_STREAM) != 0) {
+			close(fd);
+			return -1;
 		}
-		if (! sio_wouldblock(errno))
-			diag_raise();
-		/* The socket is not ready, yield */
-		if (! ev_is_active(coio)) {
-			ev_io_set(coio, coio->fd, EV_READ);
-			ev_io_start(loop(), coio);
-		}
+		return fd;
+	}
+
+	if (!sio_wouldblock(errno))
+		return -1;
+
+	/* The socket is not ready, yield */
+	ev_io_set(coio, coio->fd, EV_READ);
+	ev_io_start(loop(), coio);
+
+	do {
 		/*
 		 * Yield control to other fibers until the
 		 * timeout is reached.
 		 */
 		bool is_timedout = coio_fiber_yield_timeout(coio, delay);
-		fiber_testcancel();
+		if (fiber_is_cancelled()) {
+			diag_set(FiberIsCancelled);
+			break;
+		}
 		if (is_timedout)
-			tnt_raise(TimedOut);
+			break;
 		coio_timeout_update(&start, &delay);
+		fd = sio_accept(coio->fd, addr, &addrlen);
+	} while (fd < 0 && sio_wouldblock(errno));
+
+	ev_io_stop(loop(), coio);
+
+	if (fd >= 0) {
+		if (evio_setsockopt_client(fd, addr->sa_family,
+					   SOCK_STREAM) != 0) {
+			close(fd);
+			return -1;
+		}
+		return fd;
 	}
+	return -1;
 }
 
 /**
  * Read at least sz bytes from socket with readahead.
  *
- * In case of EOF returns the amount read until eof (possibly 0),
- * and sets errno to 0.
+ * In case of EOF returns the amount read until eof (possibly 0).
  * Can read up to bufsiz bytes.
  *
  * @retval the number of bytes read.
@@ -313,46 +338,68 @@ coio_read_ahead_timeout(struct ev_io *coio, void *buf, size_t sz,
 	coio_timeout_init(&start, &delay, timeout);
 
 	ssize_t to_read = (ssize_t) sz;
+	if (to_read <= 0)
+		return 0;
 
-	check_coio_in_use(coio);
-	CoioGuard coio_guard(coio);
+	if (check_coio_in_use(coio) != 0)
+		return -1;
 
-	while (true) {
-		/*
-		 * Sic: assume the socket is ready: since
-		 * the user called read(), some data must
-		 * be expected.
-		 */
-		ssize_t nrd = sio_read(coio->fd, buf, bufsiz);
-		if (nrd > 0) {
-			to_read -= nrd;
-			if (to_read <= 0)
-				return sz - to_read;
-			buf = (char *) buf + nrd;
-			bufsiz -= nrd;
-		} else if (nrd == 0) {
-			errno = 0;
-			return sz - to_read;
-		} else if (! sio_wouldblock(errno)) {
-			diag_raise();
-		}
+	ssize_t nrd;
+	/*
+	 * Sic: assume the socket is ready: since
+	 * the user called read(), some data must
+	 * be expected.
+	 */
+	do {
+		nrd = sio_read(coio->fd, buf, bufsiz);
+		if (nrd <= 0)
+			break;
+		to_read -= nrd;
+		buf = (char *) buf + nrd;
+		bufsiz -= nrd;
+	} while (to_read > 0);
 
-		/* The socket is not ready, yield */
-		if (! ev_is_active(coio)) {
-			ev_io_set(coio, coio->fd, EV_READ);
-			ev_io_start(loop(), coio);
-		}
+	if (nrd >= 0)
+		return sz - to_read;
+
+	if (!sio_wouldblock(errno))
+		return -1;
+
+	/* The socket is not ready, yield */
+	ev_io_set(coio, coio->fd, EV_READ);
+	ev_io_start(loop(), coio);
+
+	do {
 		/*
 		 * Yield control to other fibers until the
 		 * timeout is being reached.
 		 */
-		bool is_timedout = coio_fiber_yield_timeout(coio,
-							    delay);
-		fiber_testcancel();
+		bool is_timedout = coio_fiber_yield_timeout(coio, delay);
+		if (fiber_is_cancelled()) {
+			diag_set(FiberIsCancelled);
+			break;
+		}
 		if (is_timedout)
-			tnt_raise(TimedOut);
+			break;
 		coio_timeout_update(&start, &delay);
-	}
+		nrd = sio_read(coio->fd, buf, bufsiz);
+		if (nrd == 0)
+			break;
+		if (nrd < 0) {
+			if (sio_wouldblock(errno))
+				continue;
+			break;
+		}
+		to_read -= nrd;
+		buf = (char *) buf + nrd;
+		bufsiz -= nrd;
+	} while (to_read > 0);
+
+	ev_io_stop(loop(), coio);
+
+	if (nrd < 0)
+		return -1;
+	return sz - to_read;
 }
 
 /**
@@ -366,10 +413,13 @@ ssize_t
 coio_readn_ahead(struct ev_io *coio, void *buf, size_t sz, size_t bufsiz)
 {
 	ssize_t nrd = coio_read_ahead(coio, buf, sz, bufsiz);
+	if (nrd < 0)
+		return -1;
 	if (nrd < (ssize_t)sz) {
 		errno = EPIPE;
-		tnt_raise(SocketError, sio_socketname(coio->fd),
-			  "unexpected EOF when reading from socket");
+		diag_set(SocketError, sio_socketname(coio->fd),
+			 "unexpected EOF when reading from socket");
+		return -1;
 	}
 	return nrd;
 }
@@ -386,10 +436,13 @@ coio_readn_ahead_timeout(struct ev_io *coio, void *buf, size_t sz, size_t bufsiz
 		         ev_tstamp timeout)
 {
 	ssize_t nrd = coio_read_ahead_timeout(coio, buf, sz, bufsiz, timeout);
-	if (nrd < (ssize_t)sz && errno == 0) { /* EOF. */
+	if (nrd < 0)
+		return -1;
+	if (nrd < (ssize_t)sz) { /* EOF. */
 		errno = EPIPE;
-		tnt_raise(SocketError, sio_socketname(coio->fd),
-			  "unexpected EOF when reading from socket");
+		diag_set(SocketError, sio_socketname(coio->fd),
+			 "unexpected EOF when reading from socket");
+		return -1;
 	}
 	return nrd;
 }
@@ -412,43 +465,62 @@ coio_write_timeout(struct ev_io *coio, const void *buf, size_t sz,
 	ev_tstamp start, delay;
 	coio_timeout_init(&start, &delay, timeout);
 
-	check_coio_in_use(coio);
-	CoioGuard coio_guard(coio);
+	if (towrite <= 0)
+		return 0;
+	if (check_coio_in_use(coio) != 0)
+		return -1;
 
-	while (true) {
-		/*
-		 * Sic: write as much data as possible,
-		 * assuming the socket is ready.
-		 */
-		ssize_t nwr = sio_write(coio->fd, buf, towrite);
-		if (nwr > 0) {
-			/* Go past the data just written. */
-			if (nwr >= towrite)
-				return sz;
-			towrite -= nwr;
-			buf = (char *) buf + nwr;
-		} else if (nwr < 0 && !sio_wouldblock(errno)) {
-			diag_raise();
-		}
-		if (! ev_is_active(coio)) {
-			ev_io_set(coio, coio->fd, EV_WRITE);
-			ev_io_start(loop(), coio);
-		}
-		/* Yield control to other fibers. */
-		fiber_testcancel();
+	ssize_t nwr;
+	/*
+	 * Sic: write as much data as possible,
+	 * assuming the socket is ready.
+	 */
+	do {
+		nwr = sio_write(coio->fd, buf, towrite);
+		if (nwr < 0)
+			break;
+		towrite -= nwr;
+		buf = (char *) buf + nwr;
+	} while (towrite > 0);
+
+	if (nwr > 0)
+		return sz;
+
+	if (!sio_wouldblock(errno))
+		return -1;
+
+	ev_io_set(coio, coio->fd, EV_WRITE);
+	ev_io_start(loop(), coio);
+
+	do {
 		/*
 		 * Yield control to other fibers until the
 		 * timeout is reached or the socket is
 		 * ready.
 		 */
-		bool is_timedout = coio_fiber_yield_timeout(coio,
-							    delay);
-		fiber_testcancel();
-
+		bool is_timedout = coio_fiber_yield_timeout(coio, delay);
+		if (fiber_is_cancelled()) {
+			diag_set(FiberIsCancelled);
+			break;
+		}
 		if (is_timedout)
-			tnt_raise(TimedOut);
+			break;
 		coio_timeout_update(&start, &delay);
-	}
+		nwr = sio_write(coio->fd, buf, towrite);
+		if (nwr < 0) {
+			if (sio_wouldblock(errno))
+				continue;
+			break;
+		}
+		towrite -= nwr;
+		buf = (char *) buf + nwr;
+	} while (towrite > 0);
+
+	ev_io_stop(loop(), coio);
+
+	if (nwr < 0)
+		return -1;
+	return sz;
 }
 
 /*
@@ -456,66 +528,83 @@ coio_write_timeout(struct ev_io *coio, const void *buf, size_t sz,
  * Put in an own function to workaround gcc bug with @finally
  */
 static inline ssize_t
-coio_flush(int fd, struct iovec *iov, ssize_t offset, int iovcnt)
+coio_flush(int fd, struct iovec **iov, size_t *offset, int iovcnt)
 {
-	sio_add_to_iov(iov, -offset);
-	ssize_t nwr = sio_writev(fd, iov, iovcnt);
-	sio_add_to_iov(iov, offset);
-	if (nwr < 0 && ! sio_wouldblock(errno))
-		diag_raise();
+	sio_add_to_iov(*iov, -*offset);
+	ssize_t nwr = sio_writev(fd, *iov, iovcnt);
+	sio_add_to_iov(*iov, *offset);
+	if (nwr < 0 && !sio_wouldblock(errno))
+		return -1;
+	if (nwr < 0)
+		return 0;
+	/* Successful write adjust iov and offset. */
+	*iov += sio_move_iov(*iov, nwr, offset);
 	return nwr;
 }
 
 ssize_t
 coio_writev_timeout(struct ev_io *coio, struct iovec *iov, int iovcnt,
-		    size_t size_hint, ev_tstamp timeout)
+		    ev_tstamp timeout)
 {
 	size_t total = 0;
 	size_t iov_len = 0;
 	struct iovec *end = iov + iovcnt;
 	ev_tstamp start, delay;
 	coio_timeout_init(&start, &delay, timeout);
-	check_coio_in_use(coio);
-	CoioGuard coio_guard(coio);
 
+	if (iovcnt == 0)
+		return 0;
+
+	if (check_coio_in_use(coio) != 0)
+		return -1;
+
+	ssize_t nwr;
 	/* Avoid a syscall in case of 0 iovcnt. */
-	while (iov < end) {
-		/* Write as much data as possible. */
-		ssize_t nwr = coio_flush(coio->fd, iov, iov_len,
-					 end - iov);
-		if (nwr >= 0) {
-			total += nwr;
-			/*
-			 * If there was a hint for the total size
-			 * of the vector, use it.
-			 */
-			if (size_hint > 0 && size_hint == total)
-				break;
+	do {
+		nwr = coio_flush(coio->fd, &iov, &iov_len, end - iov);
+		if (nwr < 0)
+			break;
+		total += nwr;
 
-			iov += sio_move_iov(iov, nwr, &iov_len);
-			if (iov == end) {
-				assert(iov_len == 0);
-				break;
-			}
-		}
-		if (! ev_is_active(coio)) {
-			ev_io_set(coio, coio->fd, EV_WRITE);
-			ev_io_start(loop(), coio);
-		}
-		/* Yield control to other fibers. */
-		fiber_testcancel();
+	} while (iov < end);
+
+	assert(nwr < 0 || iov_len == 0);
+	if (nwr > 0)
+		return total;
+
+	if (!sio_wouldblock(errno))
+		return -1;
+
+	ev_io_set(coio, coio->fd, EV_WRITE);
+	ev_io_start(loop(), coio);
+	do {
 		/*
 		 * Yield control to other fibers until the
 		 * timeout is reached or the socket is
 		 * ready.
 		 */
 		bool is_timedout = coio_fiber_yield_timeout(coio, delay);
-		fiber_testcancel();
-
+		if (fiber_is_cancelled()) {
+			diag_set(FiberIsCancelled);
+			break;
+		}
 		if (is_timedout)
-			tnt_raise(TimedOut);
+			break;
 		coio_timeout_update(&start, &delay);
-	}
+		nwr = coio_flush(coio->fd, &iov, &iov_len, end - iov);
+		if (nwr < 0) {
+			if (sio_wouldblock(errno))
+				continue;
+			break;
+		}
+		total += nwr;
+	} while (iov < end);
+
+	ev_io_stop(loop(), coio);
+
+	if (nwr < 0)
+		return -1;
+	assert(iov_len == 0);
 	return total;
 }
 
@@ -533,36 +622,40 @@ coio_sendto_timeout(struct ev_io *coio, const void *buf, size_t sz, int flags,
 	ev_tstamp start, delay;
 	coio_timeout_init(&start, &delay, timeout);
 
-	check_coio_in_use(coio);
-	CoioGuard coio_guard(coio);
+	if (check_coio_in_use(coio) != 0)
+		return -1;
 
-	while (true) {
-		/*
-		 * Sic: write as much data as possible,
-		 * assuming the socket is ready.
-		 */
-		ssize_t nwr = sio_sendto(coio->fd, buf, sz,
-					 flags, dest_addr, addrlen);
-		if (nwr > 0)
-			return nwr;
-		if (nwr < 0 && ! sio_wouldblock(errno))
-			diag_raise();
-		if (! ev_is_active(coio)) {
-			ev_io_set(coio, coio->fd, EV_WRITE);
-			ev_io_start(loop(), coio);
-		}
+	/*
+	 * Sic: write as much data as possible,
+	 * assuming the socket is ready.
+	 */
+	ssize_t nwr = sio_sendto(coio->fd, buf, sz, flags, dest_addr, addrlen);
+	if (nwr > 0 || !sio_wouldblock(errno))
+		return nwr;
+
+	ev_io_set(coio, coio->fd, EV_WRITE);
+	ev_io_start(loop(), coio);
+	do {
 		/*
 		 * Yield control to other fibers until
 		 * timeout is reached or the socket is
 		 * ready.
 		 */
-		bool is_timedout = coio_fiber_yield_timeout(coio,
-							    delay);
-		fiber_testcancel();
+		bool is_timedout = coio_fiber_yield_timeout(coio, delay);
+		if (fiber_is_cancelled()) {
+			diag_set(FiberIsCancelled);
+			break;
+		}
 		if (is_timedout)
-			tnt_raise(TimedOut);
+			break;
 		coio_timeout_update(&start, &delay);
-	}
+		nwr = sio_sendto(coio->fd, buf, sz, flags, dest_addr,
+				 addrlen);
+	} while (nwr < 0 && sio_wouldblock(errno));
+
+	ev_io_stop(loop(), coio);
+
+	return nwr;
 }
 
 /**
@@ -579,36 +672,41 @@ coio_recvfrom_timeout(struct ev_io *coio, void *buf, size_t sz, int flags,
 	ev_tstamp start, delay;
 	coio_timeout_init(&start, &delay, timeout);
 
-	check_coio_in_use(coio);
-	CoioGuard coio_guard(coio);
+	if (check_coio_in_use(coio) != 0)
+		return -1;
 
-	while (true) {
-		/*
-		 * Read as much data as possible,
-		 * assuming the socket is ready.
-		 */
-		ssize_t nrd = sio_recvfrom(coio->fd, buf, sz, flags,
-					   src_addr, &addrlen);
-		if (nrd >= 0)
-			return nrd;
-		if (! sio_wouldblock(errno))
-			diag_raise();
-		if (! ev_is_active(coio)) {
-			ev_io_set(coio, coio->fd, EV_READ);
-			ev_io_start(loop(), coio);
-		}
+	/*
+	 * Read as much data as possible,
+	 * assuming the socket is ready.
+	 */
+	ssize_t nrd = sio_recvfrom(coio->fd, buf, sz, flags,
+				   src_addr, &addrlen);
+	if (nrd >= 0 || !sio_wouldblock(errno))
+		return nrd;
+
+	ev_io_set(coio, coio->fd, EV_READ);
+	ev_io_start(loop(), coio);
+	do {
 		/*
 		 * Yield control to other fibers until
 		 * timeout is reached or the socket is
 		 * ready.
 		 */
-		bool is_timedout = coio_fiber_yield_timeout(coio,
-							    delay);
-		fiber_testcancel();
+		bool is_timedout = coio_fiber_yield_timeout(coio, delay);
+		if (fiber_is_cancelled()) {
+			diag_set(FiberIsCancelled);
+			break;
+		}
 		if (is_timedout)
-			tnt_raise(TimedOut);
+			break;
 		coio_timeout_update(&start, &delay);
-	}
+		nrd = sio_recvfrom(coio->fd, buf, sz, flags,
+				   src_addr, &addrlen);
+	} while (nrd < 0 && sio_wouldblock(errno));
+
+	ev_io_stop(loop(), coio);
+
+	return nrd;
 }
 
 static int
@@ -655,12 +753,13 @@ coio_service_init(struct coio_service *service, const char *name,
 	service->handler_param = handler_param;
 }
 
-void
+int
 coio_service_start(struct evio_service *service, const char *uri)
 {
 	if (evio_service_bind(service, uri) != 0 ||
 	    evio_service_listen(service) != 0)
-		diag_raise();
+		return -1;
+	return 0;
 }
 
 void
@@ -678,7 +777,6 @@ coio_stat_stat_timeout(ev_stat *stat, ev_tstamp timeout)
 	coio_timeout_init(&start, &delay, timeout);
 	fiber_yield_timeout(delay);
 	ev_stat_stop(loop(), stat);
-	fiber_testcancel();
 }
 
 typedef void (*ev_child_cb)(ev_loop *, ev_child *, int);
@@ -706,7 +804,6 @@ coio_waitpid(pid_t pid)
 	fiber_set_cancellable(allow_cancel);
 	ev_child_stop(loop(), &cw);
 	int status = cw.rstatus;
-	fiber_testcancel();
 	return status;
 }
 

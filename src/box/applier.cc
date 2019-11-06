@@ -173,8 +173,9 @@ applier_writer_f(va_list ap)
 			continue;
 		try {
 			struct xrow_header xrow;
-			xrow_encode_vclock(&xrow, &replicaset.vclock);
-			coio_write_xrow(&io, &xrow);
+			if (xrow_encode_vclock(&xrow, &replicaset.vclock) != 0 ||
+			    coio_write_xrow(&io, &xrow) < 0)
+				diag_raise();
 		} catch (SocketError *e) {
 			/*
 			 * There is no point trying to send ACKs if
@@ -308,9 +309,11 @@ applier_connect(struct applier *applier)
 	 */
 	applier->addr_len = sizeof(applier->addrstorage);
 	applier_set_state(applier, APPLIER_CONNECT);
-	coio_connect(coio, uri, &applier->addr, &applier->addr_len);
+	if (coio_connect(coio, uri, &applier->addr, &applier->addr_len) != 0)
+		diag_raise();
 	assert(coio->fd >= 0);
-	coio_readn(coio, greetingbuf, IPROTO_GREETING_SIZE);
+	if (coio_readn(coio, greetingbuf, IPROTO_GREETING_SIZE) < 0)
+		diag_raise();
 	applier->last_row_time = ev_monotonic_now(loop());
 
 	/* Decode instance version and name from greeting */
@@ -345,8 +348,9 @@ applier_connect(struct applier *applier)
 	 * election on bootstrap.
 	 */
 	xrow_encode_vote(&row);
-	coio_write_xrow(coio, &row);
-	coio_read_xrow(coio, ibuf, &row);
+	if (coio_write_xrow(coio, &row) < 0 ||
+	    coio_read_xrow(coio, ibuf, &row) < 0)
+		diag_raise();
 	if (row.type == IPROTO_OK) {
 		xrow_decode_ballot_xc(&row, &applier->ballot);
 	} else try {
@@ -376,8 +380,9 @@ applier_connect(struct applier *applier)
 			    uri->login_len,
 			    uri->password != NULL ? uri->password : "",
 			    uri->password_len);
-	coio_write_xrow(coio, &row);
-	coio_read_xrow(coio, ibuf, &row);
+	if (coio_write_xrow(coio, &row) < 0 ||
+	    coio_read_xrow(coio, ibuf, &row) < 0)
+		diag_raise();
 	applier->last_row_time = ev_monotonic_now(loop());
 	if (row.type != IPROTO_OK)
 		xrow_decode_error_xc(&row); /* auth failed */
@@ -401,7 +406,8 @@ applier_wait_snapshot(struct applier *applier)
 	 */
 	if (applier->version_id >= version_id(1, 7, 0)) {
 		/* Decode JOIN/FETCH_SNAPSHOT response */
-		coio_read_xrow(coio, ibuf, &row);
+		if (coio_read_xrow(coio, ibuf, &row) < 0)
+			diag_raise();
 		if (iproto_type_is_error(row.type)) {
 			xrow_decode_error_xc(&row); /* re-throw error */
 		} else if (row.type != IPROTO_OK) {
@@ -422,7 +428,8 @@ applier_wait_snapshot(struct applier *applier)
 	 */
 	uint64_t row_count = 0;
 	while (true) {
-		coio_read_xrow(coio, ibuf, &row);
+		if (coio_read_xrow(coio, ibuf, &row) < 0)
+			diag_raise();
 		applier->last_row_time = ev_monotonic_now(loop());
 		if (iproto_type_is_dml(row.type)) {
 			if (apply_snapshot_row(&row) != 0)
@@ -488,7 +495,8 @@ applier_wait_register(struct applier *applier, uint64_t row_count)
 	 * Receive final data.
 	 */
 	while (true) {
-		coio_read_xrow(coio, ibuf, &row);
+		if (coio_read_xrow(coio, ibuf, &row) < 0)
+			diag_raise();
 		applier->last_row_time = ev_monotonic_now(loop());
 		if (iproto_type_is_dml(row.type)) {
 			vclock_follow_xrow(&replicaset.vclock, &row);
@@ -605,10 +613,13 @@ applier_read_tx_row(struct applier *applier)
 	 * from the master for quite a while the connection is
 	 * broken - the master might just be idle.
 	 */
-	if (applier->version_id < version_id(1, 7, 7))
-		coio_read_xrow(coio, ibuf, row);
-	else
-		coio_read_xrow_timeout_xc(coio, ibuf, row, timeout);
+	if (applier->version_id < version_id(1, 7, 7)) {
+		if (coio_read_xrow(coio, ibuf, row) < 0)
+			diag_raise();
+	} else {
+		if (coio_read_xrow_timeout(coio, ibuf, row, timeout) < 0)
+			diag_raise();
+	}
 
 	applier->lag = ev_now(loop()) - row->tm;
 	applier->last_row_time = ev_monotonic_now(loop());
@@ -868,11 +879,13 @@ applier_subscribe(struct applier *applier)
 	vclock_copy(&vclock, &replicaset.vclock);
 	xrow_encode_subscribe_xc(&row, &REPLICASET_UUID, &INSTANCE_UUID,
 				 &vclock, replication_anon);
-	coio_write_xrow(coio, &row);
+	if (coio_write_xrow(coio, &row) < 0)
+		diag_raise();
 
 	/* Read SUBSCRIBE response */
 	if (applier->version_id >= version_id(1, 6, 7)) {
-		coio_read_xrow(coio, ibuf, &row);
+		if (coio_read_xrow(coio, ibuf, &row) < 0)
+			diag_raise();
 		if (iproto_type_is_error(row.type)) {
 			xrow_decode_error_xc(&row);  /* error */
 		} else if (row.type != IPROTO_OK) {
@@ -1009,7 +1022,7 @@ applier_disconnect(struct applier *applier, enum applier_state state)
 		applier->writer = NULL;
 	}
 
-	coio_close(loop(), &applier->io);
+	coio_destroy(loop(), &applier->io);
 	/* Clear all unparsed input. */
 	ibuf_reinit(&applier->ibuf);
 	fiber_gc();
