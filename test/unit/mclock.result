@@ -1,0 +1,18 @@
+1..2
+    1..1
+	*** test_random_stress ***
+    ok 1 - random stress
+	*** test_random_stress: done ***
+ok 1 - subtests
+    1..8
+	*** test_func ***
+    ok 1 - consistency 1
+    ok 2 - first vclock 1
+    ok 3 - last vclock 1
+    ok 4 - second vclock
+    ok 5 - consistency 2
+    ok 6 - consistency 3
+    ok 7 - first vclock - 2
+    ok 8 - last vclock - 2
+	*** test_func: done ***
+ok 2 - subtests
