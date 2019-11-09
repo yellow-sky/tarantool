@@ -16,9 +16,9 @@ box.cfg{replication = ""}
 test_run:cmd("switch master_quorum2")
 box.error.injection.set("ERRINJ_WAL_MEM_IGNORE", true)
 box.space.test:insert{1}
-box.snapshot()
+box.internal.wal_rotate() box.snapshot()
 box.space.test:insert{2}
-box.snapshot()
+box.internal.wal_rotate() box.snapshot()
 
 -- Manually remove all xlogs on master_quorum2 to break replication to master_quorum1.
 fio = require('fio')

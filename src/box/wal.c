@@ -614,6 +614,32 @@ wal_sync(struct vclock *vclock)
 	return rc;
 }
 
+static void
+wal_rotate_f(struct cmsg *base)
+{
+	struct wal_writer *writer = &wal_writer_singleton;
+	if (xlog_is_open(&writer->current_wal) &&
+	    vclock_sum(&writer->current_wal.meta.vclock) !=
+	    vclock_sum(&writer->vclock))
+		xlog_close(&writer->current_wal, false);
+	free(base);
+}
+
+int
+wal_rotate()
+{
+	struct wal_writer *writer = &wal_writer_singleton;
+
+	struct cmsg *base = (struct cmsg *)malloc(sizeof(struct cmsg));
+	if (base == NULL) {
+		diag_set(OutOfMemory, sizeof(struct cmsg),
+			 "runtime", "struct cmsg");
+		return -1;
+	}
+	cpipe_push(&writer->wal_pipe, wal_rotate_f, base);
+	return 0;
+}
+
 static int
 wal_begin_checkpoint_f(struct cbus_call_msg *data)
 {
@@ -627,20 +653,6 @@ wal_begin_checkpoint_f(struct cbus_call_msg *data)
 		 */
 		diag_set(ClientError, ER_CHECKPOINT_ROLLBACK);
 		return -1;
-	}
-	/*
-	 * Avoid closing the current WAL if it has no rows (empty).
-	 */
-	if (xlog_is_open(&writer->current_wal) &&
-	    vclock_sum(&writer->current_wal.meta.vclock) !=
-	    vclock_sum(&writer->vclock)) {
-
-		xlog_close(&writer->current_wal, false);
-		/*
-		 * The next WAL will be created on the first write.
-		 */
-		if (writer->gc_wal_vclock == NULL)
-			writer->gc_wal_vclock = second_vclock(writer);
 	}
 	vclock_copy(&msg->vclock, &writer->vclock);
 	msg->wal_size = writer->checkpoint_wal_size;
@@ -804,6 +816,9 @@ wal_set_gc_first_vclock_f(struct cbus_call_msg *base)
 	struct wal_writer *writer = &wal_writer_singleton;
 	struct wal_set_gc_first_vclock_msg *msg =
 		container_of(base, struct wal_set_gc_first_vclock_msg, base);
+	/* New log should be opened after this checkpoint, update gc state. */
+	if (writer->gc_wal_vclock == NULL)
+		writer->gc_wal_vclock = second_vclock(writer);
 	if (writer->gc_wal_vclock != NULL &&
 	    vclock_order_changed(&writer->gc_first_vclock,
 				 writer->gc_wal_vclock, msg->vclock))
