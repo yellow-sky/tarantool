@@ -3229,6 +3229,48 @@ on_drop_collation_rollback(struct trigger *trigger, void *event)
 }
 
 /**
+ * Check if collation is referenced by any space. If so return -1.
+ * If collation is mentioned in no one space or index definition,
+ * return 0.
+ */
+static int
+space_check_coll_entry(struct space *space, void *data)
+{
+	uint32_t coll_id = *(uint32_t *) data;
+	for (uint32_t i = 0; i < space->index_count; ++i) {
+		struct index *idx = space->index[i];
+		for (uint32_t j = 0; j < idx->def->key_def->part_count; ++j) {
+			struct key_part kp = idx->def->key_def->parts[j];
+			if (kp.coll_id == coll_id) {
+				char *id_str = tt_static_buf();
+				sprintf(id_str, "%u", coll_id);
+				char *msg = tt_static_buf();
+				sprintf(msg, "index %d of space %s has "
+					     "references to collation",
+					idx->def->iid, space->def->name);
+				diag_set(ClientError, ER_DROP_COLLATION, id_str,
+					 msg);
+				return -1;
+			}
+		}
+		for (uint32_t j = 0; j < space->def->field_count; ++j) {
+			if (space->def->fields[j].coll_id == coll_id) {
+				char *id_str = tt_static_buf();
+				sprintf(id_str, "%u", coll_id);
+				char *msg = tt_static_buf();
+				sprintf(msg, "format of space %s has "
+					      "references to collation",
+					space->def->name);
+				diag_set(ClientError, ER_DROP_COLLATION, id_str,
+					 msg);
+				return -1;
+			}
+		}
+	}
+	return 0;
+}
+
+/**
  * A trigger invoked on replace in a space containing
  * collations that a user defined.
  */
@@ -3248,11 +3290,13 @@ on_replace_dd_collation(struct trigger * /* trigger */, void *event)
 		if (on_commit == NULL || on_rollback == NULL)
 			return -1;
 		/*
-		 * TODO: Check that no index uses the collation
-		 * identifier.
+		 * Check that no index or space format uses the
+		 * collation identifier.
 		 */
 		int32_t old_id = tuple_field_u32_xc(old_tuple,
 						    BOX_COLLATION_FIELD_ID);
+		if (space_foreach(space_check_coll_entry, &old_id) != 0)
+			return -1;
 		/*
 		 * Don't allow user to drop "none" collation
 		 * since it is very special and vastly used

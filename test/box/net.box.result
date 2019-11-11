@@ -2944,10 +2944,10 @@ end
 c:close()
 ---
 ...
-box.internal.collation.drop('test')
+space:drop()
 ---
 ...
-space:drop()
+box.internal.collation.drop('test')
 ---
 ...
 c.state

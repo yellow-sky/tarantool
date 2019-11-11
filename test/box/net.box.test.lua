@@ -1209,8 +1209,8 @@ else                                             \
     return parts[1].collation_id == collation_id \
 end
 c:close()
-box.internal.collation.drop('test')
 space:drop()
+box.internal.collation.drop('test')
 c.state
 c = nil
 

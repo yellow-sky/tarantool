@@ -343,3 +343,14 @@ s:insert{'ё'}
 s:select{}
 s:drop()
 
+-- gh-4544: make sure that collation can't be dropped until it
+-- is referenced by space or index.
+--
+box.internal.collation.create('c', 'ICU', 'unicode')
+coll_id = box.space._collation.index.name:get({'c'})[1]
+box.execute([[CREATE TABLE things (id STRING COLLATE "unicode" PRIMARY KEY, a STRING COLLATE "c");]])
+box.space._collation:delete(1)
+box.space._collation:delete(coll_id)
+box.internal.collation.drop('c')
+box.space.THINGS:drop()
+box.internal.collation.drop('c')
