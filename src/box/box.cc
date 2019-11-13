@@ -325,7 +325,7 @@ recovery_journal_create(struct recovery_journal *journal, struct vclock *v)
 	journal->vclock = v;
 }
 
-static void
+static int
 apply_wal_row(struct xstream *stream, struct xrow_header *row)
 {
 	struct request request;
@@ -334,7 +334,7 @@ apply_wal_row(struct xstream *stream, struct xrow_header *row)
 		struct space *space = space_cache_find_xc(request.space_id);
 		if (box_process_rw(&request, space, NULL) != 0) {
 			say_error("error applying row: %s", request_str(&request));
-			diag_raise();
+			return -1;
 		}
 	}
 	struct wal_stream *xstream =
@@ -345,6 +345,7 @@ apply_wal_row(struct xstream *stream, struct xrow_header *row)
 	 */
 	if (++xstream->rows % WAL_ROWS_PER_YIELD == 0)
 		fiber_sleep(0);
+	return 0;
 }
 
 static void
