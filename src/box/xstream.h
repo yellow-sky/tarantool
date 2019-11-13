@@ -41,7 +41,7 @@ extern "C" {
 struct xrow_header;
 struct xstream;
 
-typedef void (*xstream_write_f)(struct xstream *, struct xrow_header *);
+typedef int (*xstream_write_f)(struct xstream *, struct xrow_header *);
 
 struct xstream {
 	xstream_write_f write;
@@ -53,8 +53,11 @@ xstream_create(struct xstream *xstream, xstream_write_f write)
 	xstream->write = write;
 }
 
-int
-xstream_write(struct xstream *stream, struct xrow_header *row);
+static inline int
+xstream_write(struct xstream *stream, struct xrow_header *row)
+{
+	return stream->write(stream, row);
+}
 
 #if defined(__cplusplus)
 } /* extern C */
