@@ -299,7 +299,7 @@ struct wal_stream {
  */
 struct recovery_journal {
 	struct journal base;
-	struct vclock *vclock;
+	struct vclock vclock;
 };
 
 /**
@@ -312,16 +312,22 @@ recovery_journal_write(struct journal *base,
 		       struct journal_entry *entry)
 {
 	struct recovery_journal *journal = (struct recovery_journal *) base;
-	entry->res = vclock_sum(journal->vclock);
+	for (struct xrow_header **row = entry->rows;
+	     row < entry->rows + entry->n_rows; ++row) {
+		vclock_follow_xrow(&journal->vclock, *row);
+	}
+	entry->res = vclock_sum(&journal->vclock);
+	/* Assume the entry was committed and adjust replicaset vclock. */
+	vclock_copy(&replicaset.vclock, &journal->vclock);
 	journal_entry_complete(entry);
 	return 0;
 }
 
 static inline void
-recovery_journal_create(struct recovery_journal *journal, struct vclock *v)
+recovery_journal_create(struct recovery_journal *journal, const struct vclock *v)
 {
 	journal_create(&journal->base, recovery_journal_write, NULL);
-	journal->vclock = v;
+	vclock_copy(&journal->vclock, v);
 }
 
 static int
@@ -335,6 +341,15 @@ apply_wal_row(struct xstream *stream, struct xrow_header *row)
 			say_error("error applying row: %s", request_str(&request));
 			return -1;
 		}
+	} else {
+		struct txn *txn = txn_begin();
+		if (txn == NULL || txn_begin_stmt(txn, NULL) != 0 ||
+		    txn_commit_stmt(txn, &request) != 0) {
+			txn_rollback(txn);
+			return -1;
+		}
+		if (txn_commit(txn) != 0)
+			return -1;
 	}
 	struct wal_stream *xstream =
 		container_of(stream, struct wal_stream, base);
@@ -2070,11 +2085,7 @@ local_recovery(const struct tt_uuid *instance_uuid,
 	struct memtx_engine *memtx;
 	memtx = (struct memtx_engine *)engine_by_name("memtx");
 	assert(memtx != NULL);
-
-	struct recovery_journal journal;
-	recovery_journal_create(&journal, &recovery->vclock);
-	journal_set(&journal.base);
-
+	vclock_copy(&replicaset.vclock, checkpoint_vclock);
 	/*
 	 * We explicitly request memtx to recover its
 	 * snapshot as a separate phase since it contains
@@ -2083,6 +2094,11 @@ local_recovery(const struct tt_uuid *instance_uuid,
 	 * other engines.
 	 */
 	memtx_engine_recover_snapshot_xc(memtx, checkpoint_vclock);
+
+	vclock_copy(&replicaset.vclock, checkpoint_vclock);
+	struct recovery_journal journal;
+	recovery_journal_create(&journal, &recovery->vclock);
+	journal_set(&journal.base);
 
 	engine_begin_final_recovery_xc();
 	if (recover_remaining_wals(recovery, &wal_stream.base, NULL, false) != 0)
@@ -2115,11 +2131,6 @@ local_recovery(const struct tt_uuid *instance_uuid,
 		if (recover_remaining_wals(recovery, &wal_stream.base, NULL,
 					   true) != 0)
 			diag_raise();
-		/*
-		 * Advance replica set vclock to reflect records
-		 * applied in hot standby mode.
-		 */
-		vclock_copy(&replicaset.vclock, &recovery->vclock);
 		box_listen();
 		box_sync_replication(false);
 	}
