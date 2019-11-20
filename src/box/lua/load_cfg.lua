@@ -533,12 +533,24 @@ local function load_cfg(cfg)
     end
     setmetatable(box, nil)
     box_configured = nil
-    box.cfg = setmetatable(cfg,
+
+    local actual = cfg
+    box.cfg = setmetatable({},
         {
             __newindex = function(table, index)
                 error('Attempt to modify a read-only table')
             end,
             __call = locked(reload_cfg),
+            __index = function (self, k)
+                return actual[k]
+            end,
+            __serialize = function() return actual end,
+            __pairs = function(self)
+                local function iter(actual, k)
+                    return next(actual, k)
+                end
+                return iter, actual, nil
+            end
         })
     private.cfg_load()
     for key, fun in pairs(dynamic_cfg) do

@@ -6,7 +6,7 @@ local socket = require('socket')
 local fio = require('fio')
 local uuid = require('uuid')
 local msgpack = require('msgpack')
-test:plan(104)
+test:plan(105)
 
 --------------------------------------------------------------------------------
 -- Invalid values
@@ -592,6 +592,15 @@ box.cfg{read_only=true}
 ]]
 test:is(run_script(code), PANIC, "panic on bootstrapping a read-only instance as master")
 
+--
+-- gf-2867 raise on raw modifications of box.cfg values
+--
+code = [[
+box.cfg{}
+box.cfg["read_only"] = true
+]]
+
+test:is(run_script(code), PANIC, "attempt to modify a read-only table")
 
 test:check()
 os.exit(0)
