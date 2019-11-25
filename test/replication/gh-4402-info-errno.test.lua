@@ -23,3 +23,5 @@ d = i.replication[replica_id].downstream
 d ~= nil and d.system_message ~= nil and d.message ~= nil or i
 
 box.schema.user.revoke('guest', 'replication')
+
+test_run:cleanup_cluster()

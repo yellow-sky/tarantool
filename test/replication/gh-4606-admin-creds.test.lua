@@ -24,3 +24,5 @@ test_run:cmd("delete server replica_auth")
 
 box.schema.user.passwd('admin', '')
 box.schema.user.revoke('admin', 'replication')
+
+test_run:cleanup_cluster()

@@ -25,3 +25,5 @@ test_run:cmd("cleanup server replica_auth")
 test_run:cmd("delete server replica_auth")
 
 box.schema.user.drop('test_user')
+
+test_run:cleanup_cluster()
