@@ -5,6 +5,7 @@ package.path = "lua/?.lua;"..package.path
 local tap = require('tap')
 local common = require('serializer_test')
 local ffi = require('ffi')
+local msgpack = require('msgpack')
 
 local function is_map(s)
     local b = string.byte(string.sub(s, 1, 1))
@@ -34,6 +35,86 @@ local function test_offsets(test, s)
     test:is(offset, 9, "offset of end")
 
     test:ok(not pcall(s.decode, dump, offset), "invalid offset")
+end
+
+local function test_configs(test, s)
+    test:plan(26)
+    --
+    -- gh-4499: ffi module should consider msgpack.cfg options
+    --
+
+    -- only excessively sparse arrays should be encoded as maps,
+    -- i.e. encode_sparse_ratio > 0 && max_idx > encode_sparse_safe
+    -- && max_idx > num(elements) * encode_sparse_ratio
+    test:ok(is_array(s.encode({ [1] = 1, [3] = 3, [4] = 3 })),
+        "not excessively sparse")
+    test:ok(is_array(s.encode({ [1] = 1, [2] = 2, [3] = 3, [4] = 4, [5] = 5,
+        [11] = 6 })), "still not excessively sparse")
+    test:ok(is_map(s.encode({ [1] = 1, [2] = 2, [100] = 3 })),
+        "is excessively sparse")
+
+    msgpack.cfg({encode_sparse_convert = false})
+    local ok, _ = pcall(s.encode(), { [1] = 1, [2] = 2, [100] = 3 })
+    test:ok(not ok, "conversion of sparse tables is manually prohibited")
+
+    -- testing (en/de)coding of invalid numbers
+    local inf = 1/0
+    local minf = -1/0
+    local nan = 0/0
+
+    test:ok(s.decode(s.encode(inf)), "decode & encode for inf")
+    test:ok(s.decode(s.encode(minf)), "decode & encode for minf")
+    test:ok(s.decode(s.encode(nan)), "decode & encode for nan")
+
+    msgpack.cfg({encode_invalid_numbers = false})
+    test:ok(not pcall(s.encode, inf), "prohibited encode for inf")
+    test:ok(not pcall(s.encode, minf), "prohibited encode for minf")
+    test:ok(not pcall(s.encode, nan), "prohibited encode for nan")
+
+    msgpack.cfg({decode_invalid_numbers = false})
+    test:ok(not pcall(s.decode, inf), "prohibited decode for inf")
+    test:ok(not pcall(s.decode, minf), "prohibited decode for minf")
+    test:ok(not pcall(s.decode, nan), "prohibited decode for nan")
+
+    -- invalid numbers can also be encoded as nil values
+    msgpack.cfg({decode_invalid_numbers = true, encode_invalid_as_nil = true})
+    test:is(s.decode(s.encode(inf)), nil, "invalid_as_nil for inf")
+    test:is(s.decode(s.encode(minf)), nil, "invalid_as_nil for minf")
+    test:is(s.decode(s.encode(nan)), nil, "invalid_as_nil for nan")
+
+    -- whether __serialize meta-value checking is enabled
+    local arr = setmetatable({1, 2, 3, k1 = 'v1', k2 = 'v2', 4, 5},
+        { __serialize = 'seq'})
+    local map = setmetatable({1, 2, 3, 4, 5}, { __serialize = 'map'})
+    local obj = setmetatable({}, {
+        __serialize = function(x) return 'serialize' end
+    })
+
+    -- testing encode metatables
+    msgpack.cfg{encode_load_metatables = false}
+    test:ok(is_map(s.encode(arr)), "array ignore __serialize")
+    test:ok(is_array(s.encode(map)), "map ignore __serialize")
+    test:ok(is_array(s.encode(obj)), "object ignore __serialize")
+
+    msgpack.cfg{encode_load_metatables = true}
+    test:ok(is_array(s.encode(arr)), "array load __serialize")
+    test:ok(is_map(s.encode(map)), "map load __serialize")
+    test:is(s.decode(s.encode(obj)), "serialize", "object load __serialize")
+
+    -- testing decode metatables
+    msgpack.cfg{decode_save_metatables = false}
+    test:isnil(getmetatable(s.decode(s.encode(arr))), "array __serialize")
+    test:isnil(getmetatable(s.decode(s.encode(map))), "map __serialize")
+
+    msgpack.cfg{decode_save_metatables = true}
+    test:is(getmetatable(s.decode(s.encode(arr))).__serialize, "seq",
+        "array save __serialize")
+    test:is(getmetatable(s.decode(s.encode(map))).__serialize, "map",
+        "map save __serialize")
+
+    -- applying default configs
+    msgpack.cfg({encode_sparse_convert = true, encode_invalid_numbers = true,
+    encode_invalid_as_nil = false})
 end
 
 local function test_other(test, s)
@@ -82,7 +163,6 @@ local function test_other(test, s)
         while t ~= nil do level = level + 1 t = t[1] end
         return level
     end
-    local msgpack = require('msgpack')
     local deep_as_nil = msgpack.cfg.encode_deep_as_nil
     msgpack.cfg({encode_deep_as_nil = true})
     local max_depth = msgpack.cfg.encode_max_depth
@@ -118,7 +198,7 @@ end
 
 tap.test("msgpackffi", function(test)
     local serializer = require('msgpackffi')
-    test:plan(11)
+    test:plan(12)
     test:test("unsigned", common.test_unsigned, serializer)
     test:test("signed", common.test_signed, serializer)
     test:test("double", common.test_double, serializer)
@@ -130,6 +210,7 @@ tap.test("msgpackffi", function(test)
     -- udata/cdata hooks are not implemented
     --test:test("ucdata", common.test_ucdata, serializer)
     test:test("offsets", test_offsets, serializer)
+    test:test("configs", test_configs, serializer)
     test:test("other", test_other, serializer)
     test:test("decode_buffer", common.test_decode_buffer, serializer)
 end)

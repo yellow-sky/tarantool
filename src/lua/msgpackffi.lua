@@ -206,6 +206,10 @@ local function encode_nil(buf)
     p[0] = 0xc0
 end
 
+local inf = 1/0
+local minf = -1/0
+local nan = 0/0
+
 local function encode_r(buf, obj, level)
 ::restart::
     if type(obj) == "number" then
@@ -213,7 +217,16 @@ local function encode_r(buf, obj, level)
         if obj % 1 == 0 and obj > -1e63 and obj < 1e64 then
             encode_int(buf, obj)
         else
-            encode_double(buf, obj)
+            if (obj == inf or obj == minf or tostring(obj) == "nan") and
+            not msgpack.cfg.encode_invalid_numbers then
+                if msgpack.cfg.encode_invalid_as_nil then
+                    encode_nil(buf)
+                else
+                    error("Invalid numbers encoding is manually prohibited")
+                end
+            else
+                encode_double(buf, obj)
+            end
         end
     elseif type(obj) == "string" then
         encode_str(buf, obj)
@@ -227,28 +240,46 @@ local function encode_r(buf, obj, level)
             return
         end
         local serialize = nil
-        local mt = getmetatable(obj)
-        if mt ~= nil then
-            serialize = mt.__serialize
+        if msgpack.cfg.encode_load_metatables then
+            local mt = getmetatable(obj)
+            if mt ~= nil then
+                serialize = mt.__serialize
+            end
         end
         -- calculate the number of array and map elements in the table
         -- TODO: pairs() aborts JIT
-        local array_count, map_count = 0, 0
-        for key in pairs(obj) do
-            if type(key) == 'number' and key >= 1 and
-               key == math.floor(key) and key == array_count + 1 then
+        local array_count, map_count, max_idx = 0, 0, 0
+        for key, el in pairs(obj) do
+            if type(key) == 'number' and key >= 1 and 
+            key == math.floor(key) then
                 array_count = array_count + 1
+                if key > max_idx then
+                    max_idx = key
+                end
             else
                 map_count = map_count + 1
             end
         end
-        if (serialize == nil and map_count == 0) or serialize == 'array' or
-            serialize == 'seq' or serialize == 'sequence' then
+        -- excessively sparse tables should be encoded as maps
+        local is_excessively_sparse = false
+        if msgpack.cfg.encode_sparse_ratio and
+            max_idx > msgpack.cfg.encode_sparse_safe and
+            max_idx > array_count * msgpack.cfg.encode_sparse_ratio then
+                if not msgpack.cfg.encode_sparse_convert then
+                    error(string.format("Can\'t encode excessively "..
+                    "sparse tables when encode_sparse_convert "..
+                    "configuration option is set to false"))
+                end
+                is_excessively_sparse = true
+        end
+        if not is_excessively_sparse and ( serialize == 'array' or
+            serialize == 'seq' or serialize == 'sequence' or
+            (serialize == nil and map_count == 0) ) then
             encode_array(buf, array_count)
             for i=1,array_count,1 do
                 encode_r(buf, obj[i], level + 1)
             end
-        elseif (serialize == nil and map_count > 0) or
+        elseif serialize == nil or is_excessively_sparse or
             serialize == 'map' or serialize == 'mapping' then
             encode_map(buf, array_count + map_count)
             for key, val in pairs(obj) do
@@ -278,7 +309,18 @@ local function encode_r(buf, obj, level)
             error("can not encode FFI type: '"..ffi.typeof(obj).."'")
         end
     else
-        error("can not encode Lua type: '"..type(obj).."'")
+        if msgpack.cfg.encode_use_tostring then
+            obj = tostring(obj)
+            if obj then
+                encode_str(buf, obj)
+            else
+                error("can not encode Lua type: '"..type(obj).."'")
+            end
+        elseif msgpack.cfg.encode_invalid_as_nil then
+            encode_nil(buf)
+        else
+            error("can not encode Lua type: '"..type(obj).."'")
+        end
     end
 end
 
@@ -453,7 +495,12 @@ end
 
 local function decode_double(data)
     data[0] = data[0] - 1 -- mp_decode_double need type code
-    return tonumber(builtin.mp_decode_double(data))
+    local res = tonumber(builtin.mp_decode_double(data))
+    if (res == inf or res == minf or tostring(res) == "nan") and
+    not msgpack.cfg.decode_invalid_numbers then
+        error("Invalid numbers decoding is manually prohibited")
+    end
+    return res
 end
 
 local function decode_str(data, size)
