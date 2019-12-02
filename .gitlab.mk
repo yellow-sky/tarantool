@@ -97,21 +97,12 @@ perf_cleanup: perf_clone_benchs_repo perf_cleanup_image
 # Run tests under a virtual machine
 # #################################
 
-vms_start:
-	VBoxManage controlvm ${VMS_NAME} poweroff || true
-	VBoxManage snapshot ${VMS_NAME} restore ${VMS_NAME}
-	VBoxManage startvm ${VMS_NAME} --type headless
-
 vms_test_%:
-	tar czf - ../tarantool | ssh ${VMS_USER}@127.0.0.1 -p ${VMS_PORT} tar xzf -
-	ssh ${VMS_USER}@127.0.0.1 -p ${VMS_PORT} "/bin/bash -c \
-		'${EXTRA_ENV} \
+	./tools/run_vm.sh -t=${VMS_NAME} -s -a=try_restore,start,login,stop \
+		-c="${EXTRA_ENV} \
 		cd tarantool && \
 		${GITLAB_MAKE} git_submodule_update && \
-		${TRAVIS_MAKE} $(subst vms_,,$@)'"
-
-vms_shutdown:
-	VBoxManage controlvm ${VMS_NAME} poweroff
+		${TRAVIS_MAKE} $(subst vms_,,$@)"
 
 # ######
 # Deploy
