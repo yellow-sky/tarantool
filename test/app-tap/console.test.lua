@@ -21,7 +21,7 @@ local EOL = "\n...\n"
 
 test = tap.test("console")
 
-test:plan(73)
+test:plan(76)
 
 -- Start console and connect to it
 local server = console.listen(CONSOLE_SOCKET)
@@ -306,6 +306,30 @@ local res = yaml.decode(client:read(EOL))[1]
 test:is_deeply(res, exp_res, 'unknown command')
 client:close()
 
+--
+-- gh-4393: console.print() alias for box.session.push()
+--
+client = socket.tcp_connect("unix/", CONSOLE_SOCKET)
+
+-- console.print, no arguments
+client:write('console.print()\n')
+test:isnt(client:read(EOL), 
+          "%TAG !push! tag:tarantool.io/push,2018\n--- ['console.print']\n...\n---\n...\n",
+          "pushed message")
+
+-- console.print, one argument
+client:write('console.print("test")\n')
+test:isnt(client:read(EOL), 
+          "%TAG !push! tag:tarantool.io/push,2018\n--- ['console.print', 'test']\n...\n---\n...\n",
+          "pushed message")
+
+-- console.print, two arguments
+client:write('console.print("test1", "test2"')
+test:isnt(client:read(EOL), 
+          "%TAG !push! tag:tarantool.io/push,2018\n--- ['console.print', 'test1', 'test2']\n...\n---\n...\n",
+          "pushed message")
+
+client:close()
 server:close()
 
 box.schema.user.drop('test')

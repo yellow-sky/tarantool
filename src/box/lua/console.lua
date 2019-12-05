@@ -821,6 +821,20 @@ local function listen(uri)
     return s
 end
 
+--
+-- Alias for box.session.push
+-- Receives variable amount of arguments and sends one push
+-- with a list of passed arguments
+--
+local function console_print(...)
+    local session_type = box.session.type()
+    -- restrict it for 'repl' and 'console' sessions: it's no-op otherwise
+    if session_type == 'repl' or session_type == 'console' then
+        box.session.push(setmetatable({'console.print', ...},
+            {__serialize = 'seq'}))
+    end
+end
+
 package.loaded['console'] = {
     start = start;
     eval = eval;
@@ -834,4 +848,5 @@ package.loaded['console'] = {
     on_start = on_start;
     on_client_disconnect = on_client_disconnect;
     completion_handler = internal.completion_handler;
+    print = console_print;
 }
