@@ -578,6 +578,10 @@ struct cord {
 	struct slab_cache slabc;
 	/** The "main" fiber of this cord, the scheduler. */
 	struct fiber sched;
+	/**
+	 * Region cache used to alloc and free dedicated memory chunks.
+	 */
+	struct stailq region_cache;
 	char name[FIBER_NAME_MAX];
 };
 
@@ -658,6 +662,61 @@ cord_name(struct cord *cord)
 /** True if this cord represents the process main thread. */
 bool
 cord_is_main();
+
+/**
+ * Self-contained region cache entry in a cord region cache.
+ */
+struct region_cached {
+	/* Cache link. */
+	struct stailq_entry link;
+	struct region region;
+};
+
+/**
+ * Return a region bound to the current cord.
+ */
+static inline struct region *
+cord_region_cache_get()
+{
+	if (stailq_empty(&cord()->region_cache)) {
+		struct region region;
+		region_create(&region, &cord()->slabc);
+		/* Allocate region cache entry and setup region. */
+		struct region_cached *region_cached =
+			region_alloc_object(&region, struct region_cached);
+		if (region_cached == NULL) {
+			diag_set(OutOfMemory, sizeof(struct region_cached),
+				 "region", "struct region_cached");
+			return NULL;
+		}
+		region_cached->region = region;
+		stailq_add(&cord()->region_cache, &region_cached->link);
+	}
+
+	struct region_cached *region_cached =
+		(struct region_cached *)stailq_shift_entry(&cord()->region_cache,
+							   struct region_cached,
+							   link);
+	return &region_cached->region;
+}
+
+static inline void
+cord_region_cache_put(struct region *region)
+{
+	/*
+	 * The region contained it's pwn description at the begin
+	 * we should preserve it.
+	 */
+	region_truncate(region, sizeof(struct region_cached));
+
+	struct region_cached *region_cached =
+		container_of(region, struct region_cached, region);
+	/*
+	 * Put the region at the begin of cache as it could
+	 * increase data locality.
+	 */
+	stailq_add(&cord()->region_cache, &region_cached->link);
+}
 
 void
 fiber_init(int (*fiber_invoke)(fiber_func f, va_list ap));
