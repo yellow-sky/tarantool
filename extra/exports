@@ -41,8 +41,6 @@ title_get_status
 tnt_iconv_open
 tnt_iconv_close
 tnt_iconv
-exception_get_string
-exception_get_int
 
 tarantool_lua_ibuf
 uuid_nil

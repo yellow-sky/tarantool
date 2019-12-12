@@ -25,11 +25,6 @@ struct error {
     /* Error description. */
     char _errmsg[DIAG_ERRMSG_MAX];
 };
-
-char *
-exception_get_string(struct error *e, const struct method_info *method);
-int
-exception_get_int(struct error *e, const struct method_info *method);
 ]]
 
 local REFLECTION_CACHE = {}
@@ -44,10 +39,10 @@ local function reflection_enumerate(err)
     -- See type_foreach_method() in reflection.h
     local t = err._type
     while t ~= nil do
-        local m = t.methods
-        while m.name ~= nil do
-            result[ffi.string(m.name)] = m
-            m = m + 1
+        local f = t.fields
+        while f.name ~= nil do
+            result[ffi.string(f.name)] = f
+            f = f + 1
         end
         t = t.parent
     end
@@ -56,13 +51,10 @@ local function reflection_enumerate(err)
 end
 
 local function reflection_get(err, method)
-    if method.nargs ~= 0 then
-        return nil -- NYI
-    end
-    if method.rtype == ffi.C.CTYPE_INT then
-        return tonumber(ffi.C.exception_get_int(err, method))
-    elseif method.rtype == ffi.C.CTYPE_CONST_CHAR_PTR then
-        local str = ffi.C.exception_get_string(err, method)
+    if method.type == ffi.C.CTYPE_INT then
+        return tonumber(method.getter(err)._int)
+    elseif method.type == ffi.C.CTYPE_CONST_CHAR_PTR then
+        local str = method.getter(err)._char
         if str == nil then
             return nil
         end
@@ -151,7 +143,7 @@ local function error_index(err, key)
         return getter(err)
     end
     getter = reflection_enumerate(err)[key]
-    if getter ~= nil and getter.nargs == 0 then
+    if getter ~= nil then
         local val = reflection_get(err, getter)
         if val ~= nil then
             return val

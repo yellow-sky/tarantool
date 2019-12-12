@@ -59,39 +59,34 @@ exception_log(struct error *error)
 	e->log();
 }
 
-const char *
-exception_get_string(struct error *e, const struct method_info *method)
-{
-	/* A workaround for for vtable */
-	Exception *ex = (Exception *) e;
-	if (!method_invokable<const char *>(method, ex))
-		return NULL;
-	return method_invoke<const char *>(method, ex);
-}
-
-int
-exception_get_int(struct error *e, const struct method_info *method)
-{
-	/* A workaround for vtable  */
-	Exception *ex = (Exception *) e;
-	if (!method_invokable<int>(method, ex))
-		return 0;
-	return method_invoke<int>(method, ex);
-}
-
 } /* extern "C" */
 
 /** out_of_memory::size is zero-initialized by the linker. */
 static OutOfMemory out_of_memory(__FILE__, __LINE__,
 				 sizeof(OutOfMemory), "malloc", "exception");
 
-static const struct method_info exception_methods[] = {
-	make_method(&type_Exception, "message", &Exception::get_errmsg),
-	make_method(&type_Exception, "log", &Exception::log),
-	METHODS_SENTINEL
+union value get_errmsg(struct error *e) {
+	Exception *ex = (Exception *)e;
+	union value retval = {
+		._char = ex->get_errmsg()
+	};
+	return retval;
+}
+
+union value log(struct error *e) {
+	Exception *ex = (Exception *)e;
+	ex->log();
+	return {};
+}
+
+static struct field exception_fields[] = {
+	make_field("message", CTYPE_CONST_CHAR_PTR, &get_errmsg),
+	make_field("log", CTYPE_VOID, &log),
+	FIELDS_SENTINEL
 };
-const struct type_info type_Exception = make_type("Exception", NULL,
-	exception_methods);
+
+const struct type_info type_Exception = make_type_with_fields("Exception", NULL,
+	exception_fields);
 
 void *
 Exception::operator new(size_t size)

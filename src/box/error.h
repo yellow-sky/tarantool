@@ -42,6 +42,9 @@ struct error *
 BuildClientError(const char *file, unsigned line, uint32_t errcode, ...);
 
 struct error *
+BuildLoggedError(const char *file, unsigned line, uint32_t errcode, ...);
+
+struct error *
 BuildAccessDeniedError(const char *file, unsigned int line,
 		       const char *access_type, const char *object_type,
 		       const char *object_name, const char *user_name);

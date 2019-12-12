@@ -94,13 +94,21 @@ const char *rmean_error_strings[RMEAN_ERROR_LAST] = {
 	"ERROR"
 };
 
-static struct method_info clienterror_methods[] = {
-	make_method(&type_ClientError, "code", &ClientError::errcode),
-	METHODS_SENTINEL
+union value get_code(struct error *e) {
+	ClientError *ce = (ClientError *)e;
+	union value retval = {
+		._int = ce->errcode()
+	};
+	return retval;
+}
+
+static struct field client_fields[] = {
+	make_field("code", CTYPE_INT, &get_code),
+	FIELDS_SENTINEL
 };
 
 const struct type_info type_ClientError =
-	make_type("ClientError", &type_Exception, clienterror_methods);
+	make_type_with_fields("ClientError", &type_Exception, client_fields);
 
 ClientError::ClientError(const type_info *type, const char *file, unsigned line,
 			 uint32_t errcode)
@@ -126,6 +134,22 @@ BuildClientError(const char *file, unsigned line, uint32_t errcode, ...)
 {
 	try {
 		ClientError *e = new ClientError(file, line, ER_UNKNOWN);
+		va_list ap;
+		va_start(ap, errcode);
+		error_vformat_msg(e, tnt_errcode_desc(errcode), ap);
+		va_end(ap);
+		e->m_errcode = errcode;
+		return e;
+	} catch (OutOfMemory *e) {
+		return e;
+	}
+}
+
+struct error *
+BuildLoggedError(const char *file, unsigned line, uint32_t errcode, ...)
+{
+	try {
+		LoggedError *e = new LoggedError(file, line, ER_UNKNOWN);
 		va_list ap;
 		va_start(ap, errcode);
 		error_vformat_msg(e, tnt_errcode_desc(errcode), ap);
@@ -204,16 +228,40 @@ BuildXlogGapError(const char *file, unsigned line,
 
 struct rlist on_access_denied = RLIST_HEAD_INITIALIZER(on_access_denied);
 
-static struct method_info accessdeniederror_methods[] = {
-	make_method(&type_AccessDeniedError, "access_type", &AccessDeniedError::access_type),
-	make_method(&type_AccessDeniedError, "object_type", &AccessDeniedError::object_type),
-	make_method(&type_AccessDeniedError, "object_name", &AccessDeniedError::object_name),
-	METHODS_SENTINEL
+union value get_access_type(struct error *e) {
+	AccessDeniedError *ade = (AccessDeniedError *)e;
+	union value retval = {
+		._char = ade->access_type()
+	};
+	return retval;
+}
+
+union value get_object_type(struct error *e) {
+	AccessDeniedError *ade = (AccessDeniedError *)e;
+	union value retval = {
+		._char = ade->object_type()
+	};
+	return retval;
+}
+
+union value get_object_name(struct error *e) {
+	AccessDeniedError *ade = (AccessDeniedError *)e;
+	union value retval = {
+		._char = ade->object_name()
+	};
+	return retval;
+}
+
+static struct field accessdeniederror_fields[] = {
+	make_field("access_type", CTYPE_CONST_CHAR_PTR, &get_access_type),
+	make_field("object_type", CTYPE_CONST_CHAR_PTR, &get_object_type),
+	make_field("object_name", CTYPE_CONST_CHAR_PTR, &get_object_name),
+	FIELDS_SENTINEL
 };
 
 const struct type_info type_AccessDeniedError =
-	make_type("AccessDeniedError", &type_ClientError,
-		  accessdeniederror_methods);
+	make_type_with_fields("AccessDeniedError", &type_ClientError,
+		  accessdeniederror_fields);
 
 AccessDeniedError::AccessDeniedError(const char *file, unsigned int line,
 				     const char *access_type,

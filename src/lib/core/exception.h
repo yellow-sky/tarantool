@@ -53,14 +53,17 @@ extern const struct type_info type_CollationError;
 extern const struct type_info type_SwimError;
 extern const struct type_info type_CryptoError;
 
-const char *
-exception_get_string(struct error *e, const struct method_info *method);
-
-int
-exception_get_int(struct error *e, const struct method_info *method);
-
 #if defined(__cplusplus)
 } /* extern "C" */
+
+//struct Exception_vtab {
+//
+//};
+//
+//struct Exception {
+//	struct error error;
+//
+//};
 
 class Exception: public error {
 public:
@@ -176,9 +179,10 @@ exception_init();
 
 #define tnt_error(class, ...) ({					\
 	say_debug("%s at %s:%i", #class, __FILE__, __LINE__);		\
-	class *e = new class(__FILE__, __LINE__, ##__VA_ARGS__);	\
+	struct error *e;						\
+	e = Build##class(__FILE__, __LINE__, ##__VA_ARGS__);		\
 	diag_add_error(diag_get(), e);					\
-	e;								\
+	(class *)e;								\
 })
 
 #define tnt_raise(...) do {						\

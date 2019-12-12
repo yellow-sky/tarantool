@@ -4,34 +4,28 @@
 local ffi = require('ffi')
 ffi.cdef[[
 struct type_info;
-struct method_info;
 
 enum ctype {
-    CTYPE_VOID = 0,
-    CTYPE_INT,
-    CTYPE_CONST_CHAR_PTR
+	CTYPE_VOID = 0,
+	CTYPE_INT,
+	CTYPE_CONST_CHAR_PTR
+};
+
+union value {
+	int _int;
+	const char *_char;
+};
+
+struct field {
+	const char *name;
+	enum ctype type;
+	union value (*getter)(struct error *);
 };
 
 struct type_info {
-    const char *name;
-    const struct type_info *parent;
-    const struct method_info *methods;
-};
-
-enum { METHOD_ARG_MAX = 8 };
-
-struct method_info {
-    const struct type_info *owner;
-    const char *name;
-    enum ctype rtype;
-    enum ctype atype[METHOD_ARG_MAX];
-    int nargs;
-    bool isconst;
-
-    union {
-        /* Add extra space to get proper struct size in C */
-        void *_spacer[2];
-    };
+	const char *name;
+	const struct type_info *parent;
+	const struct field *fields;
 };
 
 double

@@ -32,18 +32,11 @@
 #include "reflection.h"
 /* TODO: sorry, unimplemented: non-trivial designated initializers */
 
-const struct method_info METHODS_SENTINEL = {
-	.owner = NULL,
+const struct field FIELDS_SENTINEL = {
 	.name = NULL,
-	.rtype = CTYPE_VOID,
-	.atype = {},
-	.nargs = 0,
-	.isconst = false,
-	._spacer = {}
+	.type = CTYPE_VOID,
+	.getter = NULL
 };
 
 extern inline bool
 type_assignable(const struct type_info *type, const struct type_info *object);
-
-extern inline const struct method_info *
-type_method_by_name(const struct type_info *type, const char *name);
