@@ -107,6 +107,26 @@ lbox_rollback(lua_State *L)
 	return 0;
 }
 
+static int
+lbox_txn_rollback_to_savepoint(struct lua_State *L)
+{
+	if (lua_gettop(L) != 1 || lua_type(L, 1) != LUA_TCDATA)
+		luaL_error(L, "Usage: txn:rollback to savepoint(savepoint)");
+
+	uint32_t cdata_type;
+	struct txn_savepoint **sp_ptr = luaL_checkcdata(L, 1, &cdata_type);
+
+	if (sp_ptr == NULL)
+		luaL_error(L, "Usage: txn:rollback to savepoint(savepoint)");
+
+	int rc = box_txn_rollback_to_savepoint(*sp_ptr);
+	if (rc != 0)
+		return luaT_push_nil_and_error(L);
+
+	lua_pushnumber(L, 0);
+	return 1;
+}
+
 /**
  * Get a next txn statement from the current transaction. This is
  * a C closure and 2 upvalues should be available: first is a
@@ -288,6 +308,11 @@ static const struct luaL_Reg boxlib_backup[] = {
 	{NULL, NULL}
 };
 
+static const struct luaL_Reg boxlib_internal[] = {
+	{"rollback_to_savepoint", lbox_txn_rollback_to_savepoint},
+	{NULL, NULL}
+};
+
 #include "say.h"
 
 void
@@ -298,6 +323,9 @@ box_lua_init(struct lua_State *L)
 	lua_pop(L, 1);
 
 	luaL_register(L, "box.backup", boxlib_backup);
+	lua_pop(L, 1);
+
+	luaL_register(L, "box.internal", boxlib_internal);
 	lua_pop(L, 1);
 
 	box_lua_error_init(L);

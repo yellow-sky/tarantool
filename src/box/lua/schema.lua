@@ -77,9 +77,6 @@ ffi.cdef[[
     box_txn_savepoint_t *
     box_txn_savepoint();
 
-    int
-    box_txn_rollback_to_savepoint(box_txn_savepoint_t *savepoint);
-
     struct port_tuple_entry {
         struct port_tuple_entry *next;
         struct tuple *tuple;
@@ -351,7 +348,7 @@ box.rollback_to_savepoint = function(savepoint)
     if savepoint.txn_id ~= builtin.box_txn_id() then
         box.error(box.error.NO_SUCH_SAVEPOINT)
     end
-    if builtin.box_txn_rollback_to_savepoint(savepoint.csavepoint) == -1 then
+    if box.internal.rollback_to_savepoint(savepoint.csavepoint) == nil then
         box.error()
     end
 end
