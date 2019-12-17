@@ -56,6 +56,21 @@ test_run:cmd("setopt delimiter ''");
  | - true
  | ...
 
+-- Check default cache statistics.
+--
+box.info.sql()
+ | ---
+ | - cache:
+ |     size: 0
+ |     stmt_count: 0
+ | ...
+box.info:sql()
+ | ---
+ | - cache:
+ |     size: 0
+ |     stmt_count: 0
+ | ...
+
 -- Test local interface and basic capabilities of prepared statements.
 --
 execute('CREATE TABLE test (id INT PRIMARY KEY, a NUMBER, b TEXT)')
@@ -134,6 +149,15 @@ execute(s.sql_str, {1, 3})
  |   - name: B
  |     type: string
  |   rows: []
+ | ...
+
+assert(box.info.sql().cache.stmt_count ~= 0)
+ | ---
+ | - true
+ | ...
+assert(box.info.sql().cache.size ~= 0)
+ | ---
+ | - true
  | ...
 
 test_run:cmd("setopt delimiter ';'")
@@ -502,8 +526,16 @@ execute(s3.sql_str)
 
 -- Setting cache size to 0 erases all content from it.
 --
-box.cfg{sql_cache_size = 0}
+box.cfg{sql_cache_size = 0 }
  | ---
+ | ...
+assert(box.info.sql().cache.stmt_count == 0)
+ | ---
+ | - true
+ | ...
+assert(box.info.sql().cache.size == 0)
+ | ---
+ | - true
  | ...
 s = prepare("SELECT a FROM test;")
  | ---

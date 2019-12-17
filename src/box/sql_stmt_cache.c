@@ -34,6 +34,7 @@
 #include "error.h"
 #include "execute.h"
 #include "session.h"
+#include "info/info.h"
 
 static struct sql_stmt_cache sql_stmt_cache;
 
@@ -46,6 +47,21 @@ sql_stmt_cache_init()
 	sql_stmt_cache.mem_quota = 0;
 	sql_stmt_cache.mem_used = 0;
 	rlist_create(&sql_stmt_cache.cache_lru);
+}
+
+void
+sql_stmt_cache_stat(struct info_handler *h)
+{
+	info_begin(h);
+	info_table_begin(h, "cache");
+	info_append_int(h, "size", sql_stmt_cache.mem_used);
+	uint32_t entry_count = 0;
+	struct stmt_cache_entry *entry;
+	rlist_foreach_entry(entry, &sql_stmt_cache.cache_lru, in_lru)
+		entry_count++;
+	info_append_int(h, "stmt_count", entry_count);
+	info_table_end(h);
+	info_end(h);
 }
 
 static size_t
