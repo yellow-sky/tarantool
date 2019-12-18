@@ -295,8 +295,8 @@ tx_schedule_commit(struct cmsg *msg)
 		}
 	}
 	vclock_copy(&replicaset.wal_vclock, &batch->vclock);
-	vclock_copy(&replicaset.commit_vclock, &batch->vclock);
 	tx_schedule_queue(&batch->commit);
+	trigger_run(&replicaset.on_write, &batch->vclock);
 	mempool_free(&writer->msg_pool, container_of(msg, struct wal_msg, base));
 }
 
@@ -1316,9 +1316,9 @@ wal_write_in_wal_mode_none(struct journal *journal,
 	vclock_copy(&writer->vclock, &entry->vclock);
 	entry->approx_len = 0;
 	entry->res = vclock_sum(&writer->vclock);
-	journal_entry_complete(entry);
 	vclock_copy(&replicaset.wal_vclock, &writer->vclock);
-	vclock_copy(&replicaset.commit_vclock, &writer->vclock);
+	journal_entry_complete(entry);
+	trigger_run(&replicaset.on_write, &writer->vclock);
 	return 0;
 }
 

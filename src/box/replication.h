@@ -206,6 +206,12 @@ struct replicaset {
 	 */
 	struct vclock wal_vclock;
 	/**
+	 * Trigger is fired when wal has written out a transaction.
+	 * This trigger is used by txn engine in order
+	 * to process transactions.
+	 */
+	struct rlist on_write;
+	/**
 	 * This flag is set while the instance is bootstrapping
 	 * from a remote master.
 	 */

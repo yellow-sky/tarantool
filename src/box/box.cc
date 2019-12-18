@@ -318,14 +318,15 @@ recovery_journal_write(struct journal *base,
 	     row < entry->rows + entry->n_rows; ++row) {
 		vclock_follow_xrow(&journal->vclock, *row);
 	}
+	vclock_copy(&entry->vclock, &journal->vclock);
 	entry->res = vclock_sum(&journal->vclock);
 	/*
 	 * Update wal and commit vclock as this entry
 	 * was written and committed.
 	 */
 	vclock_copy(&replicaset.wal_vclock, &journal->vclock);
-	vclock_copy(&replicaset.commit_vclock, &journal->vclock);
 	journal_entry_complete(entry);
+	trigger_run(&replicaset.on_write, &journal->vclock);
 	return 0;
 }
 
@@ -2255,6 +2256,7 @@ box_cfg_xc(void)
 	engine_init();
 	schema_init();
 	replication_init();
+	txn_engine_init();
 	port_init();
 	iproto_init();
 

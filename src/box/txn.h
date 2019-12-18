@@ -36,6 +36,7 @@
 #include "trigger.h"
 #include "fiber.h"
 #include "space.h"
+#include "journal.h"
 
 #if defined(__cplusplus)
 extern "C" {
@@ -65,6 +66,8 @@ enum txn_flag {
 	TXN_CAN_YIELD,
 	/** on_commit and/or on_rollback list is not empty. */
 	TXN_HAS_TRIGGERS,
+	/** Transaction was submitted to wal but not processed yet. */
+	TXN_IS_PENDING,
 };
 
 enum {
@@ -142,7 +145,18 @@ struct txn_savepoint {
 
 extern double too_long_threshold;
 
+/**
+ * Initialize transaction engine.
+ */
+void
+txn_engine_init();
+
 struct txn {
+	/**
+	 * Link for the list of transaction awaited for
+	 * commit or rollback.
+	 */
+	struct rlist link;
 	/**
 	 * A memory region to put all transaction relative data in.
 	 * Detaching transaction data from a fiber temporary storage
@@ -206,6 +220,8 @@ struct txn {
 	struct rlist on_commit, on_rollback;
 	/** List of savepoints to find savepoint by name. */
 	struct rlist savepoints;
+	/** Journal entry corresponding to this transaction. */
+	struct journal_entry *entry;
 };
 
 static inline bool

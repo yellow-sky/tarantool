@@ -34,8 +34,19 @@
 #include "journal.h"
 #include <fiber.h>
 #include "xrow.h"
+#include "replication.h"
 
 double too_long_threshold;
+
+/*
+ * List of transaction which were sent to wal but not writen yet.
+ */
+static struct rlist writting_queue = {&writting_queue, &writting_queue};
+
+/*
+ * List of transaction which were written but not committed yet.
+ */
+static struct rlist pending_queue = {&pending_queue, &pending_queue};
 
 static int
 txn_on_stop(struct trigger *trigger, void *event);
@@ -222,6 +233,8 @@ txn_begin(void)
 	txn->engine_tx = NULL;
 	rlist_create(&txn->savepoints);
 	txn->fiber = NULL;
+	txn->entry = NULL;
+	rlist_create(&txn->link);
 	fiber_set_txn(fiber(), txn);
 	/* fiber_on_yield is initialized by engine on demand */
 	trigger_create(&txn->fiber_on_stop, txn_on_stop, NULL, NULL);
@@ -445,25 +458,40 @@ txn_complete(struct txn *txn)
 		}
 	}
 	/*
-	 * If there is no fiber waiting for the transaction then
-	 * the transaction could be safely freed. In the opposite case
-	 * the fiber is in duty to free this transaction.
+	 * Check if there is no fiber awaiting for the transaction
+	 * and the transaction was processed by WAL.
 	 */
-	if (txn->fiber == NULL)
+	if (txn->fiber == NULL && !txn_has_flag(txn, TXN_IS_PENDING)) {
 		txn_free(txn);
-	else {
-		txn_set_flag(txn, TXN_IS_DONE);
-		if (txn->fiber != fiber())
-			/* Wake a waiting fiber up. */
-			fiber_wakeup(txn->fiber);
+		return;
 	}
+
+	txn_set_flag(txn, TXN_IS_DONE);
+	if (txn->fiber != NULL && txn->fiber != fiber())
+		fiber_wakeup(txn->fiber);
 }
 
 static void
 txn_entry_complete_cb(struct journal_entry *entry, void *data)
 {
 	struct txn *txn = data;
+	txn_clear_flag(txn, TXN_IS_PENDING);
+
 	txn->signature = entry->res;
+	if (txn->signature > 0) {
+		/*
+		 * Transaction was written move it to pending
+		 * queue until it will be committed.
+		 */
+		rlist_move_tail(&pending_queue, &txn->link);
+		return;
+	}
+	/*
+	 * Checkpoint transaction (with zero signature) and
+	 * failed to write could be completed now.
+	 */
+	rlist_del(&txn->link);
+
 	/*
 	 * Some commit/rollback triggers require for in_txn fiber
 	 * variable to be set so restore it for the time triggers
@@ -478,22 +506,17 @@ txn_entry_complete_cb(struct journal_entry *entry, void *data)
 static int64_t
 txn_write_to_wal(struct txn *txn)
 {
-	assert(txn->n_new_rows + txn->n_applier_rows > 0);
-
 	/* Prepare a journal entry. */
-	struct journal_entry *req = journal_entry_new(txn->n_new_rows +
-						      txn->n_applier_rows,
-						      txn->region,
-						      txn_entry_complete_cb,
-						      txn);
-	if (req == NULL) {
+	txn->entry = journal_entry_new(txn->n_new_rows + txn->n_applier_rows,
+				       txn->region, txn_entry_complete_cb, txn);
+	if (txn->entry == NULL) {
 		txn_rollback(txn);
 		return -1;
 	}
 
 	struct txn_stmt *stmt;
-	struct xrow_header **remote_row = req->rows;
-	struct xrow_header **local_row = req->rows + txn->n_applier_rows;
+	struct xrow_header **remote_row = txn->entry->rows;
+	struct xrow_header **local_row = txn->entry->rows + txn->n_applier_rows;
 	stailq_foreach_entry(stmt, &txn->stmts, next) {
 		if (stmt->has_triggers) {
 			txn_init_triggers(txn);
@@ -505,13 +528,16 @@ txn_write_to_wal(struct txn *txn)
 			*local_row++ = stmt->row;
 		else
 			*remote_row++ = stmt->row;
-		req->approx_len += xrow_approx_len(stmt->row);
+		txn->entry->approx_len += xrow_approx_len(stmt->row);
 	}
-	assert(remote_row == req->rows + txn->n_applier_rows);
+	assert(remote_row == txn->entry->rows + txn->n_applier_rows);
 	assert(local_row == remote_row + txn->n_new_rows);
 
+	txn_set_flag(txn, TXN_IS_PENDING);
+	rlist_add_tail(&writting_queue, &txn->link);
+
 	/* Send the entry to the journal. */
-	if (journal_write(req) < 0) {
+	if (journal_write(txn->entry) < 0) {
 		diag_set(ClientError, ER_WAL_IO);
 		diag_log();
 		return -1;
@@ -558,13 +584,6 @@ txn_write(struct txn *txn)
 	 * so reset the corresponding key in the fiber storage.
 	 */
 	txn->start_tm = ev_monotonic_now(loop());
-	if (txn->n_new_rows + txn->n_applier_rows == 0) {
-		/* Nothing to do. */
-		txn->signature = 0;
-		txn_complete(txn);
-		fiber_set_txn(fiber(), NULL);
-		return 0;
-	}
 	fiber_set_txn(fiber(), NULL);
 	return txn_write_to_wal(txn);
 }
@@ -589,8 +608,9 @@ txn_commit(struct txn *txn)
 	if (res != 0)
 		diag_set(ClientError, ER_WAL_IO);
 
-	/* Synchronous transactions are freed by the calling fiber. */
-	txn_free(txn);
+	/* Free the transaction if it wal processed by wal. */
+	if (!txn_has_flag(txn, TXN_IS_PENDING))
+		txn_free(txn);
 	return res;
 }
 
@@ -859,4 +879,44 @@ txn_on_yield(struct trigger *trigger, void *event)
 	txn_rollback_to_svp(txn, NULL);
 	txn_set_flag(txn, TXN_IS_ABORTED_BY_YIELD);
 	return 0;
+}
+
+/*
+ * Commit all transaction up to the commit vclock.
+ */
+static int
+txn_engine_on_write(struct trigger *trigger, void *data)
+{
+	(void) trigger;
+	/* If transaction was written then it is committed. */
+	struct vclock *commit_vclock = (struct vclock *)data;
+	vclock_copy(&replicaset.commit_vclock, commit_vclock);
+	struct txn *txn, *tmp;
+	rlist_foreach_entry_safe(txn, &pending_queue, link, tmp) {
+		/* Commit all transactions up to committed vclock */
+		assert(txn->entry != NULL);
+		int rc = vclock_compare(&txn->entry->vclock,
+					&replicaset.commit_vclock);
+		if (rc > 0 || rc == VCLOCK_ORDER_UNDEFINED)
+			break;
+		rlist_del(&txn->link);
+		/*
+		 * Some commit/rollback triggers require for in_txn fiber
+		 * variable to be set so restore it for the time triggers
+		 * are in progress.
+		 */
+		assert(in_txn() == NULL);
+		fiber_set_txn(fiber(), txn);
+		txn_complete(txn);
+		fiber_set_txn(fiber(), NULL);
+	}
+	return 0;
+}
+
+void
+txn_engine_init()
+{
+	static struct trigger on_txn_engine_write;
+	trigger_create(&on_txn_engine_write, txn_engine_on_write, NULL, NULL);
+	trigger_add(&replicaset.on_write, &on_txn_engine_write);
 }
