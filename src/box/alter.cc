@@ -705,7 +705,7 @@ public:
 
 	void *operator new(size_t size)
 	{
-		return region_aligned_calloc_xc(&in_txn()->region, size,
+		return region_aligned_calloc_xc(in_txn()->region, size,
 						alignof(uint64_t));
 	}
 	void operator delete(void * /* ptr */) {}
@@ -720,7 +720,7 @@ txn_alter_trigger_new(trigger_f run, void *data)
 {
 	size_t size = sizeof(struct trigger);
 	struct trigger *trigger = (struct trigger *)
-		region_aligned_alloc(&in_txn()->region, size,
+		region_aligned_alloc(in_txn()->region, size,
 				     alignof(struct trigger));
 	if (trigger == NULL) {
 		diag_set(OutOfMemory, size, "region", "struct trigger");
@@ -770,7 +770,7 @@ alter_space_new(struct space *old_space)
 	struct txn *txn = in_txn();
 	size_t size = sizeof(struct alter_space);
 	struct alter_space *alter = (struct alter_space *)
-		region_aligned_alloc(&in_txn()->region, size,
+		region_aligned_alloc(txn->region, size,
 				     alignof(struct alter_space));
 	if (alter == NULL) {
 		diag_set(OutOfMemory, size, "region", "struct alter_space");

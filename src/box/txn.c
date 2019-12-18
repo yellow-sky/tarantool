@@ -37,9 +37,6 @@
 
 double too_long_threshold;
 
-/* Txn cache. */
-static struct stailq txn_cache = {NULL, &txn_cache.first};
-
 static int
 txn_on_stop(struct trigger *trigger, void *event);
 
@@ -60,7 +57,7 @@ txn_add_redo(struct txn *txn, struct txn_stmt *stmt, struct request *request)
 {
 	/* Create a redo log row. */
 	struct xrow_header *row;
-	row = region_alloc_object(&txn->region, struct xrow_header);
+	row = region_alloc_object(txn->region, struct xrow_header);
 	if (row == NULL) {
 		diag_set(OutOfMemory, sizeof(*row),
 			 "region", "struct xrow_header");
@@ -85,7 +82,7 @@ txn_add_redo(struct txn *txn, struct txn_stmt *stmt, struct request *request)
 	 */
 	struct space *space = stmt->space;
 	row->group_id = space != NULL ? space_group_id(space) : 0;
-	row->bodycnt = xrow_encode_dml(request, &txn->region, row->body);
+	row->bodycnt = xrow_encode_dml(request, txn->region, row->body);
 	if (row->bodycnt < 0)
 		return -1;
 	stmt->row = row;
@@ -175,20 +172,17 @@ txn_rollback_to_svp(struct txn *txn, struct stailq_entry *svp)
 inline static struct txn *
 txn_new(void)
 {
-	if (!stailq_empty(&txn_cache))
-		return stailq_shift_entry(&txn_cache, struct txn, in_txn_cache);
-
 	/* Create a region. */
-	struct region region;
-	region_create(&region, &cord()->slabc);
+	struct region *region = cord_region_cache_get();
+	if (region == NULL)
+		return NULL;
 
 	/* Place txn structure on the region. */
-	struct txn *txn = region_alloc_object(&region, struct txn);
+	struct txn *txn = region_alloc_object(region, struct txn);
 	if (txn == NULL) {
 		diag_set(OutOfMemory, sizeof(*txn), "region", "struct txn");
 		return NULL;
 	}
-	assert(region_used(&region) == sizeof(*txn));
 	txn->region = region;
 	return txn;
 }
@@ -203,9 +197,7 @@ txn_free(struct txn *txn)
 	stailq_foreach_entry(stmt, &txn->stmts, next)
 		txn_stmt_unref_tuples(stmt);
 
-	/* Truncate region up to struct txn size. */
-	region_truncate(&txn->region, sizeof(struct txn));
-	stailq_add(&txn_cache, &txn->in_txn_cache);
+	cord_region_cache_put(txn->region);
 }
 
 struct txn *
@@ -271,7 +263,7 @@ txn_begin_stmt(struct txn *txn, struct space *space)
 		diag_set(ClientError, ER_SUB_STMT_MAX);
 		return -1;
 	}
-	struct txn_stmt *stmt = txn_stmt_new(&txn->region);
+	struct txn_stmt *stmt = txn_stmt_new(txn->region);
 	if (stmt == NULL)
 		return -1;
 
@@ -491,7 +483,7 @@ txn_write_to_wal(struct txn *txn)
 	/* Prepare a journal entry. */
 	struct journal_entry *req = journal_entry_new(txn->n_new_rows +
 						      txn->n_applier_rows,
-						      &txn->region,
+						      txn->region,
 						      txn_entry_complete_cb,
 						      txn);
 	if (req == NULL) {
@@ -727,7 +719,7 @@ box_txn_alloc(size_t size)
 		double lf;
 		long l;
 	};
-	return region_aligned_alloc(&txn->region, size,
+	return region_aligned_alloc(txn->region, size,
 	                            alignof(union natural_align));
 }
 
@@ -739,7 +731,7 @@ txn_savepoint_new(struct txn *txn, const char *name)
 	int name_len = name != NULL ? strlen(name) : 0;
 	svp_sz += name_len;
 	struct txn_savepoint *svp =
-		(struct txn_savepoint *) region_alloc(&txn->region, svp_sz);
+		(struct txn_savepoint *) region_alloc(txn->region, svp_sz);
 	if (svp == NULL) {
 		diag_set(OutOfMemory, svp_sz, "region", "svp");
 		return NULL;

@@ -808,9 +808,9 @@ applier_apply_tx(struct stailq *rows)
 
 	/* We are ready to submit txn to wal. */
 	struct trigger *on_rollback, *on_commit;
-	on_rollback = (struct trigger *)region_alloc(&txn->region,
+	on_rollback = (struct trigger *)region_alloc(txn->region,
 						     sizeof(struct trigger));
-	on_commit = (struct trigger *)region_alloc(&txn->region,
+	on_commit = (struct trigger *)region_alloc(txn->region,
 						   sizeof(struct trigger));
 	if (on_rollback == NULL || on_commit == NULL)
 		goto rollback;
