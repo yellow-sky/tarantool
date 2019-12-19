@@ -126,7 +126,7 @@ applier_check_sync(struct applier *applier)
 	if (applier->state == APPLIER_SYNC &&
 	    applier->lag <= replication_sync_lag &&
 	    vclock_compare_ignore0(&applier->remote_vclock_at_subscribe,
-				   &replicaset.vclock) <= 0) {
+				   &replicaset.wal_vclock) <= 0) {
 		/* Applier is synced, switch to "follow". */
 		applier_set_state(applier, APPLIER_FOLLOW);
 	}
@@ -173,7 +173,7 @@ applier_writer_f(va_list ap)
 			continue;
 		try {
 			struct xrow_header xrow;
-			if (xrow_encode_vclock(&xrow, &replicaset.vclock) != 0 ||
+			if (xrow_encode_vclock(&xrow, &replicaset.commit_vclock) != 0 ||
 			    coio_write_xrow(&io, &xrow) < 0)
 				diag_raise();
 		} catch (SocketError *e) {
@@ -422,7 +422,9 @@ applier_wait_snapshot(struct applier *applier)
 		 * Used to initialize the replica's initial
 		 * vclock in bootstrap_from_master()
 		 */
-		xrow_decode_vclock_xc(&row, &replicaset.vclock);
+		xrow_decode_vclock_xc(&row, &replicaset.commit_vclock);
+		vclock_copy(&replicaset.wal_vclock,
+			    &replicaset.commit_vclock);
 	}
 
 	/*
@@ -447,7 +449,9 @@ applier_wait_snapshot(struct applier *applier)
 				 * vclock yet, do it now. In 1.7+
 				 * this vclock is not used.
 				 */
-				xrow_decode_vclock_xc(&row, &replicaset.vclock);
+				xrow_decode_vclock_xc(&row, &replicaset.commit_vclock);
+				vclock_copy(&replicaset.wal_vclock,
+					    &replicaset.commit_vclock);
 			}
 			break; /* end of stream */
 		} else if (iproto_type_is_error(row.type)) {
@@ -509,7 +513,9 @@ applier_wait_register(struct applier *applier)
 				 * vclock yet, do it now. In 1.7+
 				 * this vclock is not used.
 				 */
-				xrow_decode_vclock_xc(first_row, &replicaset.vclock);
+				xrow_decode_vclock_xc(first_row, &replicaset.commit_vclock);
+				vclock_copy(&replicaset.wal_vclock,
+					    &replicaset.commit_vclock);
 			}
 			break; /* end of stream */
 		}
@@ -708,7 +714,7 @@ applier_txn_rollback_cb(struct trigger *trigger, void *event)
 	/* Broadcast the rollback event across all appliers. */
 	trigger_run(&replicaset.applier.on_rollback, event);
 	/* Rollback applier vclock to the committed one. */
-	vclock_copy(&replicaset.applier.vclock, &replicaset.vclock);
+	vclock_copy(&replicaset.applier.vclock, &replicaset.commit_vclock);
 	return 0;
 }
 
@@ -875,7 +881,7 @@ applier_subscribe(struct applier *applier)
 
 	struct vclock vclock;
 	vclock_create(&vclock);
-	vclock_copy(&vclock, &replicaset.vclock);
+	vclock_copy(&vclock, &replicaset.wal_vclock);
 	xrow_encode_subscribe_xc(&row, &REPLICASET_UUID, &INSTANCE_UUID,
 				 &vclock, replication_anon);
 	if (coio_write_xrow(coio, &row) < 0)

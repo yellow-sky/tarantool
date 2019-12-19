@@ -112,15 +112,10 @@ struct wal_writer
 	 */
 	struct cpipe tx_prio_pipe;
 	/**
-	 * The vector clock of the WAL writer. It's a bit behind
-	 * the vector clock of the transaction thread, since it
-	 * "follows" the tx vector clock.
-	 * By "following" we mean this: whenever a transaction
-	 * is started in 'tx' thread, it's assigned a tentative
-	 * LSN. If the transaction is rolled back, this LSN
-	 * is abandoned. Otherwise, after the transaction is written
-	 * to the log with this LSN, WAL writer vclock is advanced
-	 * with this LSN and LSN becomes "real".
+	 * The vector clock of the WAL writer. After a journal
+	 * entry was logged the corresponding components of
+	 * a wal vclock are promoted so the vclock reflects the
+	 * last written transaction (but not necessary committed yet).
 	 */
 	struct vclock vclock;
 	/**
@@ -299,8 +294,8 @@ tx_schedule_commit(struct cmsg *msg)
 			cpipe_push(&writer->wal_pipe, wal_rollback_done, &rollback_done_msg);
 		}
 	}
-	/* Update the tx vclock to the latest written by wal. */
-	vclock_copy(&replicaset.vclock, &batch->vclock);
+	vclock_copy(&replicaset.wal_vclock, &batch->vclock);
+	vclock_copy(&replicaset.commit_vclock, &batch->vclock);
 	tx_schedule_queue(&batch->commit);
 	mempool_free(&writer->msg_pool, container_of(msg, struct wal_msg, base));
 }
@@ -530,7 +525,7 @@ wal_enable(void)
 	struct wal_writer *writer = &wal_writer_singleton;
 
 	/* Initialize the writer vclock from the recovery state. */
-	vclock_copy(&writer->vclock, &replicaset.vclock);
+	vclock_copy(&writer->vclock, &replicaset.wal_vclock);
 
 	/*
 	 * Scan the WAL directory to build an index of all
@@ -1320,9 +1315,10 @@ wal_write_in_wal_mode_none(struct journal *journal,
 		       entry->rows + entry->n_rows);
 	vclock_copy(&writer->vclock, &entry->vclock);
 	entry->approx_len = 0;
-	vclock_copy(&replicaset.vclock, &writer->vclock);
 	entry->res = vclock_sum(&writer->vclock);
 	journal_entry_complete(entry);
+	vclock_copy(&replicaset.wal_vclock, &writer->vclock);
+	vclock_copy(&replicaset.commit_vclock, &writer->vclock);
 	return 0;
 }
 

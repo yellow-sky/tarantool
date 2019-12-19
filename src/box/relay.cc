@@ -294,7 +294,7 @@ relay_final_join(int fd, uint64_t sync, struct vclock *start_vclock,
 		     tnt_raise(ClientError, ER_INJECTION, "relay final join"));
 
 	ERROR_INJECT(ERRINJ_RELAY_FINAL_SLEEP, {
-		while (vclock_compare(stop_vclock, &replicaset.vclock) == 0)
+		while (vclock_compare(stop_vclock, &replicaset.wal_vclock) == 0)
 			fiber_sleep(0.001);
 	});
 }
@@ -406,7 +406,7 @@ relay_subscribe(struct replica *replica, int fd, uint64_t sync,
 		replica_on_relay_stop(replica);
 	});
 
-	vclock_copy(&relay->local_vclock_at_subscribe, &replicaset.vclock);
+	vclock_copy(&relay->local_vclock_at_subscribe, &replicaset.wal_vclock);
 	relay->version_id = replica_version_id;
 
 	if (wal_relay(&relay->wal_relay, replica_clock, NULL,

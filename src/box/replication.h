@@ -195,9 +195,16 @@ struct replicaset {
 	struct rlist anon;
 	/**
 	 * TX thread local vclock reflecting the state
-	 * of the cluster as maintained by appliers.
+	 * of the commited transaction known by the local
+	 * instance.
 	 */
-	struct vclock vclock;
+	struct vclock commit_vclock;
+	/**
+	 * TX thread local vclock reflecting the state
+	 * of the logged transaction known by the local
+	 * instance.
+	 */
+	struct vclock wal_vclock;
 	/**
 	 * This flag is set while the instance is bootstrapping
 	 * from a remote master.

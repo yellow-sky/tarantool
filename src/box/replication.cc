@@ -88,13 +88,14 @@ replication_init(void)
 	memset(&replicaset, 0, sizeof(replicaset));
 	replica_hash_new(&replicaset.hash);
 	rlist_create(&replicaset.anon);
-	vclock_create(&replicaset.vclock);
+	vclock_create(&replicaset.commit_vclock);
+	vclock_create(&replicaset.wal_vclock);
 	fiber_cond_create(&replicaset.applier.cond);
 	replicaset.replica_by_id = (struct replica **)calloc(VCLOCK_MAX, sizeof(struct replica *));
 	latch_create(&replicaset.applier.order_latch);
 
 	vclock_create(&replicaset.applier.vclock);
-	vclock_copy(&replicaset.applier.vclock, &replicaset.vclock);
+	vclock_copy(&replicaset.applier.vclock, &replicaset.wal_vclock);
 	rlist_create(&replicaset.applier.on_rollback);
 	rlist_create(&replicaset.applier.on_commit);
 
@@ -757,7 +758,7 @@ replicaset_needs_rejoin(struct replica **master)
 
 		const struct ballot *ballot = &applier->ballot;
 		if (vclock_compare(&ballot->gc_vclock,
-				   &replicaset.vclock) <= 0) {
+				   &replicaset.wal_vclock) <= 0) {
 			/*
 			 * There's at least one master that still stores
 			 * WALs needed by this instance. Proceed to local
@@ -769,14 +770,14 @@ replicaset_needs_rejoin(struct replica **master)
 		const char *uuid_str = tt_uuid_str(&replica->uuid);
 		const char *addr_str = sio_strfaddr(&applier->addr,
 						applier->addr_len);
-		const char *local_vclock_str = vclock_to_string(&replicaset.vclock);
+		const char *local_vclock_str = vclock_to_string(&replicaset.wal_vclock);
 		const char *remote_vclock_str = vclock_to_string(&ballot->vclock);
 		const char *gc_vclock_str = vclock_to_string(&ballot->gc_vclock);
 
 		say_info("can't follow %s at %s: required %s available %s",
 			 uuid_str, addr_str, local_vclock_str, gc_vclock_str);
 
-		if (vclock_compare(&replicaset.vclock, &ballot->vclock) > 0) {
+		if (vclock_compare(&replicaset.wal_vclock, &ballot->vclock) > 0) {
 			/*
 			 * Replica has some rows that are not present on
 			 * the master. Don't rebootstrap as we don't want
