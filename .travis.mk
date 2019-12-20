@@ -24,6 +24,7 @@ asan: docker_test_asan_debian
 docker_%:
 	mkdir -p ~/.cache/ccache
 	docker run \
+		${DOCKER_OPTIONS} \
 		--rm=true --tty=true \
 		--volume "${PWD}:/tarantool" \
 		--volume "${HOME}/.cache:/cache" \
@@ -122,6 +123,17 @@ test_asan_debian_no_deps: build_asan_debian
 		replication-py/ small/ sql/ sql-tap/ swim/ unit/ vinyl/ wal_off/ xlog/ xlog-py/
 
 test_asan_debian: deps_debian deps_buster_clang_8 test_asan_debian_no_deps
+
+#######
+# ARM #
+#######
+
+qemu_arm_debian:
+	docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+
+build_arm_debian: qemu_arm_debian docker_build_debian
+
+test_arm_debian_no_deps: qemu_arm_debian docker_test_debian_no_deps
 
 #######
 # OSX #

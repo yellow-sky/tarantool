@@ -3,6 +3,8 @@ stages:
 
 variables:
   GITLAB_MAKE: "make -f .gitlab.mk"
+  DOCKER_ARM_IMAGE: "${CI_REGISTRY}/${CI_PROJECT_PATH}/testing/arm64v8-debian-buster:latest"
+  DOCKER_NETWORK: "--network=host"
 
 # Jobs templates
 
@@ -89,6 +91,17 @@ release_asan_clang8:
   <<: *docker_test_clang8_definition
   script:
     - ${GITLAB_MAKE} test_asan_debian_no_deps
+
+release_arm:
+  stage: test
+  tags:
+    - test_qemu
+  variables:
+    DOCKER_IMAGE: "${DOCKER_ARM_IMAGE}"
+    DOCKER_OPTIONS: "${DOCKER_NETWORK}"
+    CMAKE_EXTRA_PARAMS: -DENABLE_BACKTRACE=OFF
+  script:
+    - ${GITLAB_MAKE} test_arm_debian_no_deps
 
 osx_13_release:
   <<: *release_only_definition

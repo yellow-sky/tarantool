@@ -43,7 +43,22 @@
 #include "trigger.h"
 
 #if ENABLE_FIBER_TOP
+#if !defined(__arm__) && !defined(__aarch64__) && !defined(__powerpc64__) && !defined(__PPC64__) && \
+    !defined(__powerpc__)
 #include <x86intrin.h> /* __rdtscp() */
+#elif defined(__aarch64__)
+static __inline__ unsigned long long __rdtscp(uint32_t *cpu_id)
+{
+       // System timer of ARMv8 runs at a different frequency than the CPU's.
+       // The frequency is fixed, typically in the range 1-50MHz.  It can be
+       // read at CNTFRQ special register.  We assume the OS has set up
+       // the virtual timer properly.
+       if (!cpu_id) { cpu_id = 0; }
+       int64_t virtual_timer_value;
+       __asm__ volatile("mrs %0, cntvct_el0" : "=r"(virtual_timer_value));
+       return virtual_timer_value;
+}
+#endif
 
 static inline void
 clock_stat_add_delta(struct clock_stat *stat, uint64_t clock_delta)
@@ -109,7 +124,7 @@ cpu_stat_reset(struct cpu_stat *stat)
 static uint64_t
 cpu_stat_on_csw(struct cpu_stat *stat)
 {
-	uint32_t cpu_id;
+	uint32_t cpu_id = 0;
 	uint64_t delta, clock = __rdtscp(&cpu_id);
 
 	if (cpu_id == stat->prev_cpu_id) {
