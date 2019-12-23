@@ -455,6 +455,12 @@ void
 xrow_encode_timestamp(struct xrow_header *row, uint32_t replica_id, double tm);
 
 /**
+ * Copy crow_header to region.
+ */
+struct xrow_header *
+xrow_copy(const struct xrow_header *row, struct region *region);
+
+/**
  * Fast encode xrow header using the specified header fields.
  * It is faster than the xrow_header_encode, because uses
  * the predefined values for all fields of the header, defined

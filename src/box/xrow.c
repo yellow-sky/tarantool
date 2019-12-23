@@ -1415,3 +1415,33 @@ greeting_decode(const char *greetingbuf, struct greeting *greeting)
 
 	return 0;
 }
+
+struct xrow_header *
+xrow_copy(const struct xrow_header *row, struct region *region)
+{
+	size_t region_svp = region_used(region);
+	struct xrow_header *copy = (struct xrow_header *)
+		region_alloc(region, sizeof(struct xrow_header));
+	if (copy == NULL) {
+		diag_set(OutOfMemory, sizeof(struct xrow_header),
+			 "region", "struct xrow_header");
+		goto error;
+	}
+	*copy = *row;
+	for (int i = 0; i < row->bodycnt; ++i) {
+		copy->body[i].iov_base = region_alloc(region,
+						      copy->body[i].iov_len);
+		if (copy->body[i].iov_base == NULL) {
+			diag_set(OutOfMemory, copy->body[i].iov_len,
+				 "region", "row body");
+			goto error;
+		}
+		memcpy(copy->body[i].iov_base, row->body[i].iov_base,
+		       copy->body[i].iov_len);
+	}
+	return copy;
+
+error:
+	region_truncate(region, region_svp);
+	return NULL;
+}
