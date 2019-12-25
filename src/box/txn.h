@@ -68,6 +68,8 @@ enum txn_flag {
 	TXN_HAS_TRIGGERS,
 	/** Transaction was submitted to wal but not processed yet. */
 	TXN_IS_PENDING,
+	/** Wal should ve synced just after this transaction. */
+	TXN_IS_SYNC,
 };
 
 enum {
@@ -482,6 +484,10 @@ txn_savepoint_by_name(struct txn *txn, const char *name);
 /** Remove given and all newer entries from savepoint list. */
 void
 txn_savepoint_release(struct txn_savepoint *svp);
+
+/** Synchronize txn engine. */
+int
+txn_engine_sync(struct vclock *vclock, int64_t *wal_size);
 
 /**
  * FFI bindings: do not throw exceptions, do not accept extra

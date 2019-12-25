@@ -514,6 +514,9 @@ txn_write_to_wal(struct txn *txn)
 		return -1;
 	}
 
+	if (txn_has_flag(txn, TXN_IS_SYNC))
+		txn->entry->flags |= JOURNAL_ENTRY_SYNC;
+
 	struct txn_stmt *stmt;
 	struct xrow_header **remote_row = txn->entry->rows;
 	struct xrow_header **local_row = txn->entry->rows + txn->n_applier_rows;
@@ -919,4 +922,66 @@ txn_engine_init()
 	static struct trigger on_txn_engine_write;
 	trigger_create(&on_txn_engine_write, txn_engine_on_write, NULL, NULL);
 	trigger_add(&replicaset.on_write, &on_txn_engine_write);
+}
+
+struct txn_sync_data {
+	struct vclock vclock;
+	int64_t size;
+	bool sync;
+};
+
+static int
+txn_sync_on_commit(struct trigger *trigger, void *data)
+{
+	struct txn_sync_data *sync_data = (struct txn_sync_data *)trigger->data;
+	struct txn *txn = (struct txn *)data;
+	vclock_copy(&sync_data->vclock, &txn->entry->vclock);
+	sync_data->size = txn->entry->approx_len;
+	return 0;
+}
+
+static int
+txn_sync_f(va_list ap)
+{
+	struct txn_sync_data *sync_data = va_arg(ap, struct txn_sync_data *);
+	struct txn *txn = txn_begin();
+	if (txn == NULL)
+		return -1;
+	struct trigger on_commit;
+	trigger_create(&on_commit, txn_sync_on_commit, sync_data, NULL);
+	txn_on_commit(txn, &on_commit);
+	if (txn_commit(txn) == 0)
+		return 0;
+	return -1;
+}
+
+int
+txn_engine_sync(struct vclock *vclock, int64_t *wal_size)
+{
+	ERROR_INJECT(ERRINJ_WAL_SYNC, {
+		diag_set(ClientError, ER_INJECTION, "wal sync");
+		return -1;
+	});
+	struct txn_sync_data sync_data;
+	/*
+	 * Wal updates size only after an actual write so
+	 * set the sync flag up to deliver the wal size
+	 * after the last checkpoint.
+	 */
+	sync_data.sync = wal_size != NULL;
+	/* We could not have more than one transaction per fiber. */
+	struct fiber *sync_fiber = fiber_new("sync fiber", txn_sync_f);
+	if (sync_fiber == NULL)
+		return -1;
+	fiber_set_joinable(sync_fiber, true);
+	fiber_start(sync_fiber, &sync_data);
+	if (fiber_join(sync_fiber) == 0) {
+		if (vclock != NULL)
+			vclock_copy(vclock, &sync_data.vclock);
+		if (wal_size != NULL)
+			*wal_size = sync_data.size;
+		return 0;
+	}
+	diag_set(ClientError, ER_CHECKPOINT_ROLLBACK);
+	return -1;
 }

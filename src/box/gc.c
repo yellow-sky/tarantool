@@ -57,6 +57,7 @@
 #include "engine.h"		/* engine_collect_garbage() */
 #include "wal.h"		/* wal_collect_garbage() */
 #include "checkpoint_schedule.h"
+#include "txn.h"
 
 struct gc_state gc;
 
@@ -349,7 +350,7 @@ gc_do_checkpoint(void)
 	rc = engine_begin_checkpoint();
 	if (rc != 0)
 		goto out;
-	rc = wal_begin_checkpoint(&checkpoint);
+	rc = txn_engine_sync(&checkpoint.vclock, &checkpoint.wal_size);
 	if (rc != 0)
 		goto out;
 	rc = engine_commit_checkpoint(&checkpoint.vclock);

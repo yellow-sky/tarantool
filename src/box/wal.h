@@ -178,15 +178,6 @@ wal_atfork();
 enum wal_mode
 wal_mode();
 
-/**
- * Wait until all submitted writes are successfully flushed
- * to disk. Returns 0 on success, -1 if write failed.
- * Corresponding vclock is returned in @a vclock unless it is
- * NULL.
- */
-int
-wal_sync(struct vclock *vclock);
-
 struct wal_checkpoint {
 	struct cbus_call_msg base;
 	/**
@@ -202,17 +193,6 @@ struct wal_checkpoint {
 	 */
 	int64_t wal_size;
 };
-
-/**
- * Prepare WAL for checkpointing.
- *
- * This function flushes all pending changes. Checkpoint
- * info is returned in @checkpoint. It is supposed to be
- * passed to wal_commit_checkpoint() upon successful
- * checkpoint creation.
- */
-int
-wal_begin_checkpoint(struct wal_checkpoint *checkpoint);
 
 /**
  * This function is called upon successful checkpoint creation.

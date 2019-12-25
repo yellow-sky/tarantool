@@ -561,42 +561,6 @@ wal_free(void)
 }
 
 static void
-wal_entry_done_f(struct journal_entry *entry, void *data)
-{
-	(void) entry;
-	struct fiber_cond *done_cond = (struct fiber_cond *)data;
-	fiber_cond_signal(done_cond);
-}
-
-int
-wal_sync(struct vclock *vclock)
-{
-	ERROR_INJECT(ERRINJ_WAL_SYNC, {
-		diag_set(ClientError, ER_INJECTION, "wal sync");
-		return -1;
-	});
-
-	struct fiber_cond done_cond;
-	fiber_cond_create(&done_cond);
-
-	size_t region_svp = region_used(&fiber()->gc);
-	struct journal_entry *entry;
-	entry = journal_entry_new(0, &fiber()->gc, wal_entry_done_f, &done_cond);
-	journal_write(entry);
-	while (!journal_entry_is_done(entry))
-		fiber_cond_wait(&done_cond);
-	int64_t res = entry->res;
-	if (res >= 0 && vclock != NULL)
-		vclock_copy(vclock, &entry->vclock);
-	region_truncate(&fiber()->gc, region_svp);
-	if (res < 0) {
-		diag_set(ClientError, ER_WAL_IO);
-		return -1;
-	}
-	return 0;
-}
-
-static void
 wal_rotate_f(struct cmsg *base)
 {
 	struct wal_writer *writer = &wal_writer_singleton;
@@ -619,30 +583,6 @@ wal_rotate()
 		return -1;
 	}
 	cpipe_push(&writer->wal_pipe, wal_rotate_f, base);
-	return 0;
-}
-
-int
-wal_begin_checkpoint(struct wal_checkpoint *checkpoint)
-{
-	struct fiber_cond done_cond;
-	fiber_cond_create(&done_cond);
-
-	size_t region_svp = region_used(&fiber()->gc);
-	struct journal_entry *entry;
-	entry = journal_entry_new(0, &fiber()->gc, wal_entry_done_f, &done_cond);
-	entry->flags |= JOURNAL_ENTRY_SYNC;
-	journal_write(entry);
-	while (!journal_entry_is_done(entry))
-		fiber_cond_wait(&done_cond);
-	if (entry->res < 0) {
-		diag_set(ClientError, ER_CHECKPOINT_ROLLBACK);
-		region_truncate(&fiber()->gc, region_svp);
-		return -1;
-	}
-	vclock_copy(&checkpoint->vclock, &entry->vclock);
-	checkpoint->wal_size = entry->approx_len;
-	region_truncate(&fiber()->gc, region_svp);
 	return 0;
 }
 

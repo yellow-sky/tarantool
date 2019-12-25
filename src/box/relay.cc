@@ -52,6 +52,7 @@
 #include "xrow_io.h"
 #include "xstream.h"
 #include "wal.h"
+#include "txn.h"
 
 /** State of a replication relay. */
 struct relay {
@@ -206,7 +207,7 @@ relay_initial_join(int fd, uint64_t sync, struct vclock *vclock)
 	 * the frozen read view are successfully committed and
 	 * obtain corresponding vclock.
 	 */
-	if (wal_sync(vclock) != 0)
+	if (txn_engine_sync(vclock, NULL) != 0)
 		diag_raise();
 
 	/* Respond to the JOIN request with the current vclock. */
