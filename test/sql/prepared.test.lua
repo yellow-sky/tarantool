@@ -263,11 +263,11 @@ box.schema.func.create('SLEEP', {language = 'Lua',
     body = 'function () fiber.sleep(0.3) return 1 end',
     exports = {'LUA', 'SQL'}});
 
-s = prepare("SELECT id, SLEEP() FROM test;");
+s = prepare("SELECT SLEEP() in (1, 2)");
 assert(s ~= nil);
 
 function implicit_yield()
-    s = prepare("SELECT id, SLEEP() FROM test;")
+    s = prepare("SELECT SLEEP() in (1, 2)")
     execute(s.stmt_id)
 end;
 

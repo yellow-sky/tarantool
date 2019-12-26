@@ -1418,7 +1418,7 @@ case OP_ResultRow: {
 	assert(p->nResColumn==pOp->p2);
 	assert(pOp->p1>0);
 	assert(pOp->p1+pOp->p2<=(p->nMem+1 - p->nCursor)+1);
-	assert(p->iStatement == 0 && p->anonymous_savepoint == NULL);
+	assert(p->iStatement == 0);
 
 	/* Invalidate all ephemeral cursor row caches */
 	p->cacheCtr = (p->cacheCtr + 2)|1;
