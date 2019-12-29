@@ -47,7 +47,7 @@ fio.unlink(xlogs[#xlogs])
 test_run:cmd('start server panic with crash_expected=True')
 
 -- Check that log contains the mention of broken LSN and the request printout
-grep_broken_lsn(fio.pathjoin(fio.cwd(), 'panic.log'), 1)
+grep_broken_lsn(fio.pathjoin(fio.cwd(), 'panic.log'), 2)
 
 test_run:cmd('cleanup server panic')
 test_run:cmd('delete server panic')

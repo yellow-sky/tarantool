@@ -222,7 +222,7 @@ function ret_old(old,new) return old end
 s:before_replace(ret_old) == ret_old
 s:insert{1, 1}
 
-path = fio.pathjoin(box.cfg.wal_dir, string.format('%020d.xlog', box.info.lsn - 1))
+path = fio.pathjoin(box.cfg.wal_dir, string.format('%020d.xlog', box.info.lsn - 2))
 fun, param, state = xlog.pairs(path)
 state, row = fun(param, state)
 row.HEADER.type

@@ -95,7 +95,7 @@ old_lsn = box.info.vclock[2] or 0
 box.cfg{read_only=false}
 box.space.test:insert{3}
 -- New changes are tracked under freshly assigned id.
-box.info.vclock[2] == old_lsn + 1
+box.info.vclock[2] == old_lsn + 2
 
 test_run:cmd('switch default')
 

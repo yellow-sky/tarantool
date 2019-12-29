@@ -19,7 +19,7 @@ box.space._schema:replace({'tost'})
 
 -- corrupted (empty) in the middle (old behavior: goto error on recovery)
 fio = require('fio')
-path = fio.pathjoin(box.cfg.wal_dir, string.format('%020d.xlog', box.info.lsn - 2))
+path = fio.pathjoin(box.cfg.wal_dir, string.format('%020d.xlog', box.info.lsn - 4))
 fio.truncate(path)
 
 test_run:cmd("restart server test")
@@ -27,7 +27,7 @@ box.space._schema:replace({'last'})
 
 -- corrupted (empty), last
 fio = require('fio')
-path = fio.pathjoin(box.cfg.wal_dir, string.format('%020d.xlog', box.info.lsn - 1))
+path = fio.pathjoin(box.cfg.wal_dir, string.format('%020d.xlog', box.info.lsn - 2))
 fio.truncate(path)
 
 test_run:cmd("restart server test")
@@ -38,7 +38,7 @@ box.space._schema:replace({'tost'})
 
 -- corrupted header, last
 fio = require('fio')
-path = fio.pathjoin(box.cfg.wal_dir, string.format('%020d.xlog', box.info.lsn - 1))
+path = fio.pathjoin(box.cfg.wal_dir, string.format('%020d.xlog', box.info.lsn - 2))
 f = fio.open(path, {'O_WRONLY'})
 f:write('DEAD')
 f:close()

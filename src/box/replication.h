@@ -212,6 +212,10 @@ struct replicaset {
 	 */
 	struct rlist on_write;
 	/**
+	 * Trigger is fired when wal wants to ack a vclock.
+	 */
+	struct rlist on_wal_ack;
+	/**
 	 * This flag is set while the instance is bootstrapping
 	 * from a remote master.
 	 */

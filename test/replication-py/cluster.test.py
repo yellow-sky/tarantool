@@ -139,8 +139,8 @@ print '-------------------------------------------------------------'
 print 'Modify data to bump LSN and check box.info'
 print '-------------------------------------------------------------'
 replica.admin('box.space._schema:insert{"test", 48}')
-replica.admin('box.info.lsn == 1')
-replica.admin('box.info.vclock[%d] == 1' % replica_id)
+replica.admin('box.info.lsn == 2')
+replica.admin('box.info.vclock[%d] == 2' % replica_id)
 
 print '-------------------------------------------------------------'
 print 'Connect master to replica'
@@ -162,14 +162,14 @@ print '-------------------------------------------------------------'
 master.admin('box.space._cluster:delete{%d} ~= nil' % replica_id)
 
 # gh-1219: LSN must not be removed from vclock on unregister
-master.admin('box.info.vclock[%d] == 1' % replica_id)
+master.admin('box.info.vclock[%d] == 2' % replica_id)
 
 print '-------------------------------------------------------------'
 print 'Modify data to bump LSN on replica'
 print '-------------------------------------------------------------'
 replica.admin('box.space._schema:insert{"tost", 49}')
-replica.admin('box.info.lsn == 2')
-replica.admin('box.info.vclock[%d] == 2' % replica_id)
+replica.admin('box.info.lsn == 4')
+replica.admin('box.info.vclock[%d] == 4' % replica_id)
 
 print '-------------------------------------------------------------'
 print 'Master must not crash then receives orphan rows from replica'
@@ -180,7 +180,7 @@ sys.stdout.push_filter(replication_source, '<replication>')
 master.admin("box.cfg{ replication = '%s' }" % replication_source)
 
 master.wait_lsn(replica_id, replica.get_lsn(replica_id))
-master.admin('box.info.vclock[%d] == 2' % replica_id)
+master.admin('box.info.vclock[%d] == 4' % replica_id)
 
 master.admin("box.cfg{ replication = '' }")
 replica.stop()
@@ -196,7 +196,7 @@ print '-------------------------------------------------------------'
 # Snapshot is required. Otherwise a relay will skip records made by previous
 # replica with the re-used id.
 master.admin("box.snapshot()")
-master.admin('box.info.vclock[%d] == 2' % replica_id)
+master.admin('box.info.vclock[%d] == 4' % replica_id)
 
 replica = TarantoolServer(server.ini)
 replica.script = 'replication-py/replica.lua'
@@ -209,8 +209,8 @@ replica.admin('box.info.id == %d' % replica_id)
 replica.admin('not box.info.ro')
 # All records were succesfully recovered.
 # Replica should have the same vclock as master.
-master.admin('box.info.vclock[%d] == 2' % replica_id)
-replica.admin('box.info.vclock[%d] == 2' % replica_id)
+master.admin('box.info.vclock[%d] == 4' % replica_id)
+replica.admin('box.info.vclock[%d] == 4' % replica_id)
 
 replica.stop()
 replica.cleanup()

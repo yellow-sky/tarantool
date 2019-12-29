@@ -50,7 +50,7 @@ box.schema.user.grant('guest', 'replication')
 ---
 - true
 ...
-box.info.vclock[master_id] == 1
+box.info.vclock[master_id] == 2
 ---
 - true
 ...
@@ -113,7 +113,7 @@ box.space._cluster:count() == 2
 master_id = box.info.id
 ---
 ...
-box.info.vclock[master_id] == 2 -- grant + registration == 2
+box.info.vclock[master_id] == 4 -- grant + registration + 2 ack == 4
 ---
 - true
 ...
@@ -207,7 +207,7 @@ box.space._cluster:count() == 2
 master_id = test_run:get_server_id('default')
 ---
 ...
-box.info.vclock[master_id] == 2
+box.info.vclock[master_id] == 4
 ---
 - true
 ...

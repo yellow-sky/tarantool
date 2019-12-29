@@ -114,11 +114,11 @@ box.space.loc:select{}
 -- Replica-local changes are accounted for in 0 vclock component.
 box.info.lsn
  | ---
- | - 10
+ | - 20
  | ...
 box.info.vclock[0]
  | ---
- | - 10
+ | - 20
  | ...
 
 -- Replica is read-only.
@@ -262,7 +262,7 @@ box.space.test:insert{3}
  | - [3]
  | ...
 -- New changes are tracked under freshly assigned id.
-box.info.vclock[2] == old_lsn + 1
+box.info.vclock[2] == old_lsn + 2
  | ---
  | - true
  | ...

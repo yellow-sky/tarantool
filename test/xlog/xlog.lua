@@ -6,7 +6,7 @@ box.cfg{
     memtx_memory        = 107374182,
     pid_file            = "tarantool.pid",
     force_recovery      = true,
-    wal_max_size        = 500,
+    wal_max_size        = 1000,
     snap_io_rate_limit  = 16
 }
 

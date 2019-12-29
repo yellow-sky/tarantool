@@ -315,7 +315,8 @@ static ssize_t
 relay_subscribe_filter(struct wal_relay *wal_relay, struct xrow_header **row)
 {
 	if ((*row)->type != IPROTO_OK) {
-		assert(iproto_type_is_dml((*row)->type));
+		assert(iproto_type_is_dml((*row)->type) ||
+		       (*row)->type == IPROTO_WAL_ACK);
 		/*
 		 * Because of asynchronous replication both master
 		 * and replica may have different transaction
@@ -348,14 +349,14 @@ relay_subscribe_filter(struct wal_relay *wal_relay, struct xrow_header **row)
 		rc = WAL_RELAY_FILTER_ROW;
 	}
 
+	if ((*row)->replica_id == 0)
+		return WAL_RELAY_FILTER_SKIP;
 	/*
 	 * Transform replica local requests to IPROTO_NOP so as to
 	 * promote vclock on the replica without actually modifying
 	 * any data.
 	 */
 	if ((*row)->group_id == GROUP_LOCAL) {
-		if ((*row)->replica_id == 0)
-			return WAL_RELAY_FILTER_SKIP;
 		struct xrow_header *filtered_row = (struct xrow_header *)
 			region_alloc(&fiber()->gc, sizeof(*filtered_row));
 		if (filtered_row == NULL) {

@@ -92,11 +92,11 @@ _select(1, 10)
 
 -- Check box.info.vclock is updated during hot standby.
 test_run:cmd("switch hot_standby")
-_wait_lsn(10)
+_wait_lsn(20)
 box.space.tweedledum.index[1]:select()
 
 test_run:cmd("switch replica")
-_wait_lsn(10)
+_wait_lsn(20)
 _select(1, 10)
 
 test_run:cmd("stop server default")
@@ -118,7 +118,7 @@ _insert(11, 20)
 _select(11, 20)
 
 test_run:cmd("switch replica")
-_wait_lsn(10)
+_wait_lsn(20)
 _select(11, 20)
 
 test_run:cmd("stop server hot_standby")

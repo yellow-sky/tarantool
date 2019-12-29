@@ -91,6 +91,7 @@ replication_init(void)
 	vclock_create(&replicaset.commit_vclock);
 	vclock_create(&replicaset.wal_vclock);
 	rlist_create(&replicaset.on_write);
+	rlist_create(&replicaset.on_wal_ack);
 	fiber_cond_create(&replicaset.applier.cond);
 	replicaset.replica_by_id = (struct replica **)calloc(VCLOCK_MAX, sizeof(struct replica *));
 	latch_create(&replicaset.applier.order_latch);

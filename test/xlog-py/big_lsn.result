@@ -22,7 +22,7 @@ box.snapshot()
 ...
 box.info.lsn
 ---
-- 123456789124
+- 123456789125
 ...
 box.space._schema:delete('dummy')
 ---

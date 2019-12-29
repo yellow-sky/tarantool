@@ -22,7 +22,7 @@ box.info.lsn == 0
 box.schema.user.grant('guest', 'replication')
 -- LSN is 1 after the first request
 #box.info.vclock == 1
-box.info.vclock[master_id] == 1
+box.info.vclock[master_id] == 2
 box.info.lsn == box.info.vclock[master_id]
 master = box.info.replication[master_id]
 master.id == master_id
@@ -46,7 +46,7 @@ box.space._cluster:count() == 2
 
 -- master's status
 master_id = box.info.id
-box.info.vclock[master_id] == 2 -- grant + registration == 2
+box.info.vclock[master_id] == 4 -- grant + registration + 2 ack == 4
 box.info.lsn == box.info.vclock[master_id]
 master = box.info.replication[master_id]
 master.id == master_id
@@ -79,7 +79,7 @@ box.space._cluster:count() == 2
 
 -- master's status
 master_id = test_run:get_server_id('default')
-box.info.vclock[master_id] == 2
+box.info.vclock[master_id] == 4
 master = box.info.replication[master_id]
 master.id == master_id
 master.uuid == box.space._cluster:get(master_id)[2]

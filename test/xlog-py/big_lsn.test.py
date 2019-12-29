@@ -13,7 +13,7 @@ server.admin("box.snapshot()")
 server.stop()
 
 # Bump the instance vclock by tweaking the checkpoint.
-old_lsn = 1
+old_lsn = 2
 new_lsn = 123456789123
 snap_dir = os.path.join(server.vardir, server.name)
 old_snap = os.path.join(snap_dir, "%020d.snap" % old_lsn)

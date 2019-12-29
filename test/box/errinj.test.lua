@@ -51,14 +51,14 @@ space:insert{1}
 errinj.set("ERRINJ_WAL_WRITE_PARTIAL", -1)
 space:insert{1}
 -- Check vclock was promoted only one time
-box.info.vclock[box.info.id] == lsn1 + 1
+box.info.vclock[box.info.id] == lsn1 + 2
 errinj.set("ERRINJ_WAL_WRITE_PARTIAL", 0)
 space:update(1, {{'=', 2, 2}})
 space:get{1}
 errinj.set("ERRINJ_WAL_WRITE_PARTIAL", -1)
 space:update(1, {{'=', 2, 2}})
 -- Check vclock was promoted only two times
-box.info.vclock[box.info.id] == lsn1 + 2
+box.info.vclock[box.info.id] == lsn1 + 4
 space:truncate()
 
 -- Check a failed log rotation

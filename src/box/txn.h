@@ -490,6 +490,14 @@ int
 txn_engine_sync(struct vclock *vclock, int64_t *wal_size);
 
 /**
+ * Process wal ack through the txn engine.
+ * After this ack was written out corresponding
+ * transactions up to acked are going to be committed.
+ */
+int
+txn_process_ack(const struct xrow_header *row);
+
+/**
  * FFI bindings: do not throw exceptions, do not accept extra
  * arguments
  */

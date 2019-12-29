@@ -427,6 +427,9 @@ applier_wait_snapshot(struct applier *applier)
 			    &replicaset.commit_vclock);
 	}
 
+	applier_set_state(applier, APPLIER_INITIAL_JOIN);
+	struct vclock commit_vclock;
+
 	/*
 	 * Receive initial data.
 	 */
@@ -441,6 +444,7 @@ applier_wait_snapshot(struct applier *applier)
 			if (++row_count % 100000 == 0)
 				say_info("%.1fM rows received", row_count / 1e6);
 		} else if (row.type == IPROTO_OK) {
+			xrow_decode_vclock_xc(&row, &commit_vclock);
 			if (applier->version_id < version_id(1, 7, 0)) {
 				/*
 				 * This is the start vclock if the
@@ -777,6 +781,19 @@ applier_apply_tx(struct stailq *rows)
 		return 0;
 	}
 
+	/* Check if an ack should be processed. */
+	if (first_row->type == IPROTO_WAL_ACK) {
+		assert(first_row->is_commit);
+		int rc = txn_process_ack(first_row);
+		latch_unlock(latch);
+		if (rc == 0) {
+			/* Transaction was sent to journal so promote vclock. */
+			vclock_follow(&replicaset.applier.vclock,
+				      first_row->replica_id, first_row->lsn);
+		}
+		return rc;
+	}
+
 	/**
 	 * Explicitly begin the transaction so that we can
 	 * control fiber->gc life cycle and, in case of apply
@@ -866,6 +883,15 @@ fail:
  */
 static int
 applier_on_commit(struct trigger *trigger, void *event)
+{
+	(void) event;
+	struct applier *applier = (struct applier *)trigger->data;
+	fiber_cond_signal(&applier->writer_cond);
+	return 0;
+}
+
+static int
+applier_on_wal_write(struct trigger *trigger, void *event)
 {
 	(void) event;
 	struct applier *applier = (struct applier *)trigger->data;
@@ -996,6 +1022,10 @@ applier_subscribe(struct applier *applier)
 	applier->lag = TIMEOUT_INFINITY;
 
 	/* Register triggers to handle replication commits and rollbacks. */
+	struct trigger on_wal_write;
+	trigger_create(&on_wal_write, applier_on_wal_write, applier, NULL);
+	trigger_add(&replicaset.on_write, &on_wal_write);
+
 	struct trigger on_commit;
 	trigger_create(&on_commit, applier_on_commit, applier, NULL);
 	trigger_add(&replicaset.applier.on_commit, &on_commit);
@@ -1005,6 +1035,7 @@ applier_subscribe(struct applier *applier)
 	trigger_add(&replicaset.applier.on_rollback, &on_rollback);
 
 	auto trigger_guard = make_scoped_guard([&] {
+		trigger_clear(&on_wal_write);
 		trigger_clear(&on_commit);
 		trigger_clear(&on_rollback);
 	});

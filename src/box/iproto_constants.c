@@ -107,7 +107,6 @@ const char *iproto_type_strs[] =
 	"CALL",
 	"EXECUTE",
 	NULL, /* NOP */
-	"PREPARE",
 };
 
 #define bit(c) (1ULL<<IPROTO_##c)

@@ -97,7 +97,7 @@ test_run:cmd('start server panic with crash_expected=True')
 - false
 ...
 -- Check that log contains the mention of broken LSN and the request printout
-grep_broken_lsn(fio.pathjoin(fio.cwd(), 'panic.log'), 1)
+grep_broken_lsn(fio.pathjoin(fio.cwd(), 'panic.log'), 2)
 ---
 - '{type: ''REPLACE'', replica_id: 1, space_id: 272, index_id: 0, tuple: ["t0", "v1"]}'
 ...

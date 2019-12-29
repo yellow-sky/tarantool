@@ -42,7 +42,7 @@ box.cfg{replication = replication}
 -- replication stopped of third transaction
 -- flush wal
 box.space.l_space:replace({1})
-v1[1] + 2 == box.info.vclock[1]
+v1[1] + 3 == box.info.vclock[1]
 box.space.test:select()
 -- check replication status
 box.info.replication[1].upstream.status

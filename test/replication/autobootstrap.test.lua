@@ -39,7 +39,8 @@ _ = test_run:cmd("switch default")
 
 vclock = test_run:get_cluster_vclock(SERVERS)
 vclock2 = test_run:wait_cluster_vclock(SERVERS, vclock)
-vclock_diff(vclock1, vclock2)
+-- It is not possible to predict how many ack would be written
+vclock_diff(vclock1, vclock2) >= 3
 
 --
 -- Check result

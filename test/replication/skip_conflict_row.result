@@ -196,7 +196,7 @@ test_run:cmd("switch replica")
 - true
 ...
 -- lsn should be incremented
-v1 == box.info.vclock[1] - 10
+v1 == box.info.vclock[1] - 20
 ---
 - true
 ...

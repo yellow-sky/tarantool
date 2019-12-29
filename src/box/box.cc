@@ -343,6 +343,17 @@ apply_wal_row(struct xstream *stream, struct xrow_header *row)
 {
 	struct wal_stream *wal_stream =
 		container_of(stream, struct wal_stream, base);
+
+	/* Wal ACK request should be processed through the txn engine. */
+	if (row->type == IPROTO_WAL_ACK) {
+		assert(row->lsn == row->tsn);
+		assert(row->is_commit);
+		if (txn_process_ack(row) != 0)
+			return -1;
+		return 0;
+	}
+
+
 	if (wal_stream->txn == NULL) {
 		wal_stream->txn = txn_begin();
 		if (wal_stream->txn == NULL)
@@ -363,7 +374,7 @@ apply_wal_row(struct xstream *stream, struct xrow_header *row)
 			rc = txn_commit_stmt(txn, &request);
 	}
 	if (row->is_commit) {
-		if (txn_commit(wal_stream->txn) != 0) {
+		if (txn_write(wal_stream->txn) != 0) {
 			wal_stream->txn = NULL;
 			return -1;
 		}

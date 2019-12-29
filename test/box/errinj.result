@@ -208,7 +208,7 @@ space:insert{1}
  | - [1]
  | ...
 -- Check vclock was promoted only one time
-box.info.vclock[box.info.id] == lsn1 + 1
+box.info.vclock[box.info.id] == lsn1 + 2
  | ---
  | - true
  | ...
@@ -233,7 +233,7 @@ space:update(1, {{'=', 2, 2}})
  | - [1, 2]
  | ...
 -- Check vclock was promoted only two times
-box.info.vclock[box.info.id] == lsn1 + 2
+box.info.vclock[box.info.id] == lsn1 + 4
  | ---
  | - true
  | ...

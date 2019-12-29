@@ -71,7 +71,7 @@ for i = 1, 10 do box.space.test:insert({i, 'm'}) end
 
 test_run:cmd("switch replica")
 -- lsn should be incremented
-v1 == box.info.vclock[1] - 10
+v1 == box.info.vclock[1] - 20
 -- and state is follow
 box.info.replication[1].upstream.status
 

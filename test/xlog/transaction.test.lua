@@ -36,15 +36,19 @@ lsn_str = tostring(lsn)
 data = read_xlog(fio.pathjoin(box.cfg.wal_dir, string.rep('0', 20 - #lsn_str) .. tostring(lsn_str) .. '.xlog'))
 -- check nothing changed for single row transactions
 data[1].HEADER.tsn == nil and data[1].HEADER.commit == nil
-data[2].HEADER.tsn == nil and data[2].HEADER.commit == nil
+data[2].HEADER.type == 13 -- WAL ACK
+data[3].HEADER.tsn == nil and data[3].HEADER.commit == nil
+data[4].HEADER.type == 13 -- WAL ACK
 -- check two row transaction
-data[3].HEADER.tsn == data[3].HEADER.lsn and data[3].HEADER.commit == nil
-data[4].HEADER.tsn == data[3].HEADER.tsn and data[4].HEADER.commit == true
--- check four row transaction
 data[5].HEADER.tsn == data[5].HEADER.lsn and data[5].HEADER.commit == nil
-data[6].HEADER.tsn == data[5].HEADER.tsn and data[6].HEADER.commit == nil
-data[7].HEADER.tsn == data[5].HEADER.tsn and data[7].HEADER.commit == nil
-data[8].HEADER.tsn == data[5].HEADER.tsn and data[8].HEADER.commit == true
+data[6].HEADER.tsn == data[6].HEADER.tsn and data[6].HEADER.commit == true
+data[7].HEADER.type == 13 -- WAL ACK
+-- check four row transaction
+data[8].HEADER.tsn == data[8].HEADER.lsn and data[8].HEADER.commit == nil
+data[9].HEADER.tsn == data[9].HEADER.tsn and data[9].HEADER.commit == nil
+data[10].HEADER.tsn == data[10].HEADER.tsn and data[10].HEADER.commit == nil
+data[11].HEADER.tsn == data[11].HEADER.tsn and data[11].HEADER.commit == true
+data[12].HEADER.type == 13 -- WAL ACK
 box.space.test:drop()
 
 box.snapshot = old_snapshot

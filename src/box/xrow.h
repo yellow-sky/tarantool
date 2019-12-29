@@ -564,6 +564,19 @@ iproto_reply_error(struct obuf *out, const struct error *e, uint64_t sync,
 		   uint32_t schema_version);
 
 /**
+ * Encode wal entry with given vclock and store encoded data to region.
+ */
+int
+xrow_encode_wal_ack(struct xrow_header *row, const struct vclock *vclock,
+		    struct region *region);
+
+/**
+ * Extract encoded wal ack vclock from given xrow.
+ */
+int
+xrow_decode_wal_ack(const struct xrow_header *row, struct vclock *vclock);
+
+/**
  * Write an IPROTO_CHUNK header from a specified position in a
  * buffer.
  * @param buf Buffer to write to.

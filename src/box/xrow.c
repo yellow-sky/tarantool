@@ -789,6 +789,72 @@ xrow_to_iovec(const struct xrow_header *row, struct iovec *out)
 }
 
 int
+xrow_encode_wal_ack(struct xrow_header *row, const struct vclock *vclock,
+		    struct region *region)
+{
+	size_t size = mp_sizeof_map(1) +
+		      mp_sizeof_uint(IPROTO_VCLOCK) +
+		      mp_sizeof_vclock(vclock);
+	char *buf = (char *) region_alloc(region, size);
+	if (buf == NULL) {
+		diag_set(OutOfMemory, size, "region_alloc", "wal ack request");
+		return -1;
+	}
+	char *data = buf;
+	data = mp_encode_map(data, 1);
+	data = mp_encode_uint(data, IPROTO_VCLOCK);
+	data = mp_encode_vclock(data, vclock);
+	assert(data <= buf + size);
+	row->body[0].iov_base = buf;
+	row->body[0].iov_len = (data - buf);
+	row->bodycnt = 1;
+	row->type = IPROTO_WAL_ACK;
+	return 0;
+}
+
+int
+xrow_decode_wal_ack(const struct xrow_header *row, struct vclock *vclock)
+{
+	if (row->bodycnt == 0) {
+		diag_set(ClientError, ER_INVALID_MSGPACK, "request body");
+		return -1;
+	}
+	assert(row->type == IPROTO_WAL_ACK);
+	assert(row->bodycnt == 1);
+	const char * const data = (const char *) row->body[0].iov_base;
+	const char *end = data + row->body[0].iov_len;
+	const char *d = data;
+	if (mp_check(&d, end) != 0 || mp_typeof(*data) != MP_MAP) {
+		xrow_on_decode_err(data, end, ER_INVALID_MSGPACK,
+				   "request body");
+		return -1;
+	}
+
+	d = data;
+	uint32_t map_size = mp_decode_map(&d);
+	for (uint32_t i = 0; i < map_size; i++) {
+		if (mp_typeof(*d) != MP_UINT) {
+			mp_next(&d); /* key */
+			mp_next(&d); /* value */
+			continue;
+		}
+		uint8_t key = mp_decode_uint(&d);
+		switch (key) {
+		case IPROTO_VCLOCK:
+			if (mp_decode_vclock(&d, vclock) != 0) {
+				xrow_on_decode_err(data, end, ER_INVALID_MSGPACK,
+						   "invalid VCLOCK");
+				return -1;
+			}
+			break;
+		default:
+			mp_next(&d); /* value */
+		}
+	}
+	return 0;
+}
+
+int
 xrow_decode_call(const struct xrow_header *row, struct call_request *request)
 {
 	if (row->bodycnt == 0) {

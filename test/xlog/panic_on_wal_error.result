@@ -1,181 +1,186 @@
+-- test-run result file version 2
 -- preparatory stuff
 env = require('test_run')
----
-...
+ | ---
+ | ...
 test_run = env.new()
----
-...
+ | ---
+ | ...
+
 test_run:cmd("restart server default with cleanup=True")
+ | 
 box.schema.user.grant('guest', 'replication')
----
-...
+ | ---
+ | ...
 _ = box.schema.space.create('test')
----
-...
+ | ---
+ | ...
 _ = box.space.test:create_index('pk')
----
-...
+ | ---
+ | ...
 --
 -- reopen xlog
 --
 test_run:cmd("restart server default")
+ | 
 box.error.injection.set("ERRINJ_WAL_MEM_IGNORE", true)
----
-- ok
-...
+ | ---
+ | - ok
+ | ...
 box.space.test ~= nil
----
-- true
-...
+ | ---
+ | - true
+ | ...
 -- insert some stuff
 -- 
 box.space.test:auto_increment{'before snapshot'}
----
-- [1, 'before snapshot']
-...
+ | ---
+ | - [1, 'before snapshot']
+ | ...
 --
 -- this snapshot will go to the replica
 --
 box.internal.wal_rotate() box.snapshot()
----
-...
+ | ---
+ | ...
 -- 
 -- create a replica, let it catch up somewhat
 --
 test_run:cmd("create server replica with rpl_master=default, script='xlog/replica.lua'")
----
-- true
-...
+ | ---
+ | - true
+ | ...
 test_run:cmd("start server replica")
----
-- true
-...
+ | ---
+ | - true
+ | ...
 test_run:cmd("switch replica")
----
-- true
-...
+ | ---
+ | - true
+ | ...
 box.space.test:select{}
----
-- - [1, 'before snapshot']
-...
+ | ---
+ | - - [1, 'before snapshot']
+ | ...
 -- 
 -- stop replica, restart the master, insert more stuff
 -- which will make it into an xlog only
 --
 test_run:cmd("switch default")
----
-- true
-...
+ | ---
+ | - true
+ | ...
 test_run:cmd("stop server replica")
----
-- true
-...
+ | ---
+ | - true
+ | ...
 test_run:cmd("restart server default")
+ | 
 box.error.injection.set("ERRINJ_WAL_MEM_IGNORE", true)
----
-- ok
-...
+ | ---
+ | - ok
+ | ...
 box.space.test:auto_increment{'after snapshot'}
----
-- [2, 'after snapshot']
-...
+ | ---
+ | - [2, 'after snapshot']
+ | ...
 box.space.test:auto_increment{'after snapshot - one more row'}
----
-- [3, 'after snapshot - one more row']
-...
+ | ---
+ | - [3, 'after snapshot - one more row']
+ | ...
 --
 -- save snapshot and remove xlogs
 -- 
 box.internal.wal_rotate() box.snapshot()
----
-...
+ | ---
+ | ...
 fio = require('fio')
----
-...
+ | ---
+ | ...
 glob = fio.pathjoin(box.cfg.wal_dir, '*.xlog')
----
-...
+ | ---
+ | ...
 files = fio.glob(glob)
----
-...
+ | ---
+ | ...
 for _, file in pairs(files) do fio.unlink(file) end
----
-...
+ | ---
+ | ...
 --
 -- make sure the server has some xlogs, otherwise the
 -- replica doesn't discover the gap in the logs
 --
 box.space.test:auto_increment{'after snapshot and restart'}
----
-- [4, 'after snapshot and restart']
-...
+ | ---
+ | - [4, 'after snapshot and restart']
+ | ...
 box.space.test:auto_increment{'after snapshot and restart - one more row'}
----
-- [5, 'after snapshot and restart - one more row']
-...
+ | ---
+ | - [5, 'after snapshot and restart - one more row']
+ | ...
 --  
 --  check that panic is true
 --
 box.cfg{force_recovery=false}
----
-...
+ | ---
+ | ...
 box.cfg.force_recovery
----
-- false
-...
+ | ---
+ | - false
+ | ...
 -- 
 -- try to start the replica, ha-ha
 -- (replication should fail, some rows are missing)
 --
 test_run:cmd("start server replica")
----
-- true
-...
+ | ---
+ | - true
+ | ...
 test_run:cmd("switch replica")
----
-- true
-...
+ | ---
+ | - true
+ | ...
 fiber = require('fiber')
----
-...
+ | ---
+ | ...
 while box.info.replication[1].upstream.status ~= "stopped" do fiber.sleep(0.001) end
----
-...
+ | ---
+ | ...
 box.info.replication[1].upstream.status
----
-- stopped
-...
+ | ---
+ | - stopped
+ | ...
 box.info.replication[1].upstream.message
----
-- 'Missing .xlog file between LSN 6 {1: 6} and 10 {1: 10}'
-...
+ | ---
+ | - 'Missing .xlog file between LSN 12 {1: 12} and 20 {1: 20}'
+ | ...
 box.space.test:select{}
----
-- - [1, 'before snapshot']
-...
+ | ---
+ | - - [1, 'before snapshot']
+ | ...
 --
 --
 test_run:cmd("switch default")
----
-- true
-...
+ | ---
+ | - true
+ | ...
 box.error.injection.set("ERRINJ_WAL_MEM_IGNORE", false)
----
-- ok
-...
+ | ---
+ | - ok
+ | ...
 test_run:cmd("stop server replica")
----
-- true
-...
+ | ---
+ | - true
+ | ...
 test_run:cmd("cleanup server replica")
----
-- true
-...
+ | ---
+ | - true
+ | ...
 --
 -- cleanup
 box.space.test:drop()
----
-...
+ | ---
+ | ...
 box.schema.user.revoke('guest', 'replication')
----
-...
+ | ---
+ | ...

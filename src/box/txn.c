@@ -35,6 +35,8 @@
 #include <fiber.h>
 #include "xrow.h"
 #include "replication.h"
+/* box_is_ro */
+#include "box.h"
 
 double too_long_threshold;
 
@@ -44,9 +46,16 @@ double too_long_threshold;
 static struct rlist writting_queue = {&writting_queue, &writting_queue};
 
 /*
+ * Count of writting transactions which include localy
+ * generated rows.
+ */
+static size_t local_transactions_writting = 0;
+
+/*
  * List of transaction which were written but not committed yet.
  */
 static struct rlist pending_queue = {&pending_queue, &pending_queue};
+
 
 static int
 txn_on_stop(struct trigger *trigger, void *event);
@@ -477,6 +486,9 @@ txn_entry_complete_cb(struct journal_entry *entry, void *data)
 	struct txn *txn = data;
 	txn_clear_flag(txn, TXN_IS_PENDING);
 
+	if (txn->n_new_rows > 0)
+		--local_transactions_writting;
+
 	txn->signature = entry->res;
 	if (txn->signature > 0) {
 		/*
@@ -538,6 +550,8 @@ txn_write_to_wal(struct txn *txn)
 
 	txn_set_flag(txn, TXN_IS_PENDING);
 	rlist_add_tail(&writting_queue, &txn->link);
+	if (txn->n_new_rows > 0)
+		++local_transactions_writting;
 
 	/* Send the entry to the journal. */
 	if (journal_write(txn->entry) < 0) {
@@ -884,44 +898,66 @@ txn_on_yield(struct trigger *trigger, void *event)
 	return 0;
 }
 
-/*
- * Commit all transaction up to the commit vclock.
- */
+static void
+txn_engine_commit_to_vclock(struct vclock *commit_vclock);
+
 static int
-txn_engine_on_write(struct trigger *trigger, void *data)
+txn_engine_on_wal_ack(struct trigger *trigger, void *data)
 {
 	(void) trigger;
-	/* If transaction was written then it is committed. */
-	struct vclock *commit_vclock = (struct vclock *)data;
-	vclock_copy(&replicaset.commit_vclock, commit_vclock);
-	struct txn *txn, *tmp;
-	rlist_foreach_entry_safe(txn, &pending_queue, link, tmp) {
-		/* Commit all transactions up to committed vclock */
-		assert(txn->entry != NULL);
-		int rc = vclock_compare(&txn->entry->vclock,
-					&replicaset.commit_vclock);
-		if (rc > 0 || rc == VCLOCK_ORDER_UNDEFINED)
-			break;
-		rlist_del(&txn->link);
-		/*
-		 * Some commit/rollback triggers require for in_txn fiber
-		 * variable to be set so restore it for the time triggers
-		 * are in progress.
-		 */
-		assert(in_txn() == NULL);
-		fiber_set_txn(fiber(), txn);
-		txn_complete(txn);
-		fiber_set_txn(fiber(), NULL);
+	struct vclock *ack_vclock = (struct vclock *)data;
+	/* Check if there is nothing to commit. */
+	if (rlist_empty(&pending_queue))
+		return 0;
+	int rc = vclock_compare(ack_vclock, &replicaset.commit_vclock);
+	/* An edge case - zero rows transaction were acked. */
+	if (rc == 0) {
+		txn_engine_commit_to_vclock(&replicaset.commit_vclock);
+		return 0;
 	}
+	if (rc < 0 && rc != VCLOCK_ORDER_UNDEFINED)
+		return 0;
+	/* Do not ack foreign transactions in read only mode. */
+	if (box_is_ro() && vclock_get(&replicaset.commit_vclock, instance_id) ==
+			   vclock_get(&replicaset.wal_vclock, instance_id))
+		return 0;
+
+	/* Create an ack row and process it through engine. */
+	size_t gc_svp = region_used(&fiber()->gc);
+	struct xrow_header *row = (struct xrow_header *)
+		region_alloc(&fiber()->gc, sizeof(struct xrow_header));
+	if (row == NULL)
+		goto fail;
+	row->replica_id = 0;
+	row->group_id = GROUP_DEFAULT;
+	/*
+	 * if there were no more transactions issued after
+	 * the latest acked then ack vclock should commit
+	 * itself to in order to maintain the commit vclock
+	 * as written one.
+	 */
+	if (vclock_get(&replicaset.wal_vclock, instance_id) ==
+	    vclock_get(ack_vclock, instance_id) &&
+	    local_transactions_writting == 0)
+		vclock_inc(ack_vclock, instance_id);
+	if (xrow_encode_wal_ack(row, ack_vclock, &fiber()->gc) != 0)
+		goto fail;
+	if (txn_process_ack(row) != 0)
+		goto fail;
+	region_truncate(&fiber()->gc, gc_svp);
+	return 0;
+fail:
+	say_error("Could not process local wal ack");
+	region_truncate(&fiber()->gc, gc_svp);
 	return 0;
 }
 
 void
 txn_engine_init()
 {
-	static struct trigger on_txn_engine_write;
-	trigger_create(&on_txn_engine_write, txn_engine_on_write, NULL, NULL);
-	trigger_add(&replicaset.on_write, &on_txn_engine_write);
+	static struct trigger on_txn_engine_wal_ack;
+	trigger_create(&on_txn_engine_wal_ack, txn_engine_on_wal_ack, NULL, NULL);
+	trigger_add(&replicaset.on_wal_ack, &on_txn_engine_wal_ack);
 }
 
 struct txn_sync_data {
@@ -985,3 +1021,96 @@ txn_engine_sync(struct vclock *vclock, int64_t *wal_size)
 	diag_set(ClientError, ER_CHECKPOINT_ROLLBACK);
 	return -1;
 }
+
+/*
+ * Commit all pending transaction up to commit vclock.
+ */
+static void
+txn_engine_commit_to_vclock(struct vclock *commit_vclock)
+{
+	struct txn *txn, *tmp;
+	rlist_foreach_entry_safe(txn, &pending_queue, link, tmp) {
+		assert(txn->entry != NULL);
+		int rc = vclock_compare(&txn->entry->vclock, commit_vclock);
+		if (rc > 0 || rc == VCLOCK_ORDER_UNDEFINED)
+			break;
+		rlist_del(&txn->link);
+		/*
+		 * Some commit/rollback triggers require for in_txn fiber
+		 * variable to be set so restore it for the time triggers
+		 * are in progress.
+		 */
+		assert(in_txn() == NULL);
+		fiber_set_txn(fiber(), txn);
+		txn_complete(txn);
+		fiber_set_txn(fiber(), NULL);
+	}
+}
+
+/*
+ * Update commit vclock based on ack vclock written to wal.
+ */
+static void
+txn_engine_update_commit_vclock(const struct vclock *ack_vclock)
+{
+	struct vclock_iterator it;
+	vclock_iterator_init(&it, ack_vclock);
+	vclock_foreach(&it, item) {
+		if (item.lsn <= vclock_get(&replicaset.commit_vclock, item.id))
+			continue;
+		vclock_follow(&replicaset.commit_vclock, item.id, item.lsn);
+	}
+}
+
+static void
+txn_ack_entry_done(struct journal_entry *entry, void *data)
+{
+	struct region *region = (struct region *)data;
+	if (entry->res < 0) {
+		cord_region_cache_put(region);
+		return;
+	}
+	/*
+	 * Ack was written so we could promote commit vclock
+	 * and commit corresponding transactions.
+	 */
+	struct vclock ack_vclock;
+	if (xrow_decode_wal_ack(*entry->rows, &ack_vclock) != 0)
+		panic("could not decode ack: journal is corrupted");
+	txn_engine_update_commit_vclock(&ack_vclock);
+	txn_engine_commit_to_vclock(&replicaset.commit_vclock);
+
+	cord_region_cache_put(region);
+}
+
+int
+txn_process_ack(const struct xrow_header *row)
+{
+	struct vclock ack_vclock;
+	if (xrow_decode_wal_ack(row, &ack_vclock) != 0)
+		goto error;
+
+	struct region *region = cord_region_cache_get();
+	if (region == NULL)
+		return -1;
+
+	/* Store row to the entry region. */
+	struct xrow_header *ack_row;
+	ack_row = xrow_copy(row, region);
+	if (ack_row == NULL)
+		goto error;
+
+	struct journal_entry *entry;
+	entry = journal_entry_new(1, region, txn_ack_entry_done, region);
+	if (entry == NULL)
+		goto error;
+	*entry->rows = ack_row;
+	if (journal_write(entry) != 0)
+		return -1;
+	return 0;
+
+error:
+	cord_region_cache_put(region);
+	return -1;
+}
+

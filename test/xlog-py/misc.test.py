@@ -26,7 +26,7 @@ if os.access(wal, os.F_OK):
 server.admin("index = space:create_index('primary', { type = 'hash' })")
 
 server.stop()
-lsn += 2
+lsn += 4
 
 print """
 # a new xlog must be opened after regular termination.
@@ -45,7 +45,7 @@ server.stop()
 
 if os.access(wal, os.F_OK):
   print ".xlog stays around after sutdown"
-lsn += 1
+lsn += 2
 
 print """
 # An xlog file with one record during recovery.
