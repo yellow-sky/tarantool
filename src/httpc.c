@@ -467,3 +467,22 @@ httpc_execute(struct httpc_request *req, double timeout)
 
 	return 0;
 }
+
+char *
+httpc_str_escape(struct httpc_env *env, const char *str, int len)
+{
+	return curl_easy_escape(env->curl_env.multi, str, len);
+}
+
+char *
+httpc_str_unescape(struct httpc_env *env, const char *str, int len,
+		int *outlen)
+{
+	return curl_easy_unescape(env->curl_env.multi, str, len, outlen);
+}
+
+void
+httpc_str_free(char *str)
+{
+	curl_free(str);
+}

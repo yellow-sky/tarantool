@@ -413,4 +413,40 @@ httpc_execute(struct httpc_request *req, double timeout);
 
 /** Request }}} */
 
+/** {{{ Encode/Decode */
+
+/**
+ * This function URL encodes the given string
+ * according RFC3986
+ * @param req - reference to request object with filled fields
+ * @param str - input string to be encoded
+ * @param len - length of input string
+ * @return encoded string or NULL
+ */
+char *
+httpc_str_escape(struct httpc_env *env, const char *str, int len);
+
+/**
+ * This function URL decodes the given string
+ * according RFC3986
+ * @param req - reference to request object with filled fields
+ * @param str - input string to be encoded
+ * @param len - length of input string
+ * @param outlen - - length of output string
+ * @return decoded string or NULL
+ */
+
+char *
+httpc_str_unescape(struct httpc_env *env, const char *str, int len, int *outlen);
+
+/**
+ * This function reclaims memory that has been obtained
+ * through a libcurl call
+ * @param str - pointer to string returned from escape/unescape
+ */
+void
+httpc_str_free(char *str);
+
+/** Encode/Decode }}} */
+
 #endif /* TARANTOOL_HTTPC_H_INCLUDED */

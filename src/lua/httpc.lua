@@ -29,8 +29,6 @@
 --  SUCH DAMAGE.
 --
 
-local fiber = require('fiber')
-
 local driver = package.loaded.http.client
 package.loaded.http = nil
 
@@ -442,7 +440,20 @@ curl_mt = {
 -- Export
 --
 local http_default = http_new()
-local this_module = { new = http_new, }
+
+local function url_escape(str)
+    return driver.escape(http_default.curl, str)
+end
+
+local function url_unescape(str)
+    return driver.unescape(http_default.curl, str)
+end
+
+local this_module = {
+    new = http_new,
+    url_escape = url_escape,
+    url_unescape = url_unescape
+}
 
 local function http_default_wrap(fname)
     return function(...) return http_default[fname](http_default, ...) end

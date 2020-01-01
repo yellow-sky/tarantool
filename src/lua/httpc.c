@@ -425,6 +425,49 @@ luaT_httpc_cleanup(lua_State *L)
 	return 2;
 }
 
+static int
+luaT_httpc_escape(lua_State *L)
+{
+	struct httpc_env *ctx = luaT_httpc_checkenv(L);
+	if (ctx == NULL)
+		return luaL_error(L, "can't get httpc environment");
+
+	size_t str_len;
+	const char *str = luaL_checklstring(L, 2, &str_len);
+	if (str == NULL)
+		return luaL_error(L, "second argument should be a string");
+
+	char *outstr = httpc_str_escape(ctx, str, str_len);
+	if (outstr == NULL)
+		return luaL_error(L, "string escaping error");
+
+	lua_pushstring(L, outstr);
+	httpc_str_free(outstr);
+	return 1;
+}
+
+static int
+luaT_httpc_unescape(lua_State *L)
+{
+	struct httpc_env *ctx = luaT_httpc_checkenv(L);
+	if (ctx == NULL)
+		return luaL_error(L, "can't get httpc environment");
+
+	size_t str_len;
+	const char *str = luaL_checklstring(L, 2, &str_len);
+	if (str == NULL)
+		return luaL_error(L, "second argument should be a string");
+
+	int outstr_len;
+	char *outstr = httpc_str_unescape(ctx, str, str_len, &outstr_len);
+	if (outstr == NULL)
+		return luaL_error(L, "string unescaping error");
+
+	lua_pushlstring(L, outstr, outstr_len);
+	httpc_str_free(outstr);
+	return 1;
+}
+
 /*
  * }}}
  */
@@ -435,6 +478,8 @@ luaT_httpc_cleanup(lua_State *L)
 
 static const struct luaL_Reg Module[] = {
 	{"new", luaT_httpc_new},
+	{"escape", luaT_httpc_escape},
+	{"unescape", luaT_httpc_unescape},
 	{NULL, NULL}
 };
 
