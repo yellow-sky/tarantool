@@ -449,10 +449,68 @@ local function url_unescape(str)
     return driver.unescape(http_default.curl, str)
 end
 
+--
+--  This function format query params from table with arguments
+--
+--  Parameters:
+--
+--  args  -  table with key-value pairs that will be
+--               encoded as string "key1=value1&key2=value2"
+--               each element of pair is encoded with url_escape
+--
+local function format_query(args)
+    if type(args) ~= "table" then
+        error("httpc.format_query expected table with args")
+    end
+    local encoded = {}
+    for k, v in pairs(args) do
+        k = tostring(k)
+        v = tostring(v)
+        k = url_escape(k)
+        v = url_escape(v)
+        table.insert(encoded, k .. '=' .. v)
+    end
+
+    return table.concat(encoded, '&')
+end
+
+--
+--  This function parse query params from string to table
+--
+--  Parameters:
+--
+--  str  -  string in format "key1=value1&key2=value2"
+--              that will be parsed into {key1 = value1, key2 = value2}
+--              each element of pair is decoded with url_unescape
+--
+local function parse_query(str)
+    if type(str) ~= "string" then
+        error("httpc.parse_query expected string with args")
+    end
+    local args = string.split(str, '&')
+
+    local decoded = {}
+    for _, arg in ipairs(args) do
+        local k_v = string.split(arg, '=', 1)
+        if #k_v ~= 2 then
+            error("httpc.parse_query expected arguments in format 'key=value'"
+                .. " separated by '&', got: " .. tostring(arg))
+        end
+        local key = url_unescape(k_v[1])
+        local value = url_unescape(k_v[2])
+
+        decoded[key] = value
+    end
+
+    return decoded
+end
+
 local this_module = {
     new = http_new,
     url_escape = url_escape,
-    url_unescape = url_unescape
+    url_unescape = url_unescape,
+    format_query = format_query,
+    parse_query = parse_query,
 }
 
 local function http_default_wrap(fname)

@@ -611,7 +611,7 @@ function run_tests(test, sock_family, sock_addr)
     stop_server(test, server)
 end
 
-test:plan(3)
+test:plan(5)
 
 test:test("http over AF_INET", function(test)
     local s = socketlib('AF_INET', 'SOCK_STREAM', 0)
@@ -651,6 +651,43 @@ test:test("url_escape/url_unescape", function(test)
     test:is('%20', client.url_escape(' '), 'space is escaped as %20')
     test:is('%24%26%2B%2C%3A%3B%3D%3F%40', client.url_escape('$&+,:;=?@'), 'special characters escaping')
     test:is('-._~', client.url_escape('-._~'), '-._~ are not escaped according RFC 3986')
+end)
+
+test:test("format_query", function(test)
+    test:plan(6)
+    test:is(client.format_query({['hello'] = 'world'}), 'hello=world', 'correct formation for one eng arg')
+    test:is(client.format_query({['привет'] = 'мир'}),
+        '%D0%BF%D1%80%D0%B8%D0%B2%D0%B5%D1%82=%D0%BC%D0%B8%D1%80',  'correct formation for one rus arg')
+    test:is(client.format_query({['key=key'] = 'value;value'}), 'key%3Dkey=value%3Bvalue',
+        'correct formation for args with special characters')
+    test:is(client.format_query({['key1'] = 'value1', ['ключ2'] = 'значение'}),
+        'key1=value1&%D0%BA%D0%BB%D1%8E%D1%872=%D0%B7%D0%BD%D0%B0%D1%87%D0%B5%D0%BD%D0%B8%D0%B5',
+        'correct formation for several args')
+
+    local ok, err = pcall(client.format_query, 'str')
+    test:is(ok, false, 'only table could be passed as argument')
+    test:ok(err:endswith('httpc.format_query expected table with args'), 'correct error message')
+end)
+
+test:test("parse_query", function(test)
+    test:plan(8)
+        test:is_deeply(client.parse_query('hello=world'), {['hello'] = 'world'}, 'correct parsing for one eng arg')
+        test:is_deeply(client.parse_query('%D0%BF%D1%80%D0%B8%D0%B2%D0%B5%D1%82=%D0%BC%D0%B8%D1%80'),
+        {['привет'] = 'мир'}, 'correct parsing for one rus arg')
+        test:is_deeply(client.parse_query('key%3Dkey=value%3Bvalue'), {['key=key'] = 'value;value'},
+            'correct formation for args with special characters')
+        test:is_deeply(client.parse_query(
+            'key1=value1&%D0%BA%D0%BB%D1%8E%D1%872=%D0%B7%D0%BD%D0%B0%D1%87%D0%B5%D0%BD%D0%B8%D0%B5'),
+            {['key1'] = 'value1', ['ключ2'] = 'значение'}, 'correct parsing for several args')
+
+        local ok, err = pcall(client.parse_query, {})
+        test:is(ok, false, 'only string could be passed as argument')
+        test:ok(err:endswith('httpc.parse_query expected string with args'), 'correct error message')
+
+        local ok, err = pcall(client.parse_query, '1=2&3&4')
+        test:is(ok, false, 'unexpected input format error')
+        test:ok(err:endswith('httpc.parse_query expected arguments in format \'key=value\'' ..
+            ' separated by \'&\', got: 3'), 'correct error message')
 end)
 
 os.exit(test:check() == true and 0 or -1)
