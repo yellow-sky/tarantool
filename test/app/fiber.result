@@ -1561,6 +1561,59 @@ fiber.top()
 ---
 - error: fiber.top() is disabled. Enable it with fiber.top_enable() first
 ...
+-- gh-4709 fiber.is_dead() returns true for dead fibers
+-- check "dead" fiber
+f = fiber.create(function() end)
+---
+...
+f:status()
+---
+- dead
+...
+f:is_dead()
+---
+- true
+...
+-- check "running" fiber
+fiber.status()
+---
+- running
+...
+fiber.is_dead()
+---
+- false
+...
+fiber.self():status()
+---
+- running
+...
+fiber.self():is_dead()
+---
+- false
+...
+-- check "suspended" fiber
+f = fiber.create(function()\
+    while true do\
+        fiber.testcancel()\
+        fiber.sleep(1)\
+    end\
+end)
+---
+...
+f:status()
+---
+- suspended
+...
+f:is_dead()
+---
+- false
+...
+f:cancel()
+---
+...
+f = nil
+---
+...
 -- cleanup
 test_run:cmd("clear filter")
 ---

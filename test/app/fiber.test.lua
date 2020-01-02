@@ -688,6 +688,30 @@ tbl.time > 0
 fiber.top_disable()
 fiber.top()
 
+-- gh-4709 fiber.is_dead() returns true for dead fibers
+-- check "dead" fiber
+f = fiber.create(function() end)
+f:status()
+f:is_dead()
+
+-- check "running" fiber
+fiber.status()
+fiber.is_dead()
+fiber.self():status()
+fiber.self():is_dead()
+
+-- check "suspended" fiber
+f = fiber.create(function()\
+    while true do\
+        fiber.testcancel()\
+        fiber.sleep(1)\
+    end\
+end)
+f:status()
+f:is_dead()
+f:cancel()
+f = nil
+
 -- cleanup
 test_run:cmd("clear filter")
 

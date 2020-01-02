@@ -559,6 +559,29 @@ lbox_fiber_status(struct lua_State *L)
 }
 
 /**
+ * Return true if fiber status is dead.
+ */
+static int
+lbox_fiber_is_dead(struct lua_State *L)
+{
+	struct fiber *f;
+	if (lua_gettop(L)) {
+		uint32_t fid = *(uint32_t *)
+				luaL_checkudata(L, 1, fiberlib_name);
+		f = fiber_find(fid);
+	} else {
+		f = fiber();
+	}
+
+	if (f == NULL || f->fid == 0) {
+		lua_pushboolean(L, true);
+	} else {
+		lua_pushboolean(L, false);
+	}
+	return 1;
+}
+
+/**
  * Get or set fiber name.
  * With no arguments, gets or sets the current fiber
  * name. It's also possible to get/set the name of
@@ -808,6 +831,7 @@ static const struct luaL_Reg lbox_fiber_meta [] = {
 	{"name", lbox_fiber_name},
 	{"cancel", lbox_fiber_cancel},
 	{"status", lbox_fiber_status},
+	{"is_dead", lbox_fiber_is_dead},
 	{"testcancel", lbox_fiber_testcancel},
 	{"__serialize", lbox_fiber_serialize},
 	{"__tostring", lbox_fiber_tostring},
@@ -839,6 +863,7 @@ static const struct luaL_Reg fiberlib[] = {
 	{"create", lbox_fiber_create},
 	{"new", lbox_fiber_new},
 	{"status", lbox_fiber_status},
+	{"is_dead", lbox_fiber_is_dead},
 	{"name", lbox_fiber_name},
 	{NULL, NULL}
 };
