@@ -51,6 +51,7 @@ lua_source(lua_sources ../third_party/luafun/fun.lua)
 lua_source(lua_sources lua/httpc.lua)
 lua_source(lua_sources lua/iconv.lua)
 lua_source(lua_sources lua/swim.lua)
+lua_source(lua_sources lua/load_ffi_defs.lua)
 # LuaJIT jit.* library
 lua_source(lua_sources "${CMAKE_BINARY_DIR}/third_party/luajit/src/jit/bc.lua")
 lua_source(lua_sources "${CMAKE_BINARY_DIR}/third_party/luajit/src/jit/bcsave.lua")
@@ -157,6 +158,44 @@ set(api_headers
     ${CMAKE_SOURCE_DIR}/src/lib/core/clock.h
 )
 rebuild_module_api(${api_headers})
+
+set(fficdef_headers
+    ${CMAKE_SOURCE_DIR}/src/title.h
+    ${CMAKE_SOURCE_DIR}/src/box/box.h
+    ${CMAKE_SOURCE_DIR}/src/box/index.h
+    ${CMAKE_SOURCE_DIR}/src/box/port.h
+    ${CMAKE_SOURCE_DIR}/src/box/schema.h
+    ${CMAKE_SOURCE_DIR}/src/box/space.h
+    ${CMAKE_SOURCE_DIR}/src/box/tuple.h
+    ${CMAKE_SOURCE_DIR}/src/box/txn.h
+    ${CMAKE_SOURCE_DIR}/src/crc32.h
+    ${CMAKE_SOURCE_DIR}/src/lib/core/clock.h
+    ${CMAKE_SOURCE_DIR}/src/lib/core/coio.h
+    ${CMAKE_SOURCE_DIR}/src/lib/core/diag.h
+    ${CMAKE_SOURCE_DIR}/src/lib/core/exception.h
+    ${CMAKE_SOURCE_DIR}/src/lib/core/fiber.h
+    ${CMAKE_SOURCE_DIR}/src/lib/core/port.h
+    ${CMAKE_SOURCE_DIR}/src/lib/core/random.h
+    ${CMAKE_SOURCE_DIR}/src/lib/core/reflection.h
+    ${CMAKE_SOURCE_DIR}/src/lib/core/say.h
+    ${CMAKE_SOURCE_DIR}/src/lib/core/decimal.h
+    ${CMAKE_SOURCE_DIR}/src/lib/core/mp_decimal.h
+    ${CMAKE_SOURCE_DIR}/src/lib/crypto/crypto.h
+    ${CMAKE_SOURCE_DIR}/src/lib/csv/csv.h
+    ${CMAKE_SOURCE_DIR}/src/lib/salad/guava.h
+    ${CMAKE_SOURCE_DIR}/src/lib/swim/swim.h
+    ${CMAKE_SOURCE_DIR}/src/lib/swim/swim_constants.h
+    ${CMAKE_SOURCE_DIR}/src/lib/uri/uri.h
+    ${CMAKE_SOURCE_DIR}/src/lib/uuid/tt_uuid.h
+    ${CMAKE_SOURCE_DIR}/src/lua/digest.h
+    ${CMAKE_SOURCE_DIR}/src/lua/init.h
+    ${CMAKE_SOURCE_DIR}/src/lua/socket.h
+    ${CMAKE_SOURCE_DIR}/src/lua/string.h
+    ${CMAKE_SOURCE_DIR}/src/lua/utils.h
+    ${CMAKE_SOURCE_DIR}/src/main.h
+    ${CMAKE_SOURCE_DIR}/src/scramble.h
+)
+rebuild_module_fficdef(${fficdef_headers})
 
 if (NOT TARGET_OS_DEBIAN_FREEBSD)
     if (TARGET_OS_FREEBSD)

@@ -37,6 +37,8 @@
 extern "C" {
 #endif /* defined(__cplusplus) */
 
+/** \cond ffi */
+
 typedef uint32_t (*crc32_func)(uint32_t crc, const char *buf, unsigned int len);
 
 /*
@@ -44,6 +46,8 @@ typedef uint32_t (*crc32_func)(uint32_t crc, const char *buf, unsigned int len);
  * CRC32 calculation method.
  */
 extern crc32_func crc32_calc;
+
+/** \endcond ffi */
 
 void crc32_init();
 

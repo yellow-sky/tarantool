@@ -267,8 +267,12 @@ space_group_id(struct space *space)
 	return space->def->opts.group_id;
 }
 
+/** \cond ffi */
+
 void
 space_run_triggers(struct space *space, bool yesno);
+
+/** \endcond ffi */
 
 /**
  * Get index by index id.
@@ -330,11 +334,15 @@ index_find_unique(struct space *space, uint32_t index_id)
 	return index;
 }
 
+/** \cond ffi */
+
 /**
  * Returns number of bytes used in memory by tuples in the space.
  */
 size_t
 space_bsize(struct space *space);
+
+/** \endcond ffi */
 
 /** Get definition of the n-th index of the space. */
 struct index_def *

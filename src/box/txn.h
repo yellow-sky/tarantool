@@ -494,6 +494,7 @@ txn_savepoint_release(struct txn_savepoint *svp);
  */
 
 /** \cond public */
+/** \cond ffi */
 
 /**
  * Transaction id - a non-persistent unique identifier
@@ -521,6 +522,8 @@ box_txn(void);
  */
 API_EXPORT int
 box_txn_begin(void);
+
+/** \endcond ffi */
 
 /**
  * Commit the current transaction.
@@ -550,6 +553,7 @@ API_EXPORT void *
 box_txn_alloc(size_t size);
 
 /** \endcond public */
+/** \cond ffi */
 
 typedef struct txn_savepoint box_txn_savepoint_t;
 
@@ -574,6 +578,8 @@ box_txn_savepoint(void);
  */
 API_EXPORT int
 box_txn_rollback_to_savepoint(box_txn_savepoint_t *savepoint);
+
+/** \endcond ffi */
 
 #if defined(__cplusplus)
 } /* extern "C" */

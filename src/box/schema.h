@@ -48,6 +48,8 @@ extern uint32_t space_cache_version;
 /** Triggers invoked after schema initialization. */
 extern struct rlist on_schema_init;
 
+/** \cond ffi */
+
 /**
  * Try to look up a space by space number in the space cache.
  * FFI-friendly no-exception-thrown space lookup function.
@@ -57,6 +59,8 @@ extern struct rlist on_schema_init;
 struct space *
 space_by_id(uint32_t id);
 
+/** \endcond ffi */
+
 /**
  * Try to look up a space by space name in the space name cache.
  *
@@ -65,8 +69,12 @@ space_by_id(uint32_t id);
 struct space *
 space_by_name(const char *name);
 
+/** \cond ffi */
+
 uint32_t
 box_schema_version();
+
+/** \endcond ffi */
 
 static inline struct space *
 space_cache_find(uint32_t id)

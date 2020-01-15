@@ -40,11 +40,15 @@ extern "C" {
 struct lua_State;
 void tarantool_lua_socket_init(struct lua_State *L);
 
+/** \cond ffi */
+
 int
 lbox_socket_local_resolve(const char *host, const char *port,
 			  struct sockaddr *addr, socklen_t *socklen);
 int
 lbox_socket_nonblock(int fh, int mode);
+
+/** \endcond ffi */
 
 #if defined(__cplusplus)
 } /* extern "C" */

@@ -84,6 +84,7 @@ src/lua/*.lua.c
 src/box/lua/*.lua.c
 src/tarantool
 src/module.h
+src/lua/load_ffi_defs.lua
 tarantool-*.tar.gz
 test/lib/
 test/unit/*.test

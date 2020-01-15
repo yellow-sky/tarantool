@@ -1,0 +1,16 @@
+#!/bin/sh
+
+# This script generates output for unified FFI cdef builder
+# 1. Include only lines between /** \cond ffi */ and /** \endcond ffi */
+# 2. Remove API_EXPORT macro
+# 3. Remove C preprocessor commands (#if defined/#endif)
+# 4. Remove CFORMAT macro
+# 5. Rename end to epos
+# 6. Remove MP_PROTO macro
+
+sed -n '/^\/\*\* \\cond ffi \*\/$/,/^\/\*\* \\endcond ffi \*\/$/P' | \
+sed -E 's/([[:space:]]*)API_EXPORT[[:space:]]+/\1/g' | \
+sed -n -e '/^#if defined/,/^#endif/!p' | \
+sed -E 's/CFORMAT\(.*\)//g' | \
+sed -E 's/\*end;/\*epos;/' |
+sed 's/MP_PROTO//g'

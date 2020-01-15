@@ -1,36 +1,6 @@
 -- error.lua (internal file)
 
 local ffi = require('ffi')
-ffi.cdef[[
-struct type_info;
-
-enum {
-    DIAG_ERRMSG_MAX = 512,
-    DIAG_FILENAME_MAX = 256
-};
-
-typedef void (*error_f)(struct error *e);
-
-struct error {
-    error_f _destroy;
-    error_f _raise;
-    error_f _log;
-    const struct type_info *_type;
-    int _refs;
-    int _saved_errno;
-    /** Line number. */
-    unsigned _line;
-    /* Source file name. */
-    char _file[DIAG_FILENAME_MAX];
-    /* Error description. */
-    char _errmsg[DIAG_ERRMSG_MAX];
-};
-
-char *
-exception_get_string(struct error *e, const struct method_info *method);
-int
-exception_get_int(struct error *e, const struct method_info *method);
-]]
 
 local REFLECTION_CACHE = {}
 

@@ -77,8 +77,12 @@ tarantool_lua_run_script(char *path, bool force_interactive,
 
 extern char *history;
 
+/** \cond ffi */
+
 struct slab_cache *
 tarantool_lua_slab_cache();
+
+/** \endcond ffi */
 
 #if defined(__cplusplus)
 } /* extern "C" */

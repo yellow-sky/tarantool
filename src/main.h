@@ -37,10 +37,14 @@
 extern "C" {
 #endif /* defined(__cplusplus) */
 
+/** \cond ffi */
+
 double tarantool_uptime(void);
 
 void
 tarantool_exit(int);
+
+/** \endcond ffi */
 
 void
 load_cfg();

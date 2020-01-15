@@ -16,51 +16,6 @@ local static_alloc = buffer.static_alloc
 
 local format = string.format
 
-ffi.cdef[[
-    struct gc_socket {
-        const int fd;
-    };
-    typedef uint32_t socklen_t;
-    typedef ptrdiff_t ssize_t;
-
-    int connect(int sockfd, const struct sockaddr *addr,
-                socklen_t addrlen);
-    int bind(int sockfd, const struct sockaddr *addr,
-                socklen_t addrlen);
-
-    ssize_t write(int fd, const char *octets, size_t len);
-    ssize_t read(int fd, void *buf, size_t count);
-    int listen(int fd, int backlog);
-    int socket(int domain, int type, int protocol);
-    int coio_close(int s);
-    int shutdown(int s, int how);
-    ssize_t send(int sockfd, const void *buf, size_t len, int flags);
-    ssize_t recv(int s, void *buf, size_t len, int flags);
-    int accept(int s, void *addr, void *addrlen);
-    ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
-                   const struct sockaddr *dest_addr, socklen_t addrlen);
-
-    int
-    lbox_socket_local_resolve(const char *host, const char *port,
-                         struct sockaddr *addr, socklen_t *socklen);
-    int lbox_socket_nonblock(int fd, int mode);
-
-    int setsockopt(int s, int level, int iname, const void *opt, size_t optlen);
-    int getsockopt(int s, int level, int iname, void *ptr, size_t *optlen);
-
-    typedef struct { int active; int timeout; } linger_t;
-
-    struct protoent {
-        char  *p_name;       /* official protocol name */
-        char **p_aliases;    /* alias list */
-        int    p_proto;      /* protocol number */
-    };
-    struct protoent *getprotobyname(const char *name);
-
-    void *memmem(const void *haystack, size_t haystacklen,
-        const void *needle, size_t needlelen);
-]]
-
 local gc_socket_t = ffi.metatype(ffi.typeof('struct gc_socket'), {
     __gc = function (socket)
         if socket.fd < 0 then return end

@@ -42,8 +42,12 @@ random_init(void);
 void
 random_free(void);
 
+/** \cond ffi */
+
 void
 random_bytes(char *buf, size_t size);
+
+/** \endcond ffi */
 
 #if defined(__cplusplus)
 }

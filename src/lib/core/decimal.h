@@ -231,6 +231,8 @@ decimal_len(const decimal_t *dec);
 char *
 decimal_pack(char *data, const decimal_t *dec);
 
+/** \cond ffi */
+
 /**
  * Using a packed representation of size \a len pointed to by
  * *data, unpack it to \a dec.
@@ -242,6 +244,8 @@ decimal_pack(char *data, const decimal_t *dec);
  */
 decimal_t *
 decimal_unpack(const char **data, uint32_t len, decimal_t *dec);
+
+/** \endcond ffi */
 
 #if defined(__cplusplus)
 } /* extern "C" */

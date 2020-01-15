@@ -1,16 +1,4 @@
 local ffi = require('ffi')
-ffi.cdef[[
-    void title_update();
-    const char *title_get();
-    void title_set_interpretor_name(const char *);
-    const char *title_get_interpretor_name();
-    void title_set_script_name(const char *);
-    const char *title_get_script_name();
-    void title_set_custom(const char *);
-    const char *title_get_custom();
-    void title_set_status(const char *);
-    const char *title_get_status();
-]]
 
 local title = {}
 

@@ -6,12 +6,6 @@ local buffer = require('buffer')
 local fiber = require('fiber')
 local errno = require('errno')
 
-ffi.cdef[[
-    int umask(int mask);
-    char *dirname(char *path);
-    int chdir(const char *path);
-]]
-
 local const_char_ptr_t = ffi.typeof('const char *')
 
 local internal = fio.internal

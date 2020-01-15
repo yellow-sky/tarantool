@@ -88,6 +88,8 @@ typedef struct tuple_format box_tuple_format_t;
 box_tuple_format_t *
 box_tuple_format_default(void);
 
+/** \cond ffi */
+
 /**
  * Tuple
  */
@@ -149,6 +151,8 @@ box_tuple_bsize(box_tuple_t *tuple);
 ssize_t
 box_tuple_to_buf(box_tuple_t *tuple, char *buf, size_t size);
 
+/** \endcond ffi */
+
 /**
  * Return the associated format.
  * \param tuple tuple
@@ -156,6 +160,8 @@ box_tuple_to_buf(box_tuple_t *tuple, char *buf, size_t size);
  */
 box_tuple_format_t *
 box_tuple_format(box_tuple_t *tuple);
+
+/** \cond ffi */
 
 /**
  * Return the raw tuple field in MsgPack format.
@@ -263,6 +269,8 @@ box_tuple_seek(box_tuple_iterator_t *it, uint32_t fieldno);
 const char *
 box_tuple_next(box_tuple_iterator_t *it);
 
+/** \endcond ffi */
+
 /**
  * Allocate and initialize a new tuple from a raw MsgPack Array data.
  *
@@ -277,12 +285,15 @@ box_tuple_next(box_tuple_iterator_t *it);
 box_tuple_t *
 box_tuple_new(box_tuple_format_t *format, const char *data, const char *end);
 
+/** \cond ffi */
+
 box_tuple_t *
 box_tuple_update(box_tuple_t *tuple, const char *expr, const char *expr_end);
 
 box_tuple_t *
 box_tuple_upsert(box_tuple_t *tuple, const char *expr, const char *expr_end);
 
+/** \endcond ffi */
 /** \endcond public */
 
 /**

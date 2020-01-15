@@ -34,6 +34,8 @@
  * Constants for public API.
  */
 
+/** \cond ffi */
+
 enum swim_member_status {
 	/** The instance is ok, responds to requests. */
 	MEMBER_ALIVE = 0,
@@ -53,7 +55,11 @@ enum swim_member_status {
 	swim_member_status_MAX,
 };
 
+/** \endcond ffi */
+
 extern const char *swim_member_status_strs[];
+
+/** \cond ffi */
 
 /**
  * A monotonically growing value to refute false gossips and
@@ -75,6 +81,8 @@ struct swim_incarnation {
 	 */
 	uint64_t version;
 };
+
+/** \endcond ffi */
 
 /** Create a new incarnation value. */
 static inline void

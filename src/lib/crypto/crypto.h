@@ -53,6 +53,8 @@ extern "C" {
  * without encryption.
  */
 
+/** \cond ffi */
+
 enum crypto_algo {
 	/** None to disable encryption. */
 	CRYPTO_ALGO_NONE,
@@ -78,7 +80,11 @@ enum crypto_algo {
 	crypto_algo_MAX,
 };
 
+/** \endcond ffi */
+
 extern const char *crypto_algo_strs[];
+
+/** \cond ffi */
 
 enum crypto_mode {
 	/**
@@ -128,6 +134,8 @@ enum crypto_mode {
 	crypto_mode_MAX,
 };
 
+/** \endcond ffi */
+
 extern const char *crypto_mode_strs[];
 
 /**
@@ -151,6 +159,8 @@ enum {
 	CRYPTO_MAX_BLOCK_SIZE = 16,
 };
 
+/** \cond ffi */
+
 /**
  * OpenSSL API provides generic methods to do both encryption and
  * decryption depending on one 'int' parameter passed into
@@ -161,6 +171,8 @@ enum crypto_direction {
 	CRYPTO_DIR_DECRYPT = 0,
 	CRYPTO_DIR_ENCRYPT = 1,
 };
+
+/** \cond ffi */
 
 struct crypto_stream;
 
@@ -205,6 +217,8 @@ crypto_stream_commit(struct crypto_stream *s, char *out, int out_size);
 /** Delete a stream, free its memory. */
 void
 crypto_stream_delete(struct crypto_stream *s);
+
+/** \endcond ffi */
 
 struct crypto_codec;
 

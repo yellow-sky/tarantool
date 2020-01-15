@@ -43,6 +43,8 @@ extern "C" {
 struct type_info;
 struct method_info;
 
+/** \cond ffi */
+
 /**
  * Primitive C types
  */
@@ -57,6 +59,8 @@ struct type_info {
 	const struct type_info *parent;
 	const struct method_info *methods;
 };
+
+/** \endcond ffi */
 
 inline bool
 type_assignable(const struct type_info *type, const struct type_info *object)
@@ -87,6 +91,8 @@ type_assignable(const struct type_info *type, const struct type_info *object)
 typedef void (type_info::*method_thiscall_f)(void);
 #endif
 
+/** \cond ffi */
+
 enum { METHOD_ARG_MAX = 8 };
 
 struct method_info {
@@ -105,6 +111,8 @@ struct method_info {
 #endif /* defined(__cplusplus) */
 	};
 };
+
+/** \endcond ffi */
 
 #define type_foreach_method(m, method)						\
 	for(const struct type_info *_m = (m); _m != NULL; _m = _m->parent)	\

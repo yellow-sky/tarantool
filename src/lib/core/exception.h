@@ -53,11 +53,15 @@ extern const struct type_info type_CollationError;
 extern const struct type_info type_SwimError;
 extern const struct type_info type_CryptoError;
 
+/** \cond ffi */
+
 const char *
 exception_get_string(struct error *e, const struct method_info *method);
 
 int
 exception_get_int(struct error *e, const struct method_info *method);
+
+/** \endcond ffi */
 
 #if defined(__cplusplus)
 } /* extern "C" */

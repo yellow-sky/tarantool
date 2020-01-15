@@ -38,6 +38,8 @@
 extern "C" {
 #endif /* defined(__cplusplus) */
 
+/** \cond ffi */
+
 /**
  * \brief Calculate exact buffer size needed to store a decimal
  * pointed to by \a dec.
@@ -62,6 +64,8 @@ mp_decode_decimal(const char **data, decimal_t *dec);
  */
 char *
 mp_encode_decimal(char *data, const decimal_t *dec);
+
+/** \endcond ffi */
 
 #if defined(__cplusplus)
 } /* extern "C" */

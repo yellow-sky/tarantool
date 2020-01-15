@@ -70,6 +70,7 @@ include(cmake/simd.cmake)
 include(cmake/atomic.cmake)
 include(cmake/profile.cmake)
 include(cmake/module.cmake)
+include(cmake/fficdef.cmake)
 include(cmake/thread.cmake)
 
 set(CMAKE_REQUIRED_DEFINITIONS "-D_GNU_SOURCE")

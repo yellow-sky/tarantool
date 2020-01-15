@@ -5,32 +5,6 @@ local crypto = require('crypto')
 local bit = require('bit')
 local static_alloc = require('buffer').static_alloc
 
-ffi.cdef[[
-    /* internal implementation */
-    unsigned char *SHA1internal(const unsigned char *d, size_t n, unsigned char *md);
-
-    /* from libc */
-    int snprintf(char *str, size_t size, const char *format, ...);
-
-    typedef uint32_t (*crc32_func)(uint32_t crc,
-        const unsigned char *buf, unsigned int len);
-    extern int32_t guava(int64_t state, int32_t buckets);
-    extern crc32_func crc32_calc;
-
-    /* base64 */
-    int base64_bufsize(int binsize, int options);
-    int base64_decode(const char *in_base64, int in_len, char *out_bin, int out_len);
-    int base64_encode(const char *in_bin, int in_len, char *out_base64, int out_len, int options);
-
-    /* random */
-    void random_bytes(char *, size_t);
-
-    /* from third_party/PMurHash.h */
-    void PMurHash32_Process(uint32_t *ph1, uint32_t *pcarry, const void *key, int len);
-    uint32_t PMurHash32_Result(uint32_t h1, uint32_t carry, uint32_t total_length);
-    uint32_t PMurHash32(uint32_t seed, const void *key, int len);
-]]
-
 -- @sa base64.h
 local BASE64_NOPAD = 1
 local BASE64_NOWRAP = 2

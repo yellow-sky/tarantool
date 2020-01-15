@@ -341,6 +341,8 @@ fiber_sleep(double s);
 API_EXPORT bool
 fiber_is_cancelled();
 
+/** \cond ffi */
+
 /**
  * Report loop begin time as double (cheap).
  * Uses real time clock.
@@ -368,6 +370,8 @@ fiber_clock(void);
  */
 API_EXPORT uint64_t
 fiber_clock64(void);
+
+/** \endcond ffi */
 
 /**
  * Reschedule fiber to end of event loop cycle.

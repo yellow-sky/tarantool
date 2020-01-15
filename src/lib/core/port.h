@@ -125,9 +125,13 @@ struct port {
 	char pad[48];
 };
 
+/** \cond ffi */
+
 /** Is not inlined just to be exported. */
 void
 port_destroy(struct port *port);
+
+/** \endcond ffi */
 
 static inline int
 port_dump_msgpack(struct port *port, struct obuf *out)

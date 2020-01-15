@@ -38,8 +38,12 @@
 extern "C" {
 #endif
 
+/** \cond ffi */
+
 int32_t
 guava(int64_t state, int32_t buckets);
+
+/** \endcond ffi */
 
 #if defined(__cplusplus)
 } /* extern C */

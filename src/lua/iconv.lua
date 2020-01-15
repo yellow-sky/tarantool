@@ -2,14 +2,6 @@ local ffi    = require('ffi')
 local errno  = require('errno')
 local buffer = require('buffer')
 
-ffi.cdef[[
-typedef struct iconv *iconv_t;
-iconv_t tnt_iconv_open(const char *tocode, const char *fromcode);
-void    tnt_iconv_close(iconv_t cd);
-size_t  tnt_iconv(iconv_t cd, const char **inbuf, size_t *inbytesleft,
-                   char **outbuf, size_t *outbytesleft);
-]]
-
 local iconv_t         = ffi.typeof('struct iconv')
 local char_ptr_arr_t  = ffi.typeof('char *[1]')
 local cchar_ptr_arr_t = ffi.typeof('const char *[1]')

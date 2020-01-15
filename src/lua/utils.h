@@ -69,7 +69,9 @@ struct ibuf;
  * snprintf(m_errmsg, sizeof(m_errmsg), "%s", msg ? msg : "");
  */
 extern struct lua_State *tarantool_L;
+/** \cond ffi */
 extern struct ibuf *tarantool_lua_ibuf;
+/** \endcond ffi */
 
 extern uint32_t CTID_CONST_CHAR_PTR;
 extern uint32_t CTID_CHAR_PTR;

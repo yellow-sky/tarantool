@@ -39,6 +39,7 @@ extern "C" {
 #endif /* defined(__cplusplus) */
 
 /** \cond public */
+/** \cond ffi */
 
 double clock_realtime(void);
 double clock_monotonic(void);
@@ -50,6 +51,7 @@ uint64_t clock_monotonic64(void);
 uint64_t clock_process64(void);
 uint64_t clock_thread64(void);
 
+/** \endcond ffi */
 /** \endcond public */
 
 #if defined(__cplusplus)

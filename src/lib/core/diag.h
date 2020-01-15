@@ -42,6 +42,8 @@
 extern "C" {
 #endif /* defined(__cplusplus) */
 
+/** \cond ffi */
+
 enum {
 	DIAG_ERRMSG_MAX = 512,
 	DIAG_FILENAME_MAX = 256
@@ -51,6 +53,8 @@ struct type_info;
 struct error;
 
 typedef void (*error_f)(struct error *e);
+
+/** \endcond ffi */
 
 /**
  * Error diagnostics needs to be equally usable in C and C++

@@ -241,6 +241,8 @@ extern "C" {
 
 typedef struct tuple box_tuple_t;
 
+/** \cond ffi */
+
 /* box_select is private and used only by FFI */
 API_EXPORT int
 box_select(uint32_t space_id, uint32_t index_id,
@@ -248,6 +250,7 @@ box_select(uint32_t space_id, uint32_t index_id,
 	   const char *key, const char *key_end,
 	   struct port *port);
 
+/** \endcond ffi */
 /** \cond public */
 
 /*

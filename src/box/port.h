@@ -40,6 +40,8 @@ extern "C" {
 
 struct tuple;
 
+/** \cond ffi */
+
 struct port_tuple_entry {
 	struct port_tuple_entry *next;
 	struct tuple *tuple;
@@ -55,6 +57,7 @@ struct port_tuple {
 	struct port_tuple_entry *last;
 	struct port_tuple_entry first_entry;
 };
+/** \endcond ffi */
 static_assert(sizeof(struct port_tuple) <= sizeof(struct port),
 	      "sizeof(struct port_tuple) must be <= sizeof(struct port)");
 

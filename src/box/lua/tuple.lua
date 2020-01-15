@@ -7,58 +7,6 @@ local fun = require('fun')
 local buffer = require('buffer')
 local internal = require('box.internal')
 
-ffi.cdef[[
-/** \cond public */
-
-typedef struct tuple box_tuple_t;
-
-int
-box_tuple_ref(box_tuple_t *tuple);
-
-void
-box_tuple_unref(box_tuple_t *tuple);
-
-uint32_t
-box_tuple_field_count(box_tuple_t *tuple);
-
-size_t
-box_tuple_bsize(box_tuple_t *tuple);
-
-ssize_t
-box_tuple_to_buf(box_tuple_t *tuple, char *buf, size_t size);
-
-const char *
-box_tuple_field(box_tuple_t *tuple, uint32_t i);
-
-typedef struct tuple_iterator box_tuple_iterator_t;
-
-box_tuple_iterator_t *
-box_tuple_iterator(box_tuple_t *tuple);
-
-void
-box_tuple_iterator_free(box_tuple_iterator_t *it);
-
-uint32_t
-box_tuple_position(box_tuple_iterator_t *it);
-
-void
-box_tuple_rewind(box_tuple_iterator_t *it);
-
-const char *
-box_tuple_seek(box_tuple_iterator_t *it, uint32_t field_no);
-
-const char *
-box_tuple_next(box_tuple_iterator_t *it);
-
-/** \endcond public */
-
-box_tuple_t *
-box_tuple_update(box_tuple_t *tuple, const char *expr, const char *expr_end);
-
-box_tuple_t *
-box_tuple_upsert(box_tuple_t *tuple, const char *expr, const char *expr_end);
-]]
-
 local builtin = ffi.C
 
 local tuple_t = ffi.typeof('box_tuple_t')

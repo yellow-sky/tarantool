@@ -46,6 +46,7 @@ extern "C" {
 extern const char *CHAP_SHA1_EMPTY_PASSWORD;
 
 typedef uint16_t user_access_t;
+
 /**
  * Effective session user. A cache of user data
  * and access stored in session and fiber local storage.

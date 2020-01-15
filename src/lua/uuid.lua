@@ -4,33 +4,6 @@ local ffi = require("ffi")
 local static_alloc = require('buffer').static_alloc
 local builtin = ffi.C
 
-ffi.cdef[[
-struct tt_uuid {
-    uint32_t time_low;
-    uint16_t time_mid;
-    uint16_t time_hi_and_version;
-    uint8_t clock_seq_hi_and_reserved;
-    uint8_t clock_seq_low;
-    uint8_t node[6];
-};
-
-void
-tt_uuid_create(struct tt_uuid *uu);
-int
-tt_uuid_from_string(const char *in, struct tt_uuid *uu);
-void
-tt_uuid_to_string(const struct tt_uuid *uu, char *out);
-void
-tt_uuid_bswap(struct tt_uuid *uu);
-bool
-tt_uuid_is_nil(const struct tt_uuid *uu);
-bool
-tt_uuid_is_equal(const struct tt_uuid *lhs, const struct tt_uuid *rhs);
-char *
-tt_uuid_str(const struct tt_uuid *uu);
-extern const struct tt_uuid uuid_nil;
-]]
-
 local uuid_t = ffi.typeof('struct tt_uuid')
 local UUID_STR_LEN = 36
 local UUID_LEN = ffi.sizeof(uuid_t)

@@ -45,6 +45,8 @@
 extern "C" {
 #endif /* defined(__cplusplus) */
 
+/** \cond ffi */
+
 extern pid_t log_pid;
 
 /** \cond public */
@@ -70,6 +72,8 @@ enum say_format {
 
 extern int log_level;
 
+/** \endcond ffi */
+
 static inline bool
 say_log_level_is_enabled(int level)
 {
@@ -77,14 +81,19 @@ say_log_level_is_enabled(int level)
 }
 
 /** \endcond public */
+/** \cond ffi */
 
 extern enum say_format log_format;
+
+/** \endcond ffi */
 
 enum say_syslog_server_type {
 	SAY_SYSLOG_DEFAULT,
 	SAY_SYSLOG_UNIX,
 	SAY_SYSLOG_REMOTE
 };
+
+/** \cond ffi */
 
 enum say_logger_type {
 	/**
@@ -105,6 +114,8 @@ enum say_logger_type {
 	/** box.cfg option to log to syslog. */
 	SAY_LOGGER_SYSLOG
 };
+
+/** \endcond ffi */
 
 enum syslog_facility {
 	SYSLOG_KERN = 0,
@@ -195,12 +206,16 @@ int
 log_say(struct log *log, int level, const char *filename,
 	int line, const char *error, const char *format, ...);
 
+/** \cond ffi */
+
 /**
  * Default logger type info.
  * @retval say_logger_type.
  */
 enum say_logger_type
 log_type();
+
+/** \endcond ffi */
 
 /**
  * Set log level. Can be used dynamically.
@@ -220,6 +235,8 @@ log_set_level(struct log *log, enum say_level level);
 void
 log_set_format(struct log *log, log_format_func_t format_func);
 
+/** \cond ffi */
+
 /**
  * Set log level for the default logger. Can be used dynamically.
  * @param format	constant level
@@ -236,6 +253,8 @@ say_set_log_level(int new_level);
 void
 say_set_log_format(enum say_format format);
 
+/** \endcond ffi */
+
 /**
  * Return say format by name.
  *
@@ -246,11 +265,15 @@ say_set_log_format(enum say_format format);
 enum say_format
 say_format_by_name(const char *format);
 
+/** \cond ffi */
+
 struct ev_loop;
 struct ev_signal;
 
 void
 say_logrotate(struct ev_loop *, struct ev_signal *, int /* revents */);
+
+/** \endcond ffi */
 
 /** Init default logger. */
 void
@@ -268,11 +291,14 @@ vsay(int level, const char *filename, int line, const char *error,
      const char *format, va_list ap);
 
 /** \cond public */
+/** \cond ffi */
 typedef void (*sayfunc_t)(int, const char *, int, const char *,
 		    const char *, ...);
 
 /** Internal function used to implement say() macros */
 CFORMAT(printf, 5, 0) extern sayfunc_t _say;
+
+/** \endcond ffi */
 
 /**
  * Format and print a message to Tarantool log file.

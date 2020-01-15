@@ -40,6 +40,8 @@
 extern "C" {
 #endif /* defined(__cplusplus) */
 
+/** \cond ffi */
+
 struct uri {
 	const char *scheme;
 	size_t scheme_len;
@@ -60,15 +62,21 @@ struct uri {
 	int host_hint;
 };
 
+/** \endcond ffi */
+
 #define URI_HOST_UNIX "unix/"
 #define URI_MAXHOST NI_MAXHOST
 #define URI_MAXSERVICE _POSIX_PATH_MAX /* _POSIX_PATH_MAX always > NI_MAXSERV */
+
+/** \cond ffi */
 
 int
 uri_parse(struct uri *uri, const char *str);
 
 int
 uri_format(char *str, int len, const struct uri *uri, bool write_password);
+
+/** \endcond ffi */
 
 #if defined(__cplusplus)
 } /* extern "C" */

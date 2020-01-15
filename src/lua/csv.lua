@@ -3,54 +3,6 @@
 local ffi = require('ffi')
 local log = require('log')
 
-ffi.cdef[[
-    typedef void (*csv_emit_row_t)(void *ctx);
-    typedef void (*csv_emit_field_t)(void *ctx, const char *field, const char *end);
-
-    struct csv
-    {
-        void *emit_ctx;
-        csv_emit_row_t emit_row;
-        csv_emit_field_t emit_field;
-        char delimiter;
-        char quote_char;
-
-        char prev_symbol;
-        int error_status;
-        int ending_spaces;
-
-        void *(*realloc)(void*, size_t);
-
-        int state;
-        char *buf;
-        char *bufp;
-        size_t buf_len;
-    };
-
-    void csv_create(struct csv *csv);
-    void csv_destroy(struct csv *csv);
-    void csv_setopt(struct csv *csv, int opt, ...);
-
-    struct csv_iterator {
-        struct csv *csv;
-        const char *buf_begin;
-        const char *buf_end;
-        const char *field;
-        size_t field_len;
-    };
-    void csv_iterator_create(struct csv_iterator *it, struct csv *csv);
-    int csv_next(struct csv_iterator *);
-    void csv_feed(struct csv_iterator *, const char *, size_t);
-    size_t csv_escape_field(struct csv *csv, const char *field, size_t field_len, char *dst, size_t buf_size);
-    enum {
-        CSV_IT_OK,
-        CSV_IT_EOL,
-        CSV_IT_NEEDMORE,
-        CSV_IT_EOF,
-        CSV_IT_ERROR
-    };
-]]
-
 local iter = function(csvstate, i)
     local readable = csvstate[1]
     local csv_chunk_size = csvstate[2]

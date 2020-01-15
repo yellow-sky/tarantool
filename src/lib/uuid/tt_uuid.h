@@ -43,6 +43,8 @@ extern "C" {
 
 enum { UUID_LEN = 16, UUID_STR_LEN = 36 };
 
+/** \cond ffi */
+
 /**
  * \brief UUID structure struct
  */
@@ -61,6 +63,8 @@ struct tt_uuid {
  */
 void
 tt_uuid_create(struct tt_uuid *uu);
+
+/** \endcond ffi */
 
 /**
  * \brief Parse UUID from string.
@@ -171,10 +175,14 @@ tt_uuid_is_equal(const struct tt_uuid *lhs, const struct tt_uuid *rhs)
 	return lp[0] == rp[0] && lp[1] == rp[1];
 }
 
+/** \cond ffi */
+
 extern const struct tt_uuid uuid_nil;
 
 char *
 tt_uuid_str(const struct tt_uuid *uu);
+
+/** \endcond ffi */
 
 int
 tt_uuid_from_strl(const char *in, size_t len, struct tt_uuid *uu);

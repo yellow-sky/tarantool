@@ -39,10 +39,14 @@
 extern "C" {
 #endif /* defined(__cplusplus) */
 
+/** \cond ffi */
+
 void
 string_strip_helper(const char *inp, size_t inp_len, const char *chars,
 		    size_t chars_len, bool lstrip, bool rstrip,
 		    size_t *newstart, size_t *newlen);
+
+/** \endcond ffi */
 
 #if defined(__cplusplus)
 } /* extern "C" */

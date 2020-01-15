@@ -2,18 +2,6 @@ local ffi = require('ffi')
 local buffer = require('buffer')
 local static_alloc = buffer.static_alloc
 
-ffi.cdef[[
-    const char *
-    memmem(const char *haystack, size_t haystack_len,
-           const char *needle,   size_t needle_len);
-    int memcmp(const char *mem1, const char *mem2, size_t num);
-    int isspace(int c);
-    void
-    string_strip_helper(const char *inp, size_t inp_len, const char *chars,
-                        size_t chars_len, bool lstrip, bool rstrip,
-                        size_t *newstart, size_t *newlen);
-]]
-
 local c_char_ptr     = ffi.typeof('const char *')
 local strip_newstart = buffer.reg1.aul
 local strip_newlen   = buffer.reg2.aul

@@ -1,10 +1,6 @@
 local ffi = require('ffi')
 local errno_list = require('errno')
 
-ffi.cdef[[
-    char *strerror(int errnum);
-]]
-
 local function strerror(errno)
     if errno == nil then
         errno = ffi.errno()

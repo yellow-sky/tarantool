@@ -81,6 +81,8 @@ int
 scramble_check(const void *scramble, const void *salt, const void *hash2);
 
 
+/** \cond ffi */
+
 /**
  * Prepare a password hash as is stored in the _user space.
  * @pre out must be at least SCRAMBLE_BASE64_SIZE
@@ -88,6 +90,8 @@ scramble_check(const void *scramble, const void *salt, const void *hash2);
  */
 void
 password_prepare(const char *password, int len, char *out, int out_len);
+
+/** \endcond ffi */
 
 /**
  * Given a scramble received from a client, salt sent to client,

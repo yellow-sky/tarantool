@@ -75,6 +75,8 @@ char **title_init(int argc, char **argv);
 
 void title_free(int argc, char **argv);
 
+/** \cond ffi */
+
 /** generate and update process title */
 void title_update();
 
@@ -95,6 +97,8 @@ const char *title_get_custom();
 /* status */
 void title_set_status(const char *);
 const char *title_get_status();
+
+/** \endcond ffi */
 
 #if defined(__cplusplus)
 } /* extern "C" */

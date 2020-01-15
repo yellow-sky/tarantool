@@ -36,6 +36,8 @@
 extern "C" {
 #endif
 
+/** \cond ffi */
+
 typedef void (*csv_emit_row_t)(void *ctx);
 typedef void (*csv_emit_field_t)(void *ctx, const char *field, const char *end);
 
@@ -59,6 +61,8 @@ struct csv
 	size_t buf_len;
 };
 
+/** \endcond ffi */
+
 enum csv_parser_option {
 	CSV_OPT_DELIMITER,
 	CSV_OPT_QUOTE,
@@ -68,6 +72,8 @@ enum csv_parser_option {
 	CSV_OPT_EMIT_CTX
 };
 
+/** \cond ffi */
+
 enum csv_iteraion_state {
 	CSV_IT_OK,
 	CSV_IT_EOL,
@@ -75,6 +81,8 @@ enum csv_iteraion_state {
 	CSV_IT_EOF,
 	CSV_IT_ERROR
 };
+
+/** \endcond ffi */
 
 enum csv_parser_state {
 	CSV_LEADING_SPACES,
@@ -93,6 +101,8 @@ enum csv_error_status {
 	CSV_ER_MEMORY_ERROR
 };
 
+/** \cond ffi */
+
 void
 csv_create(struct csv *csv);
 
@@ -104,6 +114,8 @@ csv_destroy(struct csv *csv);
  */
 void
 csv_setopt(struct csv *csv, int opt, ...);
+
+/** \endcond ffi */
 
 /**
  * Parse input and call emit_row/emit_line.
@@ -124,6 +136,8 @@ csv_finish_parsing(struct csv *csv);
  */
 int
 csv_get_error_status(struct csv *csv);
+
+/** \cond ffi */
 
 /**
  * @brief The csv_iterator struct allows iterate field by field through csv
@@ -163,6 +177,8 @@ csv_feed(struct csv_iterator *it, const char *buf, size_t buf_len);
  */
 size_t
 csv_escape_field(struct csv *csv, const char *field, size_t field_len, char *dst, size_t dst_size);
+
+/** \endcond ffi */
 
 
 static inline const char *

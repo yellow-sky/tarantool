@@ -11,25 +11,6 @@ local uint32_ptr_t = ffi.typeof('uint32_t *')
 local uint64_ptr_t = ffi.typeof('uint64_t *')
 local const_char_ptr_t = ffi.typeof('const char *')
 
-ffi.cdef([[
-char *
-mp_encode_float(char *data, float num);
-char *
-mp_encode_double(char *data, double num);
-char *
-mp_encode_decimal(char *data, decimal_t *dec);
-uint32_t
-mp_sizeof_decimal(const decimal_t *dec);
-float
-mp_decode_float(const char **data);
-double
-mp_decode_double(const char **data);
-uint32_t
-mp_decode_extl(const char **data, int8_t *type);
-decimal_t *
-decimal_unpack(const char **data, uint32_t len, decimal_t *dec);
-]])
-
 local strict_alignment = (jit.arch == 'arm')
 local reg = buffer.reg1
 

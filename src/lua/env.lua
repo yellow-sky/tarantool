@@ -2,13 +2,6 @@ local ffi = require('ffi')
 local os = require('os')
 local errno = require('errno')
 
-ffi.cdef[[
-    extern char **environ;
-
-    int   setenv(const char *name, const char *value, int overwrite);
-    int   unsetenv(const char *name);
-]]
-
 local environ = ffi.C.environ
 
 os.environ = function()

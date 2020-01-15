@@ -3,34 +3,6 @@
 local ffi = require('ffi')
 local static_alloc = require('buffer').static_alloc
 
-ffi.cdef[[
-struct uri {
-    const char *scheme;
-    size_t scheme_len;
-    const char *login;
-    size_t login_len;
-    const char *password;
-    size_t password_len;
-    const char *host;
-    size_t host_len;
-    const char *service;
-    size_t service_len;
-    const char *path;
-    size_t path_len;
-    const char *query;
-    size_t query_len;
-    const char *fragment;
-    size_t fragment_len;
-    int host_hint;
-};
-
-int
-uri_parse(struct uri *uri, const char *str);
-
-int
-uri_format(char *str, size_t len, struct uri *uri, bool write_password);
-]]
-
 local builtin = ffi.C;
 
 local function parse(str)

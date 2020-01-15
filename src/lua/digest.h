@@ -37,8 +37,12 @@
 extern "C" {
 #endif
 
+/** \cond ffi */
+
 unsigned char *
 SHA1internal(const unsigned char *d, size_t n, unsigned char *md);
+
+/** \endcond ffi */
 
 struct lua_State;
 

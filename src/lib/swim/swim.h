@@ -39,6 +39,8 @@
 extern "C" {
 #endif
 
+/** \cond ffi */
+
 struct swim;
 struct rlist;
 struct tt_uuid;
@@ -62,6 +64,8 @@ enum swim_gc_mode {
 	SWIM_GC_ON = 1,
 };
 
+/** \endcond ffi */
+
 /**
  * Create a new SWIM instance. Do not bind to a port or set any
  * parameters. Allocation and initialization only. The function
@@ -69,6 +73,8 @@ enum swim_gc_mode {
  */
 struct swim *
 swim_new(uint64_t generation);
+
+/** \cond ffi */
 
 /** Check if a swim instance is configured. */
 bool
@@ -124,6 +130,8 @@ int
 swim_set_codec(struct swim *swim, enum crypto_algo algo, enum crypto_mode mode,
 	       const char *key, int key_size);
 
+/** \endcond ffi */
+
 /**
  * Stop listening and broadcasting messages, cleanup all internal
  * structures, free memory. The function yields. Actual deletion
@@ -139,6 +147,8 @@ swim_delete(struct swim *swim);
  */
 int
 swim_fd(const struct swim *swim);
+
+/** \cond ffi */
 
 /** Add a new member. */
 int
@@ -291,6 +301,8 @@ enum swim_ev_mask {
 	SWIM_EV_UPDATE          = 0b00111110,
 	SWIM_EV_DROP            = 0b01000000,
 };
+
+/** \endcond ffi */
 
 /** On member event trigger context. */
 struct swim_on_member_event_ctx {

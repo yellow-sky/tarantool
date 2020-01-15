@@ -3,69 +3,6 @@
 local ffi = require('ffi')
 local READAHEAD = 16320
 
-ffi.cdef[[
-struct slab_cache;
-struct slab_cache *
-tarantool_lua_slab_cache();
-extern struct ibuf *tarantool_lua_ibuf;
-
-struct ibuf
-{
-    struct slab_cache *slabc;
-    char *buf;
-    /** Start of input. */
-    char *rpos;
-    /** End of useful input */
-    char *wpos;
-    /** End of ibuf. */
-    char *epos;
-    size_t start_capacity;
-};
-
-void
-ibuf_create(struct ibuf *ibuf, struct slab_cache *slabc, size_t start_capacity);
-
-void
-ibuf_destroy(struct ibuf *ibuf);
-
-void
-ibuf_reinit(struct ibuf *ibuf);
-
-void *
-ibuf_reserve_slow(struct ibuf *ibuf, size_t size);
-
-void *
-lua_static_aligned_alloc(size_t size, size_t alignment);
-
-/**
- * Register is a buffer to use with FFI functions, which usually
- * operate with pointers to scalar values like int, char, size_t,
- * void *. To avoid doing 'ffi.new(<type>[1])' on each such FFI
- * function invocation, a module can use one of attributes of the
- * register union.
- *
- * Naming policy of the attributes is easy to remember:
- * 'a' for array type + type name first letters + 'p' for pointer.
- *
- * For example:
- * - int[1] - <a>rray of <i>nt - ai;
- * - const unsigned char *[1] -
- *       <a>rray of <c>onst <u>nsigned <c>har <p> pointer - acucp.
- */
-union c_register {
-    size_t as[1];
-    void *ap[1];
-    int ai[1];
-    char ac[1];
-    const unsigned char *acucp[1];
-    unsigned long aul[1];
-    uint16_t u16;
-    uint32_t u32;
-    uint64_t u64;
-    int64_t i64;
-};
-]]
-
 local builtin = ffi.C
 local ibuf_t = ffi.typeof('struct ibuf')
 
