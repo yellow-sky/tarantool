@@ -348,7 +348,7 @@ box.rollback_to_savepoint = function(savepoint)
     if savepoint.txn_id ~= builtin.box_txn_id() then
         box.error(box.error.NO_SUCH_SAVEPOINT)
     end
-    if box.internal.rollback_to_savepoint(savepoint.csavepoint) == nil then
+    if box.internal.rollback_to_savepoint(savepoint.csavepoint) == -1 then
         box.error()
     end
 end

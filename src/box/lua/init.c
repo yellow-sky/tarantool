@@ -63,6 +63,8 @@
 #include "box/lua/key_def.h"
 #include "box/lua/merger.h"
 
+static uint32_t CTID_STRUCT_TXN_SAVEPOINT_PTR = 0;
+
 extern char session_lua[],
 	tuple_lua[],
 	key_def_lua[],
@@ -107,23 +109,41 @@ lbox_rollback(lua_State *L)
 	return 0;
 }
 
+/**
+ * Extract a savepoint from the Lua stack.
+ */
+static struct txn_savepoint *
+luaT_check_txn_savepoint(struct lua_State *L, int idx)
+{
+	if (lua_type(L, idx) != LUA_TCDATA)
+		return NULL;
+
+	uint32_t cdata_type;
+	struct txn_savepoint **svp_ptr = luaL_checkcdata(L, idx, &cdata_type);
+	if (svp_ptr == NULL || cdata_type != CTID_STRUCT_TXN_SAVEPOINT_PTR)
+		return NULL;
+	return *svp_ptr;
+}
+
+/**
+ * Rollback to a savepoint.
+ *
+ * This is the helper function: it is registered in box.internal
+ * and is not the same as box.rollback_to_savepoint().
+ *
+ * Push zero at success and -1 at an error.
+ */
 static int
 lbox_txn_rollback_to_savepoint(struct lua_State *L)
 {
-	if (lua_gettop(L) != 1 || lua_type(L, 1) != LUA_TCDATA)
-		luaL_error(L, "Usage: txn:rollback to savepoint(savepoint)");
+	struct txn_savepoint *svp;
+	if (lua_gettop(L) != 1 ||
+	    (svp = luaT_check_txn_savepoint(L, 1)) == NULL)
+		return luaL_error(L,
+			"Usage: box.rollback_to_savepoint(savepoint)");
 
-	uint32_t cdata_type;
-	struct txn_savepoint **sp_ptr = luaL_checkcdata(L, 1, &cdata_type);
-
-	if (sp_ptr == NULL)
-		luaL_error(L, "Usage: txn:rollback to savepoint(savepoint)");
-
-	int rc = box_txn_rollback_to_savepoint(*sp_ptr);
-	if (rc != 0)
-		return luaT_push_nil_and_error(L);
-
-	lua_pushnumber(L, 0);
+	int rc = box_txn_rollback_to_savepoint(svp);
+	lua_pushnumber(L, rc);
 	return 1;
 }
 
@@ -318,6 +338,10 @@ static const struct luaL_Reg boxlib_internal[] = {
 void
 box_lua_init(struct lua_State *L)
 {
+	luaL_cdef(L, "struct txn_savepoint;");
+	CTID_STRUCT_TXN_SAVEPOINT_PTR = luaL_ctypeid(L,
+						     "struct txn_savepoint*");
+
 	/* Use luaL_register() to set _G.box */
 	luaL_register(L, "box", boxlib);
 	lua_pop(L, 1);
