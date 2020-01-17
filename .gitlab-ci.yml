@@ -1,8 +1,12 @@
 stages:
+  - bootstrap
   - test
+  - cleanup
 
 variables:
   GITLAB_MAKE: "make -f .gitlab.mk"
+  IMAGE_PERF: "${CI_REGISTRY}/${CI_PROJECT_PATH}/perf/ubuntu-bionic:perf_master"
+  IMAGE_PERF_BUILT: "${CI_REGISTRY}/${CI_PROJECT_PATH}/perf_tmp/ubuntu-bionic:perf_${CI_COMMIT_SHORT_SHA}"
 
 # Jobs templates
 
@@ -47,180 +51,49 @@ variables:
   after_script:
     - ${GITLAB_MAKE} vms_shutdown
 
-# Tests
-
-release:
-  <<: *docker_test_definition
-  script:
-    - ${GITLAB_MAKE} test_debian_no_deps
-
-debug:
-  <<: *docker_test_definition
-  script:
-    - ${GITLAB_MAKE} test_coverage_debian_no_deps
-
-release_clang:
-  <<: *docker_test_definition
-  variables:
-    CC: clang
-    CXX: clang++
-  script:
-    - ${GITLAB_MAKE} test_debian_no_deps
-
-release_lto:
-  <<: *release_only_definition
-  <<: *docker_test_clang8_definition
-  variables:
-    CMAKE_EXTRA_PARAMS: -DENABLE_LTO=ON
-  script:
-    - ${GITLAB_MAKE} test_debian_no_deps
-
-release_lto_clang8:
-  <<: *release_only_definition
-  <<: *docker_test_clang8_definition
-  variables:
-    CC: clang-8
-    CXX: clang++-8
-    CMAKE_EXTRA_PARAMS: -DENABLE_LTO=ON
-  script:
-    - ${GITLAB_MAKE} test_debian_no_deps
-
-release_asan_clang8:
-  <<: *docker_test_clang8_definition
-  script:
-    - ${GITLAB_MAKE} test_asan_debian_no_deps
-
-osx_13_release:
-  <<: *release_only_definition
-  <<: *vbox_definition
+perf_bootstrap:
+  only:
+    refs:
+      - master
+      - /^.*-perf$/
+  stage: bootstrap
   tags:
-    - vms_osx_13
-  variables:
-    VMS_NAME: 'osx_13'
-    VMS_USER: 'tarantool'
-    VMS_PORT: '2212'
+    - perf
   script:
-    - ${GITLAB_MAKE} vms_test_osx
+    - ${GITLAB_MAKE} docker_perf_bootstrap
 
-osx_14_release:
-  <<: *vbox_definition
+perf_linkbench:
+  only:
+    refs:
+      - master
+      - /^.*-perf$/
+  image: ${IMAGE_PERF_BUILT}
+  stage: test
   tags:
-    - vms_osx_14
-  variables:
-    VMS_NAME: 'osx_14'
-    VMS_USER: 'tarantool'
-    VMS_PORT: '2222'
+    - docker_perf_hdd
   script:
-    - ${GITLAB_MAKE} vms_test_osx
+    - ${GITLAB_MAKE} perf_linkbench
 
-osx_14_release_lto:
-  <<: *release_only_definition
-  <<: *vbox_definition
+perf_linkbench_ssd:
+  only:
+    refs:
+      - master
+      - /^.*-perf$/
+  image: ${IMAGE_PERF_BUILT}
+  stage: test
   tags:
-    - vms_osx_14
-  variables:
-    EXTRA_ENV: "export CMAKE_EXTRA_PARAMS=-DENABLE_LTO=ON ;"
-    VMS_NAME: 'osx_14'
-    VMS_USER: 'tarantool'
-    VMS_PORT: '2222'
+    - docker_perf_ssd
   script:
-    - ${GITLAB_MAKE} vms_test_osx
+    - ${GITLAB_MAKE} perf_linkbench
 
-freebsd_12_release:
-  <<: *vbox_definition
+remove_images:
+  only:
+    refs:
+      - master
+      - /^.*-perf$/
+  stage: cleanup
+  when: always
   tags:
-    - vms_freebsd_12
-  variables:
-    VMS_NAME: 'freebsd_12'
-    VMS_USER: 'vagrant'
-    VMS_PORT: '2232'
-    MAKE: 'gmake'
+    - perf
   script:
-    - ${GITLAB_MAKE} vms_test_freebsd
-
-# Packs
-
-centos_6:
-  <<: *deploy_definition
-  variables:
-    OS: 'el'
-    DIST: '6'
-
-centos_7:
-  <<: *deploy_test_definition
-  variables:
-    OS: 'el'
-    DIST: '7'
-
-fedora_28:
-  <<: *deploy_test_definition
-  variables:
-    OS: 'fedora'
-    DIST: '28'
-
-fedora_29:
-  <<: *deploy_test_definition
-  variables:
-    OS: 'fedora'
-    DIST: '29'
-
-fedora_30:
-  <<: *deploy_test_definition
-  variables:
-    OS: 'fedora'
-    DIST: '30'
-
-ubuntu_14_04:
-  <<: *deploy_definition
-  variables:
-    OS: 'ubuntu'
-    DIST: 'trusty'
-
-ubuntu_16_04:
-  <<: *deploy_definition
-  variables:
-    OS: 'ubuntu'
-    DIST: 'xenial'
-
-ubuntu_18_04:
-  <<: *deploy_definition
-  variables:
-    OS: 'ubuntu'
-    DIST: 'bionic'
-
-ubuntu_18_10:
-  <<: *deploy_definition
-  variables:
-    OS: 'ubuntu'
-    DIST: 'cosmic'
-
-ubuntu_19_04:
-  <<: *deploy_definition
-  variables:
-    OS: 'ubuntu'
-    DIST: 'disco'
-
-debian_8:
-  <<: *deploy_definition
-  variables:
-    OS: 'debian'
-    DIST: 'jessie'
-
-debian_9:
-  <<: *deploy_definition
-  variables:
-    OS: 'debian'
-    DIST: 'stretch'
-
-debian_10:
-  <<: *deploy_definition
-  variables:
-    OS: 'debian'
-    DIST: 'buster'
-
-static_build:
-  <<: *deploy_test_definition
-  variables:
-    RUN_TESTS: 'ON'
-  script:
-    - ${GITLAB_MAKE} static_build
+    - ${GITLAB_MAKE} docker_perf_tmp_image_remove
