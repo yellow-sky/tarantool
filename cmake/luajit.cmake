@@ -283,6 +283,13 @@ macro(luajit_build)
 endmacro()
 
 #
+# Definitions for luajit debug traceback limits
+#
+add_definitions(-DLUA_TRACEBACK_LEVELS1=25)
+add_definitions(-DLUA_TRACEBACK_LEVELS2=25)
+add_definitions(-DLUA_IDSIZE=128)
+
+#
 # Building shipped luajit only if there is no
 # usable system one (see cmake/luajit.cmake) or by demand.
 #
