@@ -36,6 +36,12 @@ function check_sorting(ss, ts, key)
     for _, it in pairs(iterators_list) do
         local view_space = ss:select({key}, {iterator = it})
         local test_space = ts:select({key}, {iterator = it})
+        if #view_space ~= #test_space then
+            return {
+                err = 'bad sorting', type = it, exp = test_space,
+                got = view_space
+            }
+        end
         for key, value in pairs(view_space) do
             if test_space[key].name ~= value.name then
                 return {
@@ -52,16 +58,22 @@ check_sorting(s, t)
 check_sorting(s, t, 'abcde')
 check_sorting(s, t, 'sql_d')
 check_sorting(s, t, 'sql_v')
-check_sorting(s, t, 'sql_defer_foreign_keys')
+check_sorting(s, t, 'z')
+check_sorting(s, t, 'sql_parser_debuf')
+check_sorting(s, t, 'sql_parser_debuh')
+
+name = nil
+err = nil
+for _, tuple in t:pairs() do                    \
+    name = tuple.name                           \
+    err = check_sorting(s, t, name)             \
+    if err then                                 \
+        break                                   \
+    end                                         \
+end
+err and {err, name}
 
 t:drop()
-
--- Check get() method of session_settings space.
-s:get({'sql_defer_foreign_keys'})
-s:get({'sql_recursive_triggers'})
-s:get({'sql_reverse_unordered_selects'})
-s:get({'sql_default_engine'})
-s:get({'abcd'})
 
 -- Check pairs() method of session_settings space.
 t = {}
