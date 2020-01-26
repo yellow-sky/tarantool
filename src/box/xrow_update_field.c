@@ -405,13 +405,25 @@ xrow_update_arith_make(struct xrow_update_op *op,
 			unreachable();
 			break;
 		}
-		if (lowest_type == XUPDATE_TYPE_DOUBLE) {
+		float fc = (float) c;
+		/*
+		 * A value may be saved as double even if it looks
+		 * like fitting a float. For example, 0.01 + 0.01
+		 * may be stored as double. This is because
+		 * 0.01 may be stored as 0.009999999999999, what
+		 * looks like double precision. And there is no
+		 * way how to check if this is actually 0.01.
+		 * By the same reason FLT_MAX can't be used to
+		 * detect whether a value fits float, because it
+		 * may be <= FLT_MAX, but may have a double
+		 * precision in its fraction part.
+		 */
+		if (c != (double) fc) {
 			ret->type = XUPDATE_TYPE_DOUBLE;
 			ret->dbl = c;
 		} else {
-			assert(lowest_type == XUPDATE_TYPE_FLOAT);
 			ret->type = XUPDATE_TYPE_FLOAT;
-			ret->flt = (float)c;
+			ret->flt = fc;
 		}
 	} else {
 		decimal_t a, b, c;
