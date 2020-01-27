@@ -395,10 +395,10 @@ lbox_key_def_merge(struct lua_State *L)
 	if (new_key_def == NULL)
 		return luaT_error(L);
 
-	*(struct key_def **) luaL_pushcdata(L,
+	*(struct key_def **) luaM_pushcdata(L,
 				CTID_STRUCT_KEY_DEF_REF) = new_key_def;
 	lua_pushcfunction(L, lbox_key_def_gc);
-	luaL_setcdatagc(L, -2);
+	luaM_setcdatagc(L, -2);
 	return 1;
 }
 
@@ -478,10 +478,10 @@ lbox_key_def_new(struct lua_State *L)
 	 */
 	key_def_update_optionality(key_def, 0);
 
-	*(struct key_def **) luaL_pushcdata(L,
+	*(struct key_def **) luaM_pushcdata(L,
 				CTID_STRUCT_KEY_DEF_REF) = key_def;
 	lua_pushcfunction(L, lbox_key_def_gc);
-	luaL_setcdatagc(L, -2);
+	luaM_setcdatagc(L, -2);
 
 	return 1;
 }

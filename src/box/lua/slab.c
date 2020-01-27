@@ -246,9 +246,10 @@ lbox_runtime_info(struct lua_State *L)
 
 	/*
 	 * Lua GC heap size
+	 * Similar to GC_COUNT, but more precise to prevent tests breakage.
 	 */
 	lua_pushstring(L, "lua");
-	lua_pushinteger(L, G(L)->gc.total);
+	lua_pushinteger(L, luaM_lua_total_memory(L));
 	lua_settable(L, -3);
 
 	return 1;

@@ -47,7 +47,7 @@
 				tuple_*(), ... */
 
 #include "lua/error.h"       /* luaT_error() */
-#include "lua/utils.h"       /* luaL_pushcdata(),
+#include "lua/utils.h"       /* luaM_pushcdata(),
 				luaL_iterator_*() */
 
 #include "box/lua/key_def.h" /* luaT_check_key_def() */
@@ -193,9 +193,9 @@ lbox_merge_source_new(struct lua_State *L, const char *func_name,
 		return luaT_error(L);
 	}
 	*(struct merge_source **)
-		luaL_pushcdata(L, CTID_STRUCT_MERGE_SOURCE_REF) = source;
+		luaM_pushcdata(L, CTID_STRUCT_MERGE_SOURCE_REF) = source;
 	lua_pushcfunction(L, lbox_merge_source_gc);
-	luaL_setcdatagc(L, -2);
+	luaM_setcdatagc(L, -2);
 
 	return 1;
 }
@@ -315,9 +315,9 @@ lbox_merger_new(struct lua_State *L)
 	}
 
 	*(struct merge_source **)
-		luaL_pushcdata(L, CTID_STRUCT_MERGE_SOURCE_REF) = merger;
+		luaM_pushcdata(L, CTID_STRUCT_MERGE_SOURCE_REF) = merger;
 	lua_pushcfunction(L, lbox_merge_source_gc);
-	luaL_setcdatagc(L, -2);
+	luaM_setcdatagc(L, -2);
 
 	return 1;
 }
@@ -880,7 +880,7 @@ lbox_merge_source_gen(struct lua_State *L)
 
 	/* Push merge_source, tuple. */
 	*(struct merge_source **)
-		luaL_pushcdata(L, CTID_STRUCT_MERGE_SOURCE_REF) = source;
+		luaM_pushcdata(L, CTID_STRUCT_MERGE_SOURCE_REF) = source;
 	luaT_pushtuple(L, tuple);
 
 	/*

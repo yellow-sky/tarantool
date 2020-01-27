@@ -401,8 +401,9 @@ lbox_info_memory_call(struct lua_State *L)
 	luaL_pushuint64(L, iproto_mem_used());
 	lua_settable(L, -3);
 
+	/* Similar to GC_COUNT, but more precise to prevent tests breakage. */
 	lua_pushstring(L, "lua");
-	lua_pushinteger(L, G(L)->gc.total);
+	lua_pushinteger(L, luaM_lua_total_memory(L));
 	lua_settable(L, -3);
 
 	return 1;

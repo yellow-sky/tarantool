@@ -405,7 +405,7 @@ lua_msgpack_decode_cdata(lua_State *L, bool check)
 	}
 	struct luaL_serializer *cfg = luaL_checkserializer(L);
 	luamp_decode(L, cfg, &data);
-	*(const char **)luaL_pushcdata(L, cdata_type) = data;
+	*(const char **)luaM_pushcdata(L, cdata_type) = data;
 	return 2;
 }
 
@@ -475,7 +475,7 @@ lua_ibuf_msgpack_decode(lua_State *L)
 	}
 	struct luaL_serializer *cfg = luaL_checkserializer(L);
 	luamp_decode(L, cfg, &rpos);
-	*(const char **)luaL_pushcdata(L, ctypeid) = rpos;
+	*(const char **)luaM_pushcdata(L, ctypeid) = rpos;
 	lua_pushvalue(L, -2);
 	return 2;
 }
@@ -534,7 +534,7 @@ lua_decode_array_header(lua_State *L)
 	uint32_t len = mp_decode_array(&data);
 
 	lua_pushinteger(L, len);
-	*(const char **) luaL_pushcdata(L, cdata_type) = data;
+	*(const char **) luaM_pushcdata(L, cdata_type) = data;
 	return 2;
 }
 
@@ -560,7 +560,7 @@ lua_decode_map_header(lua_State *L)
 	uint32_t len = mp_decode_map(&data);
 
 	lua_pushinteger(L, len);
-	*(const char **) luaL_pushcdata(L, cdata_type) = data;
+	*(const char **) luaM_pushcdata(L, cdata_type) = data;
 	return 2;
 }
 

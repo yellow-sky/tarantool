@@ -1,0 +1,39 @@
+diff --git a/Makefile b/Makefile
+index 0f93308..4a56917 100644
+--- a/Makefile
++++ b/Makefile
+@@ -84,7 +84,7 @@ FILE_A= libluajit.a
+ FILE_SO= libluajit.so
+ FILE_MAN= luajit.1
+ FILE_PC= luajit.pc
+-FILES_INC= lua.h lualib.h lauxlib.h luaconf.h lua.hpp luajit.h
++FILES_INC= lua.h lualib.h lauxlib.h luaconf.h lua.hpp luajit.h lmisclib.h
+ FILES_JITLIB= bc.lua bcsave.lua dump.lua p.lua v.lua zone.lua \
+ 	      dis_x86.lua dis_x64.lua dis_arm.lua dis_arm64.lua \
+ 	      dis_arm64be.lua dis_ppc.lua dis_mips.lua dis_mipsel.lua \
+diff --git a/src/Makefile b/src/Makefile
+index 827d4a4..f0c0f53 100644
+--- a/src/Makefile
++++ b/src/Makefile
+@@ -486,7 +486,7 @@ LJLIB_C= $(LJLIB_O:.o=.c)
+ LJCORE_O= lj_gc.o lj_err.o lj_char.o lj_bc.o lj_obj.o lj_buf.o \
+ 	  lj_str.o lj_tab.o lj_func.o lj_udata.o lj_meta.o lj_debug.o \
+ 	  lj_state.o lj_dispatch.o lj_vmevent.o lj_vmmath.o lj_strscan.o \
+-	  lj_strfmt.o lj_strfmt_num.o lj_api.o lj_profile.o \
++	  lj_strfmt.o lj_strfmt_num.o lj_api.o lj_mapi.o lj_profile.o \
+ 	  lj_lex.o lj_parse.o lj_bcread.o lj_bcwrite.o lj_load.o \
+ 	  lj_ir.o lj_opt_mem.o lj_opt_fold.o lj_opt_narrow.o \
+ 	  lj_opt_dce.o lj_opt_loop.o lj_opt_split.o lj_opt_sink.o \
+diff --git a/src/Makefile.dep b/src/Makefile.dep
+index 2b1cb5e..da86335 100644
+--- a/src/Makefile.dep
++++ b/src/Makefile.dep
+@@ -137,6 +137,8 @@ lj_lib.o: lj_lib.c lauxlib.h lua.h luaconf.h lj_obj.h lj_def.h lj_arch.h \
+ lj_load.o: lj_load.c lua.h luaconf.h lauxlib.h lj_obj.h lj_def.h \
+  lj_arch.h lj_gc.h lj_err.h lj_errmsg.h lj_buf.h lj_str.h lj_func.h \
+  lj_frame.h lj_bc.h lj_vm.h lj_lex.h lj_bcdump.h lj_parse.h
++lj_mapi.o: lj_mapi.c lj_ctype.h lj_obj.h lua.h luaconf.h lj_def.h \
++ lj_arch.h lj_gc.h lj_tab.h lj_lib.h lj_state.h lj_cconv.h lj_meta.h
+ lj_mcode.o: lj_mcode.c lj_obj.h lua.h luaconf.h lj_def.h lj_arch.h \
+  lj_gc.h lj_err.h lj_errmsg.h lj_jit.h lj_ir.h lj_mcode.h lj_trace.h \
+  lj_dispatch.h lj_bc.h lj_traceerr.h lj_vm.h
