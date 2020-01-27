@@ -311,33 +311,170 @@ luaL_serializer_parse_options(struct lua_State *L,
 }
 
 /**
- * @brief serializer.cfg{} Lua binding for serializers.
- * serializer.cfg is a table that contains current configuration values from
- * luaL_serializer structure. serializer.cfg has overriden __call() method
- * to change configuration keys in internal userdata (like box.cfg{}).
- * Please note that direct change in serializer.cfg.key will not affect
- * internal state of userdata. Changes via cfg() are reflected in
- * both Lua cfg table, and C serializer structure.
+ * @brief serializer.cfg() Lua binding for serializers.
+ * serializer.cfg is a userdata that contains pointer to struct luaL_serializer.
+ * It has __call metamethod, that directly updates  internal state of userdata.
  * @param L lua stack
  * @return 0
  */
 static int
 luaL_serializer_cfg(struct lua_State *L)
 {
-	/* Serializer.cfg */
-	luaL_checktype(L, 1, LUA_TTABLE);
 	/* Updated parameters. */
 	luaL_checktype(L, 2, LUA_TTABLE);
 	struct luaL_serializer *cfg = luaL_checkserializer(L);
 	for (int i = 0; OPTIONS[i].name != NULL; ++i) {
-		if (luaL_serializer_parse_option(L, i, cfg) == NULL)
+		if(luaL_serializer_parse_option(L, i, cfg) == NULL)
 			lua_pop(L, 1);
-		else
-			lua_setfield(L, 1, OPTIONS[i].name);
-	}
+        }
 	trigger_run(&cfg->on_update, cfg);
 	return 0;
 }
+
+/**
+ * @brief __serialize metamethod for serializer.cfg.
+ * Converts userdata to table for console output.
+ * @param L lua stack
+ * @return 0
+ */
+static int
+luaL_serialize_info(lua_State *L)
+{
+    struct luaL_serializer *cfg =  lua_touserdata(L, lua_upvalueindex(1));
+    lua_newtable(L);
+    for(int i = 0; OPTIONS[i].name != NULL; i++){
+        lua_pushstring(L, OPTIONS[i].name);
+        int *pval = (int *) ((char *) cfg + OPTIONS[i].offset);
+        switch (OPTIONS[i].type) {
+        case LUA_TBOOLEAN:
+            lua_pushboolean(L, *pval);
+            break;
+        case LUA_TNUMBER:
+            lua_pushnumber(L, *pval);
+            break;
+        }
+        lua_settable(L, -3);
+    }
+	return 1;
+}
+
+static int
+luaL_serializer_name_to_pos(const char *name)
+{
+	if (name == NULL)
+		return -1;
+	for(int i = 0; OPTIONS[i].name != NULL; i++) {
+		if(strcmp(OPTIONS[i].name, name) == 0) {
+			return i;
+		}
+	}
+	return -2;
+}
+
+/**
+ * @brief __index metamethod for serializer.cfg.
+ * @param L lua stack
+ * @return 0
+ */
+static int
+luaL_serializer_cfg_index(lua_State *L)
+{
+	struct luaL_serializer *cfg = luaL_checkserializer(L);
+	const char* name = lua_tostring(L, 2);
+	int i = luaL_serializer_name_to_pos(name);
+	if (i > -1) {
+		int *pval = (int *) ((char *) cfg + OPTIONS[i].offset);
+		switch (OPTIONS[i].type){
+		case LUA_TBOOLEAN:
+			lua_pushboolean(L, *pval);
+			break;
+		case LUA_TNUMBER:
+			lua_pushnumber(L, *pval);
+			break;
+		}
+	} else  if (strcmp(name, "__serialize") == 0) {
+			lua_pushlightuserdata(L, cfg);
+			lua_pushcclosure(L, luaL_serialize_info, 1);
+			return 1;
+	} else {
+			lua_pushnil(L);
+			return 1;
+	}
+	return 1;
+}
+
+/**
+ * @brief __newindex metamethod for serializer.cfg.
+ * protects serializer.cfg fro, row modification.
+ * @param L lua stack
+ * @return 0
+ */
+static int
+luaL_serializer_cfg_newindex(lua_State *L)
+{
+	luaL_error(L, "incorrect way of setting configuration, please use cfg()");
+	printf("__newindex \n");
+	return 1;
+}
+
+/**
+ * @brief lua_next for userdata.
+ * @param L lua stack
+ * @return 0
+ */
+static int
+luaL_serializer_next(lua_State *L)
+{
+	luaL_checktype(L, 1, LUA_TLIGHTUSERDATA);
+	struct luaL_serializer *cfg = (struct luaL_serializer*)lua_touserdata(L, 1);
+	const char *name = lua_tostring(L, 2);
+	int j = luaL_serializer_name_to_pos(name);
+	if (j > -2 && OPTIONS[j+1].name != NULL) {
+		lua_pushstring(L, OPTIONS[j+1].name);
+		int *pval = (int *) ((char *) cfg + OPTIONS[j+1].offset);
+		switch (OPTIONS[j+1].type){
+		case LUA_TBOOLEAN:
+			lua_pushboolean(L, *pval);
+			break;
+		case LUA_TNUMBER:
+			lua_pushnumber(L, *pval);
+			break;
+		}
+		return 2;
+	} else 
+		lua_pushnil(L);
+	return 1;
+}
+
+/**
+ * @brief __pairs metamethod for serializer.cfg.
+ * Traverses userdata like a table.
+ * @param L lua stack
+ * @return 0
+ */
+static int
+luaL_serializer_cfg_pairs(lua_State *L)
+{
+	struct luaL_serializer *cfg = luaL_checkserializer(L);
+	lua_pushcfunction(L, luaL_serializer_next);
+	lua_pushlightuserdata(L, cfg);
+	lua_pushstring(L, NULL);
+	return 3;
+}
+
+/**
+ * To get configure/change/get setting of serializer
+ * we directly write to struct luaL_serializer using
+ * userdata and  metatable desctibed here.
+ */
+static const luaL_Reg serializermeta[] = {
+        {"__serialize", luaL_serialize_info},
+        {"__index",luaL_serializer_cfg_index},
+        {"__newindex",luaL_serializer_cfg_newindex},
+        {"__call", luaL_serializer_cfg},
+	{"__pairs", luaL_serializer_cfg_pairs},
+		{NULL, NULL},
+	};
 
 /**
  * @brief serializer.new() Lua binding.
@@ -369,28 +506,17 @@ luaL_newserializer(struct lua_State *L, const char *modname, const luaL_Reg *reg
 		lua_setfield(L, -3, reg->name);
 	}
 
-	/* Add cfg{} */
+	/* Add cfg userdata with pointer */
+	lua_newuserdata(L, sizeof(*serializer));
+	/* Add cfg methods */
 	lua_newtable(L); /* cfg */
-	lua_newtable(L); /* metatable */
-	lua_pushvalue(L, -3); /* luaL_serializer */
-	lua_pushcclosure(L, luaL_serializer_cfg, 1);
-	lua_setfield(L, -2, "__call");
-	lua_setmetatable(L, -2);
-	/* Save configuration values to serializer.cfg */
-	for (int i = 0; OPTIONS[i].name != NULL; i++) {
-		int *pval = (int *) ((char *) serializer + OPTIONS[i].offset);
-		switch (OPTIONS[i].type) {
-		case LUA_TBOOLEAN:
-			lua_pushboolean(L, *pval);
-			break;
-		case LUA_TNUMBER:
-			lua_pushinteger(L, *pval);
-			break;
-		default:
-			unreachable();
-		}
-		lua_setfield(L, -2, OPTIONS[i].name);
+	const luaL_Reg *ser_info = serializermeta;
+	for (; ser_info->name != NULL; ser_info++) {
+		lua_pushvalue(L, -3);
+		lua_pushcclosure(L, ser_info->func, 1);
+		lua_setfield(L, -2, ser_info->name);
 	}
+	lua_setmetatable(L, -2);
 	lua_setfield(L, -3, "cfg");
 
 	lua_pop(L, 1);  /* remove upvalues */
@@ -420,6 +546,7 @@ lua_gettable_wrapper(lua_State *L)
 	lua_gettable(L, -2);
 	return 1;
 }
+
 
 static void
 lua_field_inspect_ucdata(struct lua_State *L, struct luaL_serializer *cfg,
