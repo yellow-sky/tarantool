@@ -443,7 +443,7 @@ tarantool_lua_init(const char *tarantool_bin, int argc, char **argv)
 	luaL_openlibs(L);
 	tarantool_lua_setpaths(L);
 
-	/* Initialize ffi to enable luaL_pushcdata/luaL_checkcdata functions */
+	/* Initialize ffi to enable luaM_pushcdata/luaL_checkcdata functions */
 	luaL_loadstring(L, "return require('ffi')");
 	lua_call(L, 0, 0);
 	lua_register(L, "tonumber64", lbox_tonumber64);
