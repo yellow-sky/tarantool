@@ -774,7 +774,7 @@ fiber_self()
 void
 fiber_gc(void)
 {
-	if (region_used(&fiber()->gc) < 128 * 1024) {
+	if (region_total(&fiber()->gc) < 128 * 1024) {
 		region_reset(&fiber()->gc);
 		return;
 	}
