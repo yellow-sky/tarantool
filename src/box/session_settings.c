@@ -324,8 +324,8 @@ session_settings_index_get(struct index *base, const char *key,
 	uint32_t len;
 	key = mp_decode_str(&key, &len);
 	key = tt_cstr(key, len);
-	int sid = 0;
-	if (session_settings_set_forward(&sid, key, true, true) != 0) {
+	int sid = session_setting_find(key);
+	if (sid < 0) {
 		*result = NULL;
 		return 0;
 	}
@@ -426,7 +426,8 @@ session_settings_space_execute_update(struct space *space, struct txn *txn,
 	}
 	key = mp_decode_str(&key, &key_len);
 	key = tt_cstr(key, key_len);
-	if (session_settings_set_forward(&sid, key, true, true) != 0) {
+	sid = session_setting_find(key);
+	if (sid < 0) {
 		*result = NULL;
 		return 0;
 	}
@@ -520,3 +521,12 @@ const struct space_vtab session_settings_space_vtab = {
 	/* .prepare_alter = */ generic_space_prepare_alter,
 	/* .invalidate = */ generic_space_invalidate,
 };
+
+int
+session_setting_find(const char *name) {
+	int sid;
+	if (session_settings_set_forward(&sid, name, true, true) == 0)
+		return sid;
+	else
+		return -1;
+}
