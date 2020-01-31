@@ -6,6 +6,7 @@
 #include "lj_tab.h"
 #include "lj_obj.h"
 #include "uj_state.h"
+#include "uj_lib.h"
 #include "uj_meta.h"
 #include "uj_capi_impl.h"
 
@@ -76,11 +77,12 @@ luaM_setcdatagc(struct lua_State *L, int idx)
 	assert(lua_type(L, idx) == LUA_TCDATA);
 	GCcdata *cd = cdataV(L->base + idx - 1);
 
-	// /* Get finalizer from the stack */
-	// TValue *fin = uj_lib_checkany(L, lua_gettop(L));
+	/* Get finalizer from the stack */
+	TValue *fin = uj_lib_checkany(L, lua_gettop(L));
+	CTState *cts = ctype_cts(L);
+	GCtab *t = cts->finalizer;
 
 #if !defined(NDEBUG)
-	CTState *cts = ctype_cts(L);
 	CType *ct = ctype_raw(cts, cd->ctypeid);
 	(void) ct;
 	assert(ctype_isptr(ct->info) || ctype_isstruct(ct->info) ||
@@ -88,7 +90,14 @@ luaM_setcdatagc(struct lua_State *L, int idx)
 #endif /* !defined(NDEBUG) */
 
 	/* Set finalizer */
-	lj_cdata_setfin(L, cd);
+	if (t->metatable != NULL) {  /* Update finalizer table, if still enabled. */
+		copyTV(L, lj_tab_set(L, t, L->base + idx - 1), fin);
+		lj_gc_anybarriert(L, t);
+		if (!tvisnil(fin))
+			cd->marked |= LJ_GC_CDATA_FIN;
+		else
+			cd->marked &= ~LJ_GC_CDATA_FIN;
+	}
 
 	/* Pop finalizer */
 	lua_pop(L, 1);
