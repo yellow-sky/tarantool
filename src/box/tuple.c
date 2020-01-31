@@ -292,7 +292,9 @@ tuple_init(field_name_hash_f hash)
 	if (tuple_format_init() != 0)
 		return -1;
 
-	field_name_hash = hash;
+	if (hash)
+		field_name_hash = hash;
+
 	/*
 	 * Create a format for runtime tuples
 	 */

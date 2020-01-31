@@ -32,6 +32,611 @@ index 93b59b0..b8547b6 100644
    if (LJ_UNLIKELY(tvismzero(&n->key))) { setrawV(&n->key, 0); }
    lj_gc_anybarriert(L, t);
    lua_assert(tvisnil(&n->val));
+diff --git a/src/ffi/lj_carith.c b/src/ffi/lj_carith.c
+index 95d8285..26e2be6 100644
+--- a/src/ffi/lj_carith.c
++++ b/src/ffi/lj_carith.c
+@@ -14,10 +14,14 @@
+ #include "uj_err.h"
+ #include "lj_tab.h"
+ #include "uj_meta.h"
++#include "jit/lj_ir.h"
+ #include "ffi/lj_ctype.h"
+ #include "ffi/lj_cconv.h"
+ #include "ffi/lj_cdata.h"
+ #include "ffi/lj_carith.h"
++#include "uj_str.h"
++#include "utils/strscan.h"
++#include "utils/fp.h"
+ 
+ /* -- C data arithmetic --------------------------------------------------- */
+ 
+@@ -272,6 +276,78 @@ int lj_carith_op(lua_State *L, enum MMS mm)
+   return lj_carith_meta(L, cts, &ca, mm);
+ }
+ 
++/* -- 64 bit bit operations helpers --------------------------------------- */
++
++#if LJ_64
++#define B64DEF(name) \
++  static LJ_AINLINE uint64_t lj_carith_##name(uint64_t x, int32_t sh)
++#else
++/* Not inlined on 32 bit archs, since some of these are quite lengthy. */
++#define B64DEF(name) \
++  uint64_t LJ_NOINLINE lj_carith_##name(uint64_t x, int32_t sh)
++#endif
++
++B64DEF(shl64) { return x << (sh&63); }
++B64DEF(shr64) { return x >> (sh&63); }
++B64DEF(sar64) { return (uint64_t)((int64_t)x >> (sh&63)); }
++B64DEF(rol64) { return lj_rol(x, (sh&63)); }
++B64DEF(ror64) { return lj_ror(x, (sh&63)); }
++
++#undef B64DEF
++
++uint64_t lj_carith_shift64(uint64_t x, int32_t sh, int op)
++{
++  switch (op) {
++  case IR_BSHL-IR_BSHL: x = lj_carith_shl64(x, sh); break;
++  case IR_BSHR-IR_BSHL: x = lj_carith_shr64(x, sh); break;
++  case IR_BSAR-IR_BSHL: x = lj_carith_sar64(x, sh); break;
++  case IR_BROL-IR_BSHL: x = lj_carith_rol64(x, sh); break;
++  case IR_BROR-IR_BSHL: x = lj_carith_ror64(x, sh); break;
++  default: lua_assert(0); break;
++  }
++  return x;
++}
++
++/* Equivalent to lj_lib_checkbit(), but handles cdata. */
++uint64_t lj_carith_check64(lua_State *L, int narg, CTypeID *id)
++{
++	TValue *o = L->base + narg-1;
++	if (o >= L->top) {
++	err:
++		uj_err_argt(L, narg, LUA_TNUMBER);
++	} else if (LJ_LIKELY(tvisnum(o))) {
++		/* Handled below. */
++	} else if (tviscdata(o)) {
++		CTState *cts = ctype_cts(L);
++		uint8_t *sp = (uint8_t *)cdataptr(cdataV(o));
++		CTypeID sid = cdataV(o)->ctypeid;
++		CType *s = ctype_get(cts, sid);
++		uint64_t x;
++		if (ctype_isref(s->info)) {
++			sp = *(void **)sp;
++			sid = ctype_cid(s->info);
++		}
++		s = ctype_raw(cts, sid);
++		if (ctype_isenum(s->info)) s = ctype_child(cts, s);
++		if ((s->info & (CTMASK_NUM|CTF_BOOL|CTF_FP|CTF_UNSIGNED)) ==
++		    CTINFO(CT_NUM, CTF_UNSIGNED) && s->size == 8)
++			*id = CTID_UINT64;  /* Use uint64_t, since it has the highest rank. */
++		else if (!*id)
++			*id = CTID_INT64;  /* Use int64_t, unless already set. */
++		lj_cconv_ct_ct(cts, ctype_get(cts, *id), s,
++		               (uint8_t *)&x, sp, CCF_ARG(narg));
++		return x;
++	} else if (!(tvisstr(o) && uj_str_tonumtv(strV(o), o))) {
++		goto err;
++	}
++	if (LJ_LIKELY(tvisint(o))) {
++		return numV(o);
++	} else {
++		int32_t i = lj_num2bit(numV(o));
++		return i;
++	}
++}
++
+ /* No built-in functionality for length of cdata. */
+ int lj_carith_len(lua_State *L)
+ {
+diff --git a/src/ffi/lj_carith.h b/src/ffi/lj_carith.h
+index 64f3ee2..eea4af3 100644
+--- a/src/ffi/lj_carith.h
++++ b/src/ffi/lj_carith.h
+@@ -23,6 +23,9 @@ int64_t lj_carith_modi64(int64_t a, int64_t b);
+ uint64_t lj_carith_powu64(uint64_t x, uint64_t k);
+ int64_t lj_carith_powi64(int64_t x, int64_t k);
+ 
++uint64_t lj_carith_shift64(uint64_t x, int32_t sh, int op);
++uint64_t lj_carith_check64(lua_State *L, int narg, CTypeID *id);
++
+ #endif
+ 
+ #endif
+diff --git a/src/ffi/lj_crecord.c b/src/ffi/lj_crecord.c
+index 32e5ed1..734af1b 100644
+--- a/src/ffi/lj_crecord.c
++++ b/src/ffi/lj_crecord.c
+@@ -1686,6 +1686,94 @@ void recff_ffi_gc(jit_State *J, RecordFFData *rd)
+   crec_finalizer(J, J->base[0], &rd->argv[1]);
+ }
+ 
++/* -- 64 bit bit.* library functions -------------------------------------- */
++
++/* Determine bit operation type from argument type. */
++static CTypeID crec_bit64_type(CTState *cts, const TValue *tv)
++{
++  if (tviscdata(tv)) {
++    CType *ct = lj_ctype_rawref(cts, cdataV(tv)->ctypeid);
++    if (ctype_isenum(ct->info)) ct = ctype_child(cts, ct);
++    if ((ct->info & (CTMASK_NUM|CTF_BOOL|CTF_FP|CTF_UNSIGNED)) ==
++	CTINFO(CT_NUM, CTF_UNSIGNED) && ct->size == 8)
++      return CTID_UINT64;  /* Use uint64_t, since it has the highest rank. */
++    return CTID_INT64;  /* Otherwise use int64_t. */
++  }
++  return 0;  /* Use regular 32 bit ops. */
++}
++
++void recff_bit64_tobit(jit_State *J, RecordFFData *rd)
++{
++  CTState *cts = ctype_ctsG(J2G(J));
++  TRef tr = crec_ct_tv(J, ctype_get(cts, CTID_INT64), 0,
++		       J->base[0], &rd->argv[0]);
++  if (!tref_isinteger(tr))
++    tr = emitconv(tr, IRT_INT, tref_type(tr), 0);
++  J->base[0] = tr;
++}
++
++int recff_bit64_unary(jit_State *J, RecordFFData *rd, uint32_t ir_type)
++{
++  CTState *cts = ctype_ctsG(J2G(J));
++  CTypeID id = crec_bit64_type(cts, &rd->argv[0]);
++  if (id) {
++    TRef tr = crec_ct_tv(J, ctype_get(cts, id), 0, J->base[0], &rd->argv[0]);
++    tr = emitir(IRT(ir_type, id-CTID_INT64+IRT_I64), tr, 0);
++    J->base[0] = emitir(IRTG(IR_CNEWI, IRT_CDATA), lj_ir_kint(J, id), tr);
++    return 1;
++  }
++  return 0;
++}
++
++int recff_bit64_nary(jit_State *J, RecordFFData *rd, uint32_t ir_type)
++{
++  CTState *cts = ctype_ctsG(J2G(J));
++  CTypeID id = 0;
++  size_t i;
++  for (i = 0; J->base[i] != 0; i++) {
++    CTypeID aid = crec_bit64_type(cts, &rd->argv[i]);
++    if (id < aid) id = aid;  /* Determine highest type rank of all arguments. */
++  }
++  if (id) {
++    CType *ct = ctype_get(cts, id);
++    uint32_t ot = IRT(ir_type, id-CTID_INT64+IRT_I64);
++    TRef tr = crec_ct_tv(J, ct, 0, J->base[0], &rd->argv[0]);
++    for (i = 1; J->base[i] != 0; i++) {
++      TRef tr2 = crec_ct_tv(J, ct, 0, J->base[i], &rd->argv[i]);
++      tr = emitir(ot, tr, tr2);
++    }
++    J->base[0] = emitir(IRTG(IR_CNEWI, IRT_CDATA), lj_ir_kint(J, id), tr);
++    return 1;
++  }
++  return 0;
++}
++
++int recff_bit64_shift(jit_State *J, RecordFFData *rd, uint32_t ir_type)
++{
++  CTState *cts = ctype_ctsG(J2G(J));
++  CTypeID id;
++  TRef tsh = 0;
++  if (J->base[0] && tref_iscdata(J->base[1])) {
++    tsh = crec_ct_tv(J, ctype_get(cts, CTID_INT64), 0,
++		     J->base[1], &rd->argv[1]);
++    if (!tref_isinteger(tsh))
++      tsh = emitconv(tsh, IRT_INT, tref_type(tsh), 0);
++    J->base[1] = tsh;
++  }
++  id = crec_bit64_type(cts, &rd->argv[0]);
++  if (id) {
++    TRef tr = crec_ct_tv(J, ctype_get(cts, id), 0, J->base[0], &rd->argv[0]);
++    if (!tsh) tsh = lj_opt_narrow_tobit(J, J->base[1]);
++    if (!(ir_type < IR_BROL ? UJ_TARGET_MASKSHIFT : UJ_TARGET_MASKROT) &&
++	!tref_isk(tsh))
++      tsh = emitir(IRTI(IR_BAND), tsh, lj_ir_kint(J, 63));
++    tr = emitir(IRT(ir_type, id-CTID_INT64+IRT_I64), tr, tsh);
++    J->base[0] = emitir(IRTG(IR_CNEWI, IRT_CDATA), lj_ir_kint(J, id), tr);
++    return 1;
++  }
++  return 0;
++}
++
+ /* -- Miscellaneous library functions ------------------------------------- */
+ 
+ void lj_crecord_tonumber(jit_State *J, RecordFFData *rd)
+diff --git a/src/ffi/lj_crecord.h b/src/ffi/lj_crecord.h
+index 1471c3e..2c89f9c 100644
+--- a/src/ffi/lj_crecord.h
++++ b/src/ffi/lj_crecord.h
+@@ -50,6 +50,12 @@ void recff_ffi_sizeof(jit_State *J, RecordFFData *rd);
+ void recff_ffi_alignof(jit_State *J, RecordFFData *rd);
+ void recff_ffi_offsetof(jit_State *J, RecordFFData *rd);
+ void recff_ffi_gc(jit_State *J, RecordFFData *rd);
++
++void recff_bit64_tobit(jit_State *J, RecordFFData *rd);
++int recff_bit64_unary(jit_State *J, RecordFFData *rd, uint32_t opt);
++int recff_bit64_nary(jit_State *J, RecordFFData *rd, uint32_t opt);
++int recff_bit64_shift(jit_State *J, RecordFFData *rd, uint32_t opt);
++
+ void lj_crecord_tonumber(jit_State *J, RecordFFData *rd);
+ int lj_crecord_errno(void);
+ #endif
+diff --git a/src/jit/lj_ffrecord.c b/src/jit/lj_ffrecord.c
+index 3e4f9b0..ad2d65a 100644
+--- a/src/jit/lj_ffrecord.c
++++ b/src/jit/lj_ffrecord.c
+@@ -775,20 +775,31 @@ static void recff_helper_bit_unary(jit_State *J, IROp op)
+ 
+ static void recff_bit_tobit(jit_State *J, RecordFFData *rd)
+ {
+-  UNUSED(rd);
++#if LJ_HASFFI
++  if (tref_iscdata(J->base[0])) { recff_bit64_tobit(J, rd); return; }
++#endif
+   recff_helper_bit_unary(J, IR_TOBIT);
++  UNUSED(rd);
+ }
+ 
+ static void recff_bit_bnot(jit_State *J, RecordFFData *rd)
+ {
+-  UNUSED(rd);
++#if LJ_HASFFI
++  if (recff_bit64_unary(J, rd, IR_BNOT))
++    return;
++#endif
+   recff_helper_bit_unary(J, IR_BNOT);
++  UNUSED(rd);
+ }
+ 
+ static void recff_bit_bswap(jit_State *J, RecordFFData *rd)
+ {
+-  UNUSED(rd);
++#if LJ_HASFFI
++  if (recff_bit64_unary(J, rd, IR_BSWAP))
++    return;
++#endif
+   recff_helper_bit_unary(J, IR_BSWAP);
++  UNUSED(rd);
+ }
+ 
+ /* Record N-ary bit.band, bit.bor, bit.bxor. */
+@@ -803,18 +814,30 @@ static void recff_helper_bit_nary(jit_State *J, IROp op)
+ 
+ static void recff_bit_band(jit_State *J, RecordFFData *rd)
+ {
++#if LJ_HASFFI
++  if (recff_bit64_nary(J, rd, IR_BAND))
++    return;
++#endif
+   UNUSED(rd);
+   recff_helper_bit_nary(J, IR_BAND);
+ }
+ 
+ static void recff_bit_bor(jit_State *J, RecordFFData *rd)
+ {
++#if LJ_HASFFI
++  if (recff_bit64_nary(J, rd, IR_BOR))
++    return;
++#endif
+   UNUSED(rd);
+   recff_helper_bit_nary(J, IR_BOR);
+ }
+ 
+ static void recff_bit_bxor(jit_State *J, RecordFFData *rd)
+ {
++#if LJ_HASFFI
++  if (recff_bit64_nary(J, rd, IR_BXOR))
++    return;
++#endif
+   UNUSED(rd);
+   recff_helper_bit_nary(J, IR_BXOR);
+ }
+@@ -838,30 +861,50 @@ static void recff_helper_bit_shift(jit_State *J, IROp op)
+ 
+ static void recff_bit_lshift(jit_State *J, RecordFFData *rd)
+ {
++#if LJ_HASFFI
++  if (recff_bit64_shift(J, rd, IR_BSHL))
++    return;
++#endif
+   UNUSED(rd);
+   recff_helper_bit_shift(J, IR_BSHL);
+ }
+ 
+ static void recff_bit_rshift(jit_State *J, RecordFFData *rd)
+ {
++#if LJ_HASFFI
++  if (recff_bit64_shift(J, rd, IR_BSHR))
++    return;
++#endif
+   UNUSED(rd);
+   recff_helper_bit_shift(J, IR_BSHR);
+ }
+ 
+ static void recff_bit_arshift(jit_State *J, RecordFFData *rd)
+ {
++#if LJ_HASFFI
++  if (recff_bit64_shift(J, rd, IR_BSAR))
++    return;
++#endif
+   UNUSED(rd);
+   recff_helper_bit_shift(J, IR_BSAR);
+ }
+ 
+ static void recff_bit_rol(jit_State *J, RecordFFData *rd)
+ {
++#if LJ_HASFFI
++  if (recff_bit64_shift(J, rd, IR_BROL))
++    return;
++#endif
+   UNUSED(rd);
+   recff_helper_bit_shift(J, IR_BROL);
+ }
+ 
+ static void recff_bit_ror(jit_State *J, RecordFFData *rd)
+ {
++#if LJ_HASFFI
++  if (recff_bit64_shift(J, rd, IR_BROR))
++    return;
++#endif
+   UNUSED(rd);
+   recff_helper_bit_shift(J, IR_BROR);
+ }
+diff --git a/src/jit/opt/fold.c b/src/jit/opt/fold.c
+index c90342b..b27f275 100644
+--- a/src/jit/opt/fold.c
++++ b/src/jit/opt/fold.c
+@@ -354,9 +354,9 @@ LJFOLDF(kfold_intcomp0)
+ static uint64_t kfold_int64arith(uint64_t k1, uint64_t k2, IROp op)
+ {
+   switch (op) {
++#if LJ_HASFFI
+   case IR_ADD: k1 += k2; break;
+   case IR_SUB: k1 -= k2; break;
+-#if LJ_HASFFI
+   case IR_MUL: k1 *= k2; break;
+   case IR_BAND: k1 &= k2; break;
+   case IR_BOR: k1 |= k2; break;
+@@ -408,19 +408,13 @@ LJFOLD(BROL KINT64 KINT)
+ LJFOLD(BROR KINT64 KINT)
+ LJFOLDF(kfold_int64shift)
+ {
++#if LJ_HASFFI
+   uint64_t k = rawV(ir_k64(fleft));
+   int32_t sh = (fright->i & 63);
+-  switch ((IROp)fins->o) {
+-  case IR_BSHL: k <<= sh; break;
+-#if LJ_HASFFI
+-  case IR_BSHR: k >>= sh; break;
+-  case IR_BSAR: k = (uint64_t)((int64_t)k >> sh); break;
+-  case IR_BROL: k = lj_rol(k, sh); break;
+-  case IR_BROR: k = lj_ror(k, sh); break;
++  return INT64FOLD(lj_carith_shift64(k, sh, fins->o - IR_BSHL));
++#else
++  UNUSED(J); lua_assert(0); return FAILFOLD;
+ #endif
+-  default: lua_assert(0); break;
+-  }
+-  return INT64FOLD(k);
+ }
+ 
+ LJFOLD(BNOT KINT64)
+@@ -1305,7 +1299,9 @@ static TRef simplify_intmul_k(jit_State *J, int32_t k)
+   ** But this is mainly intended for simple address arithmetic.
+   ** Also it's easier for the backend to optimize the original multiplies.
+   */
+-  if (k == 1) {  /* i * 1 ==> i */
++  if (k == 0) {  /* i * 0 ==> 0 */
++    return RIGHTFOLD;
++  } else if (k == 1) {  /* i * 1 ==> i */
+     return LEFTFOLD;
+   } else if ((k & (k-1)) == 0) {  /* i * 2^k ==> i << k */
+     fins->o = IR_BSHL;
+@@ -1318,9 +1314,7 @@ static TRef simplify_intmul_k(jit_State *J, int32_t k)
+ LJFOLD(MUL any KINT)
+ LJFOLDF(simplify_intmul_k32)
+ {
+-  if (fright->i == 0)  /* i * 0 ==> 0 */
+-    return INTFOLD(0);
+-  else if (fright->i > 0)
++  if (fright->i >= 0)
+     return simplify_intmul_k(J, fright->i);
+   return NEXTFOLD;
+ }
+@@ -1328,12 +1322,13 @@ LJFOLDF(simplify_intmul_k32)
+ LJFOLD(MUL any KINT64)
+ LJFOLDF(simplify_intmul_k64)
+ {
+-  if (rawV(ir_kint64(fright)) == 0)  /* i * 0 ==> 0 */
+-    return INT64FOLD(0);
+-  /* NYI: SPLIT for BSHL and 32 bit backend support. */
+-  else if (rawV(ir_kint64(fright)) < 0x80000000u)
++#if LJ_HASFFI
++  if (ir_kint64(fright)->u64 < 0x80000000u)
+     return simplify_intmul_k(J, (int32_t)rawV(ir_kint64(fright)));
+   return NEXTFOLD;
++#else
++  UNUSED(J); lua_assert(0); return FAILFOLD;
++#endif
+ }
+ 
+ LJFOLD(MOD any KINT)
+diff --git a/src/lib/bit.c b/src/lib/bit.c
+index 3a707e3..7dbc7cd 100644
+--- a/src/lib/bit.c
++++ b/src/lib/bit.c
+@@ -9,39 +9,124 @@
+ #include "lua.h"
+ #include "lauxlib.h"
+ #include "lextlib.h"
+-
+ #include "lj_obj.h"
++
++#if LJ_HASFFI
++#include "ffi/lj_ctype.h"
++#include "ffi/lj_cdata.h"
++#include "ffi/lj_cconv.h"
++#include "ffi/lj_carith.h"
++#endif /* LJ_HASFFI */
++#include "uj_ff.h"
++
+ #include "uj_lib.h"
+ 
+ /* ------------------------------------------------------------------------ */
+ 
+ #define LJLIB_MODULE_bit
+ 
+-LJLIB_ASM(bit_tobit)            LJLIB_REC(.)
++#include "ffi/lj_ctype.h"
++#if LJ_HASFFI
++static int bit_result64(lua_State *L, CTypeID id, uint64_t x)
++{
++	GCcdata *cd = lj_cdata_new_(L, id, 8);
++	*(uint64_t *)cdataptr(cd) = x;
++	setcdataV(L, L->base-1, cd);
++	return FFH_RES(1);
++}
++#endif
++LJLIB_ASM(bit_tobit)            LJLIB_REC(bit_tobit)
++{
++#if LJ_HASFFI
++	CTypeID id = 0;
++	setintV(L->base-1, (int32_t)lj_carith_check64(L, 1, &id));
++	return FFH_RES(1);
++#else
++	uj_lib_checknum(L, 1);
++	return FFH_RETRY;
++#endif
++}
++
++LJLIB_ASM(bit_bnot)             LJLIB_REC(bit_unary IR_BNOT)
++{
++#if LJ_HASFFI
++	CTypeID id = 0;
++	uint64_t x = lj_carith_check64(L, 1, &id);
++	return id ? bit_result64(L, id, ~x) : FFH_RETRY;
++#else
++	uj_lib_checknum(L, 1);
++	return FFH_RETRY;
++#endif
++}
++
++LJLIB_ASM(bit_bswap)            LJLIB_REC(bit_unary IR_BSWAP)
+ {
+-  uj_lib_checknum(L, 1);
+-  return FFH_RETRY;
++#if LJ_HASFFI
++	CTypeID id = 0;
++	uint64_t x = lj_carith_check64(L, 1, &id);
++	return id ? bit_result64(L, id, lj_bswap64(x)) : FFH_RETRY;
++#else
++	uj_lib_checknum(L, 1);
++	return FFH_RETRY;
++#endif
+ }
+-LJLIB_ASM_(bit_bnot)            LJLIB_REC(.)
+-LJLIB_ASM_(bit_bswap)           LJLIB_REC(.)
+ 
+-LJLIB_ASM(bit_lshift)           LJLIB_REC(.)
++LJLIB_ASM(bit_lshift)           LJLIB_REC(bit_shift IR_BSHL)
+ {
+-  uj_lib_checknum(L, 1);
+-  uj_lib_checkbit(L, 2);
+-  return FFH_RETRY;
++#if LJ_HASFFI
++	CTypeID id = 0, id2 = 0;
++	uint64_t x = lj_carith_check64(L, 1, &id);
++	int32_t sh = (int32_t)lj_carith_check64(L, 2, &id2);
++	if (id) {
++		x = lj_carith_shift64(x, sh, curr_func(L)->c.ffid - (int)FF_bit_lshift);
++		return bit_result64(L, id, x);
++	}
++	if (id2)
++		setintV(L->base+1, sh);
++	return FFH_RETRY;
++#else
++	uj_lib_checknum(L, 1);
++	return FFH_RETRY;
++#endif
+ }
++
+ LJLIB_ASM_(bit_rshift)          LJLIB_REC(.)
+ LJLIB_ASM_(bit_arshift)         LJLIB_REC(.)
+ LJLIB_ASM_(bit_rol)             LJLIB_REC(.)
+ LJLIB_ASM_(bit_ror)             LJLIB_REC(.)
+ 
+-LJLIB_ASM(bit_band)             LJLIB_REC(.)
++LJLIB_ASM(bit_band)             LJLIB_REC(bit_nary IR_BAND)
+ {
+-  int i = 0;
+-  do { uj_lib_checknum(L, ++i); } while (L->base+i < L->top);
+-  return FFH_RETRY;
++#if LJ_HASFFI
++	CTypeID id = 0;
++	TValue *o = L->base, *top = L->top;
++	int i = 0;
++	do { lj_carith_check64(L, ++i, &id); } while (++o < top);
++	if (id) {
++		CTState *cts = ctype_cts(L);
++		CType *ct = ctype_get(cts, id);
++		int op = curr_func(L)->c.ffid - (int)FF_bit_bor;
++		uint64_t x, y = op >= 0 ? 0 : ~(uint64_t)0;
++		o = L->base;
++		do {
++			lj_cconv_ct_tv(cts, ct, (uint8_t *)&x, o, 0);
++			if (op < 0)
++				y &= x;
++			else if (op == 0)
++				y |= x;
++			else
++				y ^= x;
++		} while (++o < top);
++		return bit_result64(L, id, y);
++	}
++	return FFH_RETRY;
++#else
++	int i = 0;
++	do { uj_lib_checknum(L, ++i); } while (L->base + i < L->top);
++	return FFH_RETRY;
++#endif
+ }
++
+ LJLIB_ASM_(bit_bor)             LJLIB_REC(.)
+ LJLIB_ASM_(bit_bxor)            LJLIB_REC(.)
+ 
+@@ -49,15 +134,24 @@ LJLIB_ASM_(bit_bxor)            LJLIB_REC(.)
+ 
+ LJLIB_CF(bit_tohex)
+ {
+-  uint32_t b = (uint32_t)uj_lib_checkbit(L, 1);
+-  int32_t i, n = L->base+1 >= L->top ? 8 : uj_lib_checkbit(L, 2);
+-  const char *hexdigits = "0123456789abcdef";
+-  char buf[8];
+-  if (n < 0) { n = -n; hexdigits = "0123456789ABCDEF"; }
+-  if (n > 8) n = 8;
+-  for (i = n; --i >= 0; ) { buf[i] = hexdigits[b & 15]; b >>= 4; }
+-  lua_pushlstring(L, buf, (size_t)n);
+-  return 1;
++#if LJ_HASFFI
++	CTypeID id = 0, id2 = 0;
++	uint64_t b = lj_carith_check64(L, 1, &id);
++	int32_t i, dig = id ? 16 : 8;
++	int32_t n = (L->base + 1 >= L->top) ? dig : (int32_t)lj_carith_check64(L, 2, &id2);
++	char buf[16];
++#else
++	uint32_t b = (uint32_t)uj_lib_checkbit(L, 1);
++	int32_t i, dig = 8;
++	int32_t n = (L->base + 1 >= L->top) ? dig : uj_lib_checkbit(L, 2);
++	char buf[8];
++#endif
++	const char *hexdigits = "0123456789abcdef";
++	if (n < 0) { n = -n; hexdigits = "0123456789ABCDEF"; }
++	if (n > dig) n = dig;
++	for (i = n; --i >= 0; ) { buf[i] = hexdigits[b & 15]; b >>= 4; }
++	lua_pushlstring(L, buf, (size_t)n);
++	return 1;
+ }
+ 
+ /* ------------------------------------------------------------------------ */
 diff --git a/src/uj_vmstate.h b/src/uj_vmstate.h
 index 7bdcd2c..eadb5ae 100644
 --- a/src/uj_vmstate.h

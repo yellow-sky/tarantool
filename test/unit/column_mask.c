@@ -290,9 +290,9 @@ test_paths(void)
 }
 
 static uint32_t
-simple_hash(const char* str, uint32_t len)
+simple_hash(const void* str, uint32_t len)
 {
-	return str[0] + len;
+	return ((char *)str)[0] + len;
 }
 
 int

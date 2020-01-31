@@ -59,13 +59,13 @@ luaM_cdata_hasmm(struct lua_State *L, int idx, MMS metamethod);
 LUAMISC_API int
 luaM_pushthread1(lua_State *L, lua_State *L1);
 
-LUA_API uint32_t  lua_hashstring(lua_State *L, int idx);
+LUAMISC_API uint32_t lua_hashstring(lua_State *L, int idx);
 
 /*
  * Calculate a hash for a specified string. Hash is the same as
  * for luajit string objects (see lj_str_new()).
  */
-LUA_API uint32_t (lua_hash) (const char *str, uint32_t len);
+LUAMISC_API uint32_t (lua_hash) (const char *str, uint32_t len);
 
 #undef LUAMISC_API
 

@@ -38,7 +38,7 @@ extern "C" {
 #endif
 
 struct mh_strnu32_t;
-typedef uint32_t (*field_name_hash_f)(const char *str, uint32_t len);
+typedef uint32_t (*field_name_hash_f)(const void *str, uint32_t len);
 extern field_name_hash_f field_name_hash;
 
 /**
