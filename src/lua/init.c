@@ -61,6 +61,7 @@
 #include "lua/swim.h"
 #include "lua/decimal.h"
 #include "digest.h"
+#include "box/tuple_dictionary.h"
 #include <small/ibuf.h>
 
 #include <ctype.h>
@@ -501,6 +502,13 @@ tarantool_lua_init(const char *tarantool_bin, int argc, char **argv)
 	/* clear possible left-overs of init */
 	lua_settop(L, 0);
 	tarantool_L = L;
+	/*
+	 * FIXME: Tarantool use this hash function without any
+	 * context of Lua. Tuple init or Lua init should be
+	 * rewritten with a correct Lua string hash function
+	 * initialization.
+	 */
+	field_name_hash = G(tarantool_L)->hashf;
 }
 
 char *history = NULL;
