@@ -1004,13 +1004,26 @@ static int json_decode(lua_State *l)
     luaL_argcheck(l, lua_gettop(l) == 2 || lua_gettop(l) == 1, 1,
                   "expected 1 or 2 arguments");
 
+    struct luaL_serializer *cfg = luaL_checkserializer(l);
+
+    /* user_cfg is per-call local version of global cfg: it is
+     * used if user passes custom options to :decode() method
+     * as a separate arguments. In this case it is required
+     * to avoid modifying global parameters. Life span of
+     * user_cfg is restricted by the scope of :decode() so it
+     * is enough to allocate it on the stack. */
+    struct luaL_serializer user_cfg;
+    json.cfg = cfg;
     if (lua_gettop(l) == 2) {
-        struct luaL_serializer *user_cfg = luaL_checkserializer(l);
-        luaL_serializer_parse_options(l, user_cfg);
-        lua_pop(l, 1);
-        json.cfg = user_cfg;
-    } else {
-        json.cfg = luaL_checkserializer(l);
+
+        /* Only copy cfg options and left update triggers, see
+	 * struct luaL_serializer, uninitialized. The code should
+	 * never run them, since we must not change the json config of the
+	 * instance. */
+	luaL_serializer_copy_options(&user_cfg, cfg);
+	luaL_serializer_parse_options(l, &user_cfg);
+	lua_pop(l, 1);
+	json.cfg = &user_cfg;
     }
 
     json.data = luaL_checklstring(l, 1, &json_len);
