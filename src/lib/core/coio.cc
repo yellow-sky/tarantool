@@ -238,6 +238,17 @@ coio_connect_timeout(struct ev_io *coio, struct uri *uri, struct sockaddr *addr,
 	tnt_raise(SocketError, sio_socketname(coio->fd), "connection failed");
 }
 
+/* Do not allow to reuse coio by different fiber. */
+static inline void
+check_coio_in_use(struct ev_io *coio)
+{
+	if (ev_is_active(coio)) {
+		errno = EINPROGRESS;
+		tnt_raise(SocketError, sio_socketname(coio->fd),
+			  "already in use");
+	}
+}
+
 /**
  * Wait a client connection on a server socket until
  * timedout.
@@ -249,6 +260,7 @@ coio_accept(struct ev_io *coio, struct sockaddr *addr,
 	ev_tstamp start, delay;
 	coio_timeout_init(&start, &delay, timeout);
 
+	check_coio_in_use(coio);
 	CoioGuard coio_guard(coio);
 
 	while (true) {
@@ -302,6 +314,7 @@ coio_read_ahead_timeout(struct ev_io *coio, void *buf, size_t sz,
 
 	ssize_t to_read = (ssize_t) sz;
 
+	check_coio_in_use(coio);
 	CoioGuard coio_guard(coio);
 
 	while (true) {
@@ -399,6 +412,7 @@ coio_write_timeout(struct ev_io *coio, const void *buf, size_t sz,
 	ev_tstamp start, delay;
 	coio_timeout_init(&start, &delay, timeout);
 
+	check_coio_in_use(coio);
 	CoioGuard coio_guard(coio);
 
 	while (true) {
@@ -461,6 +475,7 @@ coio_writev_timeout(struct ev_io *coio, struct iovec *iov, int iovcnt,
 	struct iovec *end = iov + iovcnt;
 	ev_tstamp start, delay;
 	coio_timeout_init(&start, &delay, timeout);
+	check_coio_in_use(coio);
 	CoioGuard coio_guard(coio);
 
 	/* Avoid a syscall in case of 0 iovcnt. */
@@ -518,6 +533,7 @@ coio_sendto_timeout(struct ev_io *coio, const void *buf, size_t sz, int flags,
 	ev_tstamp start, delay;
 	coio_timeout_init(&start, &delay, timeout);
 
+	check_coio_in_use(coio);
 	CoioGuard coio_guard(coio);
 
 	while (true) {
@@ -563,6 +579,7 @@ coio_recvfrom_timeout(struct ev_io *coio, void *buf, size_t sz, int flags,
 	ev_tstamp start, delay;
 	coio_timeout_init(&start, &delay, timeout);
 
+	check_coio_in_use(coio);
 	CoioGuard coio_guard(coio);
 
 	while (true) {
