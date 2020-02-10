@@ -471,6 +471,7 @@ box_process_rw(struct request *request, struct space *space,
 int
 boxk(int type, uint32_t space_id, const char *format, ...);
 
+extern char *remove_sources[31];
 #if defined(__cplusplus)
 } /* extern "C" */
 #endif /* defined(__cplusplus) */

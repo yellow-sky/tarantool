@@ -398,10 +398,11 @@ replicaset_add_anon(const struct tt_uuid *replica_uuid);
  * \param connect_quorum if this flag is set, fail unless at
  *                       least replication_connect_quorum
  *                       appliers have successfully connected.
+ * \param new_count size of new appliers array
  */
 void
 replicaset_connect(struct applier **appliers, int count,
-		   bool connect_quorum);
+		   bool connect_quorumm, int new_count);
 
 /**
  * Check if the current instance fell too much behind its

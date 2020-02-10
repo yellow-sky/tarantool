@@ -482,12 +482,27 @@ replica_on_applier_state_f(struct trigger *trigger, void *event)
 	return 0;
 }
 
+static bool
+check_and_remove_sources(const char *source) {
+	for(int i = 0; i < VCLOCK_MAX - 1; i++) {
+		if (remove_sources[i] != NULL) {
+			if (strcmp(source, remove_sources[i]) == 0) {
+				free(remove_sources[i]);
+				remove_sources[i] = NULL;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
 /**
  * Update the replica set with new "applier" objects
  * upon reconfiguration of box.cfg.replication.
+ * Count is total number of applier, new_count - only new ones.
  */
 static void
-replicaset_update(struct applier **appliers, int count)
+replicaset_update(struct applier **appliers, int count, int new_count)
 {
 	replica_hash_t uniq;
 	memset(&uniq, 0, sizeof(uniq));
@@ -505,7 +520,7 @@ replicaset_update(struct applier **appliers, int count)
 	});
 
 	/* Check for duplicate UUID */
-	for (int i = 0; i < count; i++) {
+	for (int i = 0; i < new_count; i++) {
 		applier = appliers[i];
 		replica = replica_new();
 		replica_set_applier(replica, applier);
@@ -540,7 +555,7 @@ replicaset_update(struct applier **appliers, int count)
 	 * apply the new configuration. Nothing can fail after this point.
 	 */
 
-	/* Prune old appliers */
+	/* Prune all appliers that haven't finished bootstrap yet.*/
 	while (!rlist_empty(&replicaset.anon)) {
 		replica = rlist_first_entry(&replicaset.anon,
 					    typeof(*replica), in_anon);
@@ -551,21 +566,25 @@ replicaset_update(struct applier **appliers, int count)
 		applier_stop(applier);
 		applier_delete(applier);
 	}
+	/*Throw away applier with sources from remove list and stopped once.*/
 	replicaset_foreach(replica) {
 		if (replica->applier == NULL)
 			continue;
 		applier = replica->applier;
-		replica_clear_applier(replica);
-		replica->applier_sync_state = APPLIER_DISCONNECTED;
-		applier_stop(applier);
-		applier_delete(applier);
+		if (check_and_remove_sources(applier->source) || count == 0 ||
+		    applier->state == APPLIER_OFF) {
+			replica_clear_applier(replica);
+			replica->applier_sync_state = APPLIER_DISCONNECTED;
+			applier_stop(applier);
+			applier_delete(applier);
+		}
 	}
 
 	/* Save new appliers */
 	replicaset.applier.total = count;
 	replicaset.applier.connected = 0;
 	replicaset.applier.loading = 0;
-	replicaset.applier.synced = 0;
+	replicaset.applier.synced = count - new_count;
 
 	replica_hash_foreach_safe(&uniq, replica, next) {
 		replica_hash_remove(&uniq, replica);
@@ -640,15 +659,16 @@ applier_on_connect_f(struct trigger *trigger, void *event)
 
 void
 replicaset_connect(struct applier **appliers, int count,
-		   bool connect_quorum)
+		   bool connect_quorum, int new_count)
 {
 	if (count == 0) {
 		/* Cleanup the replica set. */
-		replicaset_update(appliers, count);
+		replicaset_update(appliers, count, new_count);
 		return;
 	}
 
-	say_info("connecting to %d replicas", count);
+	say_info("connected to %d replicas", count);
+	say_info("connecting to %d replicas", new_count);
 
 	if (!connect_quorum) {
 		/*
@@ -680,14 +700,15 @@ replicaset_connect(struct applier **appliers, int count,
 	struct applier_on_connect triggers[VCLOCK_MAX];
 
 	struct replicaset_connect_state state;
-	state.connected = state.failed = 0;
+	state.connected  = count - new_count;
+	state.failed = 0;
 	fiber_cond_create(&state.wakeup);
 
 	double timeout = replication_connect_timeout;
 	int quorum = MIN(count, replication_connect_quorum);
 
 	/* Add triggers and start simulations connection to remote peers */
-	for (int i = 0; i < count; i++) {
+	for (int i = 0; i < new_count; i++) {
 		struct applier *applier = appliers[i];
 		struct applier_on_connect *trigger = &triggers[i];
 		/* Register a trigger to wake us up when peer is connected */
@@ -733,7 +754,7 @@ replicaset_connect(struct applier **appliers, int count,
 		say_info("connected to %d replicas", state.connected);
 	}
 
-	for (int i = 0; i < count; i++) {
+	for (int i = 0; i < new_count; i++) {
 		/* Unregister the temporary trigger used to wake us up */
 		trigger_clear(&triggers[i].base);
 		/*
@@ -748,14 +769,17 @@ replicaset_connect(struct applier **appliers, int count,
 
 	/* Now all the appliers are connected, update the replica set. */
 	try {
-		replicaset_update(appliers, count);
+		replicaset_update(appliers, count, new_count);
 	} catch (Exception *e) {
 		goto error;
+	}
+	for (int i = 0; i < new_count; i++) {
+		appliers[i] = NULL;
 	}
 	return;
 error:
 	/* Destroy appliers */
-	for (int i = 0; i < count; i++) {
+	for (int i = 0; i < new_count; i++) {
 		trigger_clear(&triggers[i].base);
 		applier_stop(appliers[i]);
 	}

@@ -432,6 +432,9 @@ test_run:cmd('switch replica_quorum')
 ...
 -- If replication_connect_quorum was ignored here, the instance
 -- would exit with an error.
+box.cfg{replication={}}
+---
+...
 box.cfg{replication={INSTANCE_URI, nonexistent_uri(1)}}
 ---
 ...

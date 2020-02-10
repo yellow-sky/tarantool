@@ -190,6 +190,7 @@ test_run:cmd("create server replica with rpl_master=default, script='replication
 test_run:cmd("start server replica")
 test_run:cmd("switch replica")
 replication = box.cfg.replication[1]
+box.cfg{replication = {}}
 box.cfg{replication = {replication, replication}}
 
 -- Check the case when duplicate connection is detected in the background.
@@ -198,6 +199,7 @@ listen = box.cfg.listen
 box.cfg{listen = ''}
 
 test_run:cmd("switch replica")
+box.cfg{replication = {}}
 box.cfg{replication_connect_quorum = 0, replication_connect_timeout = 0.01}
 box.cfg{replication = {replication, replication}}
 

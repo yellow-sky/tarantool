@@ -457,6 +457,9 @@ test_run:cmd("switch replica")
 replication = box.cfg.replication[1]
 ---
 ...
+box.cfg{replication = {}}
+---
+...
 box.cfg{replication = {replication, replication}}
 ---
 - error: 'Incorrect value for option ''replication'': duplicate connection to the
@@ -476,6 +479,9 @@ box.cfg{listen = ''}
 test_run:cmd("switch replica")
 ---
 - true
+...
+box.cfg{replication = {}}
+---
 ...
 box.cfg{replication_connect_quorum = 0, replication_connect_timeout = 0.01}
 ---

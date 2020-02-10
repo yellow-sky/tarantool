@@ -164,6 +164,7 @@ test_run:cmd('start server replica_quorum with wait=True, wait_load=True, args="
 test_run:cmd('switch replica_quorum')
 -- If replication_connect_quorum was ignored here, the instance
 -- would exit with an error.
+box.cfg{replication={}}
 box.cfg{replication={INSTANCE_URI, nonexistent_uri(1)}}
 box.info.id
 test_run:cmd('switch default')
