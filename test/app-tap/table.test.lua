@@ -8,7 +8,7 @@ yaml.cfg{
     encode_invalid_as_nil  = true,
 }
 local test = require('tap').test('table')
-test:plan(33)
+test:plan(35)
 
 do -- check basic table.copy (deepcopy)
     local example_table = {
@@ -239,6 +239,30 @@ do -- gh-4340: deepcopy doesn't handle __metatable correctly.
             'protection',
             "checking that __metatable was correctly copied"
     )
+end
+
+do -- gh-4770: deepcopy uses __pairs for iteration over table.
+    local original = { a = 1, b = 2 }
+
+    local function custom_pairs(self)
+        local function step(tbl, k)
+            local k, v = next(tbl, k)
+            if v ~= nil then
+                v = v + 1
+            end
+            return k, v
+        end
+        return step, self, nil
+    end
+
+    setmetatable(original, {__pairs = custom_pairs })
+
+    -- Don't use is deeply as it could use pairs for check
+    local copy = table.deepcopy(original)
+    test:is(original.a, copy.a,
+            "checking that the first values is correctly copied")
+    test:is(original.b, copy.b,
+            "checking that the second values is correctly copied")
 end
 
 os.exit(test:check() == true and 0 or 1)

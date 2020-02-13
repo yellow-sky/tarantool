@@ -1,3 +1,8 @@
+-- This pairs implementation doesn't trigger __pairs metamethod
+local function internal_pairs(tbl)
+    return next, tbl, nil
+end
+
 local function table_deepcopy_internal(orig, cyclic)
     cyclic = cyclic or {}
     local copy = orig
@@ -10,7 +15,7 @@ local function table_deepcopy_internal(orig, cyclic)
                 copy = cyclic[orig]
             else
                 cyclic[orig] = copy
-                for orig_key, orig_value in pairs(orig) do
+                for orig_key, orig_value in internal_pairs(orig) do
                     local key = table_deepcopy_internal(orig_key, cyclic)
                     copy[key] = table_deepcopy_internal(orig_value, cyclic)
                 end
