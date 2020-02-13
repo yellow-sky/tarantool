@@ -2,7 +2,7 @@ local function table_deepcopy_internal(orig, cyclic)
     cyclic = cyclic or {}
     local copy = orig
     if type(orig) == 'table' then
-        local mt, copy_function = getmetatable(orig), nil
+        local mt, copy_function = debug.getmetatable(orig), nil
         if mt then copy_function = mt.__copy end
         if copy_function == nil then
             copy = {}

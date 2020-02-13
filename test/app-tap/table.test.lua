@@ -8,7 +8,7 @@ yaml.cfg{
     encode_invalid_as_nil  = true,
 }
 local test = require('tap').test('table')
-test:plan(31)
+test:plan(33)
 
 do -- check basic table.copy (deepcopy)
     local example_table = {
@@ -220,6 +220,24 @@ do -- check usage of not __copy metamethod on second level + shallow
         one_self[1].a,
         another_self[1].a,
         "checking that we've called __copy + shallow and object val is the same"
+    )
+end
+
+do -- gh-4340: deepcopy doesn't handle __metatable correctly.
+    local original = {
+        content = 'string'
+    }
+    setmetatable(original, { __metatable = 'protection' })
+    local copy = table.deepcopy(original)
+    test:is(
+            copy.content,
+            original.content,
+            "checking that original string was copied"
+    )
+    test:is(
+            getmetatable(copy),
+            'protection',
+            "checking that __metatable was correctly copied"
     )
 end
 
