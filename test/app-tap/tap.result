@@ -137,7 +137,7 @@ not ok - failed subtests
   failed: 1
   ...
     # is_deeply
-    1..20
+    1..22
     ok - 1 and 1
     ok - abc and abc
     ok - empty tables
@@ -203,10 +203,12 @@ not ok - failed subtests
       strict: true
       ...
     ok - {a = box.NULL} and {a = box.NULL} strict true
+    ok - is_deeply ignores __pairs metamethod
+    ok - is_deeply ignores __pairs metamethod
     # is_deeply: end
 not ok - failed subtests
   ---
-  planned: 20
+  planned: 22
   failed: 8
   ...
     # like

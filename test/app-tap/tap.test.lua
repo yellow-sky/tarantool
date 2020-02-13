@@ -131,7 +131,7 @@ end)
 
 
 test:test('is_deeply', function(t)
-    t:plan(20)
+    t:plan(22)
 
     t:is_deeply(1, 1, '1 and 1')
     t:is_deeply('abc', 'abc', 'abc and abc')
@@ -166,6 +166,28 @@ test:test('is_deeply', function(t)
     t:is_deeply({a = box.NULL}, {a = box.NULL},
                 '{a = box.NULL} and {a = box.NULL} strict true')
     t.strict = false
+
+    --
+    -- gh-4770: is_deeply uses __pairs for iteration through the table.
+    --
+    local original = { a = 1, b = 2 }
+
+    local function custom_pairs(self)
+        local function step(tbl, k)
+            local k, v = next(tbl, k)
+            if v ~= nil then
+                v = v + 1
+            end
+            return k, v
+        end
+        return step, self, nil
+    end
+
+    setmetatable(original, {__pairs = custom_pairs })
+    t:is_deeply(original, {a = 1, b = 2},
+            'is_deeply ignores __pairs metamethod')
+    t:is_deeply({a = 1, b = 2}, original,
+            'is_deeply ignores __pairs metamethod')
 end)
 
 

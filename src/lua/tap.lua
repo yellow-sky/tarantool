@@ -77,7 +77,10 @@ local function skip(test, message, extra)
 end
 
 
-local nan = 0/0
+-- This pairs implementation doesn't trigger __pairs metamethod
+local function internal_pairs(tbl)
+    return next, tbl, nil
+end
 
 local function cmpdeeply(got, expected, extra)
     if type(expected) == "number" or type(got) == "number" then
@@ -107,7 +110,7 @@ local function cmpdeeply(got, expected, extra)
     local path = extra.path or '/'
     local visited_keys = {}
 
-    for i, v in pairs(got) do
+    for i, v in internal_pairs(got) do
         visited_keys[i] = true
         extra.path = path .. '/' .. i
         if not cmpdeeply(v, expected[i], extra) then
@@ -116,7 +119,7 @@ local function cmpdeeply(got, expected, extra)
     end
 
     -- check if expected contains more keys then got
-    for i, v in pairs(expected) do
+    for i, v in internal_pairs(expected) do
         if visited_keys[i] ~= true and (extra.strict or v ~= box.NULL) then
             extra.expected = 'key ' .. tostring(i)
             extra.got = 'nil'
