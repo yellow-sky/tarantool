@@ -482,6 +482,15 @@ applier_fetch_snapshot(struct applier *applier)
 	applier_set_state(applier, APPLIER_READY);
 }
 
+static int
+register_wait_cb(struct trigger *trigger, void *data)
+{
+	(void) data;
+	struct fiber_cond *cond = (struct fiber_cond *)trigger->data;
+	fiber_cond_signal(cond);
+	return 0;
+}
+
 static bool
 applier_wait_register(struct applier *applier)
 {
@@ -525,6 +534,21 @@ applier_wait_register(struct applier *applier)
 			ibuf_reset(ibuf);
 		fiber_gc();
 	}
+	/* Wait until wal processed all scheduled writes. */
+	struct vclock vclock;
+	vclock_copy(&vclock, &replicaset.applier.vclock);
+	struct fiber_cond wait_cond;
+	fiber_cond_create(&wait_cond);
+
+	struct trigger on_wal_write;
+	trigger_create(&on_wal_write, register_wait_cb, &wait_cond, NULL);
+	trigger_add(&replicaset.on_write, &on_wal_write);
+	int rc = vclock_compare(&replicaset.wal_vclock, &vclock);
+	while (rc < 0 || rc == VCLOCK_ORDER_UNDEFINED) {
+		fiber_cond_wait(&wait_cond);
+		rc = vclock_compare(&replicaset.wal_vclock, &vclock);
+	}
+	trigger_clear(&on_wal_write);
 
 	return true;
 }

@@ -1423,11 +1423,9 @@ box_process_auth(struct auth_request *request, const char *salt)
 	authenticate(user, len, salt, request->scramble);
 }
 
-void
-box_process_fetch_snapshot(struct ev_io *io, struct xrow_header *header)
+static void
+check_can_be_master()
 {
-	assert(header->type == IPROTO_FETCH_SNAPSHOT);
-
 	/* Check that bootstrap has been finished */
 	if (!is_box_configured)
 		tnt_raise(ClientError, ER_LOADING);
@@ -1440,12 +1438,13 @@ box_process_fetch_snapshot(struct ev_io *io, struct xrow_header *header)
 		tnt_raise(ClientError, ER_UNSUPPORTED, "Replication",
 			  "wal_mode = 'none'");
 	}
+}
 
-	say_info("sending current read-view to replica at %s", sio_socketname(io->fd));
-
+static void
+process_fetch_snapshot(struct ev_io *io, uint64_t sync, struct vclock *vclock)
+{
 	/* Send the snapshot data to the instance. */
-	struct vclock start_vclock;
-	relay_initial_join(io->fd, header->sync, &start_vclock);
+	relay_initial_join(io->fd, sync, vclock);
 	say_info("read-view sent.");
 
 	/* Remember master's vclock after the last request */
@@ -1455,23 +1454,28 @@ box_process_fetch_snapshot(struct ev_io *io, struct xrow_header *header)
 	/* Send end of snapshot data marker */
 	struct xrow_header row;
 	xrow_encode_vclock_xc(&row, &stop_vclock);
-	row.sync = header->sync;
-	coio_write_xrow(io, &row);
+	row.sync = sync;
+	if (coio_write_xrow(io, &row) < 0)
+		diag_raise();
 }
 
 void
-box_process_register(struct ev_io *io, struct xrow_header *header)
+box_process_fetch_snapshot(struct ev_io *io, struct xrow_header *header)
 {
-	assert(header->type == IPROTO_REGISTER);
+	assert(header->type == IPROTO_FETCH_SNAPSHOT);
 
-	struct tt_uuid instance_uuid = uuid_nil;
+	check_can_be_master();
+
+	say_info("sending current read-view to replica at %s", sio_socketname(io->fd));
+
 	struct vclock vclock;
-	xrow_decode_register_xc(header, &instance_uuid, &vclock);
+	process_fetch_snapshot(io, header->sync, &vclock);
+}
 
-	if (!is_box_configured)
-		tnt_raise(ClientError, ER_LOADING);
-
-	if (tt_uuid_is_equal(&instance_uuid, &INSTANCE_UUID))
+static bool
+check_can_register(const struct tt_uuid *instance_uuid)
+{
+	if (tt_uuid_is_equal(instance_uuid, &INSTANCE_UUID))
 		tnt_raise(ClientError, ER_CONNECTION_TO_SELF);
 
 	/* Forbid replication from an anonymous instance. */
@@ -1480,42 +1484,32 @@ box_process_register(struct ev_io *io, struct xrow_header *header)
 			  "replicating from an anonymous instance.");
 	}
 
-	access_check_universe_xc(PRIV_R);
 	/* We only get register requests from anonymous instances. */
-	struct replica *replica = replica_by_uuid(&instance_uuid);
-	if (replica && replica->id != REPLICA_ID_NIL) {
-		tnt_raise(ClientError, ER_REPLICA_NOT_ANON,
-			  tt_uuid_str(&instance_uuid));
-	}
-	/* See box_process_join() */
+	struct replica *replica = replica_by_uuid(instance_uuid);
+	if (replica && replica->id != REPLICA_ID_NIL)
+		return true;
+	/*
+	 * Unless already registered, the new replica will be
+	 * added to _cluster space once the initial join stage
+	 * is complete. Fail early if the caller does not have
+	 * appropriate access privileges.
+	 */
 	box_check_writable_xc();
 	struct space *space = space_cache_find_xc(BOX_CLUSTER_ID);
 	access_check_space_xc(space, PRIV_W);
+	return false;
+}
 
-	/* Forbid replication with disabled WAL */
-	if (wal_mode() == WAL_NONE) {
-		tnt_raise(ClientError, ER_UNSUPPORTED, "Replication",
-			  "wal_mode = 'none'");
-	}
-
-	struct vclock register_vclock;
-	vclock_copy(&register_vclock, &replicaset.commit_vclock);
-	gc_add_join_readview(&register_vclock);
-	auto gc_guard = make_scoped_guard([&] {
-		gc_del_join_readview(&register_vclock);
-	});
-
-	say_info("registering replica %s at %s",
-		 tt_uuid_str(&instance_uuid), sio_socketname(io->fd));
-
-	struct vclock start_vclock;
-	vclock_copy(&start_vclock, &vclock);
-
+static void
+process_replica_registration(struct ev_io *io, uint64_t sync,
+			     const struct tt_uuid *instance_uuid,
+			     struct vclock *replica_vclock)
+{
 	/**
 	 * Call the server-side hook which stores the replica uuid
 	 * in _cluster space.
 	 */
-	box_on_join(&instance_uuid);
+	box_on_join(instance_uuid);
 
 	ERROR_INJECT_YIELD(ERRINJ_REPLICA_JOIN_DELAY);
 
@@ -1528,14 +1522,43 @@ box_process_register(struct ev_io *io, struct xrow_header *header)
 	 * (start_vclock, stop_vclock) so that it gets its
 	 * registration.
 	 */
-	relay_final_join(io->fd, header->sync, &start_vclock, &stop_vclock);
+	relay_final_join(io->fd, sync, replica_vclock, &stop_vclock);
 	say_info("final data sent.");
 
 	struct xrow_header row;
 	/* Send end of WAL stream marker */
 	xrow_encode_vclock_xc(&row, &replicaset.wal_vclock);
-	row.sync = header->sync;
-	coio_write_xrow(io, &row);
+	row.sync = sync;
+	if (coio_write_xrow(io, &row) < 0)
+		diag_raise();
+}
+
+void
+box_process_register(struct ev_io *io, struct xrow_header *header)
+{
+	assert(header->type == IPROTO_REGISTER);
+
+	struct tt_uuid instance_uuid = uuid_nil;
+	struct vclock vclock;
+	xrow_decode_register_xc(header, &instance_uuid, &vclock);
+
+	check_can_be_master();
+
+	if (check_can_register(&instance_uuid))
+		tnt_raise(ClientError, ER_REPLICA_NOT_ANON,
+			  tt_uuid_str(&instance_uuid));
+
+	struct vclock register_vclock;
+	vclock_copy(&register_vclock, &replicaset.commit_vclock);
+	gc_add_join_readview(&register_vclock);
+	auto gc_guard = make_scoped_guard([&] {
+		gc_del_join_readview(&register_vclock);
+	});
+
+	say_info("registering replica %s at %s",
+		 tt_uuid_str(&instance_uuid), sio_socketname(io->fd));
+
+	process_replica_registration(io, header->sync, &instance_uuid, &vclock);
 }
 
 void
@@ -1589,41 +1612,9 @@ box_process_join(struct ev_io *io, struct xrow_header *header)
 	struct tt_uuid instance_uuid = uuid_nil;
 	xrow_decode_join_xc(header, &instance_uuid);
 
-	/* Check that bootstrap has been finished */
-	if (!is_box_configured)
-		tnt_raise(ClientError, ER_LOADING);
+	check_can_be_master();
 
-	/* Forbid connection to itself */
-	if (tt_uuid_is_equal(&instance_uuid, &INSTANCE_UUID))
-		tnt_raise(ClientError, ER_CONNECTION_TO_SELF);
-
-	/* Forbid replication from an anonymous instance. */
-	if (replication_anon) {
-		tnt_raise(ClientError, ER_UNSUPPORTED, "Replication",
-			  "replicating from an anonymous instance.");
-	}
-
-	/* Check permissions */
-	access_check_universe_xc(PRIV_R);
-
-	/*
-	 * Unless already registered, the new replica will be
-	 * added to _cluster space once the initial join stage
-	 * is complete. Fail early if the caller does not have
-	 * appropriate access privileges.
-	 */
-	struct replica *replica = replica_by_uuid(&instance_uuid);
-	if (replica == NULL || replica->id == REPLICA_ID_NIL) {
-		box_check_writable_xc();
-		struct space *space = space_cache_find_xc(BOX_CLUSTER_ID);
-		access_check_space_xc(space, PRIV_W);
-	}
-
-	/* Forbid replication with disabled WAL */
-	if (wal_mode() == WAL_NONE) {
-		tnt_raise(ClientError, ER_UNSUPPORTED, "Replication",
-			  "wal_mode = 'none'");
-	}
+	check_can_register(&instance_uuid);
 
 	/*
 	 * Register the replica as a WAL consumer so that
@@ -1643,46 +1634,10 @@ box_process_join(struct ev_io *io, struct xrow_header *header)
 	 * Initial stream: feed replica with dirty data from engines.
 	 */
 	struct vclock start_vclock;
-	relay_initial_join(io->fd, header->sync, &start_vclock);
-	say_info("initial data sent.");
+	process_fetch_snapshot(io, header->sync, &start_vclock);
 
-	/* Remember master's vclock after the last request */
-	struct vclock stop_vclock;
-	vclock_copy(&stop_vclock, &replicaset.wal_vclock);
-
-	/* Send end of initial stage data marker */
-	struct xrow_header row;
-	xrow_encode_vclock_xc(&row, &stop_vclock);
-	row.sync = header->sync;
-	if (coio_write_xrow(io, &row) < 0)
-		diag_raise();
-
-	/**
-	 * Call the server-side hook which stores the replica uuid
-	 * in _cluster space after sending the last row but before
-	 * sending OK - if the hook fails, the error reaches the
-	 * client.
-	 */
-	box_on_join(&instance_uuid);
-
-	ERROR_INJECT_YIELD(ERRINJ_REPLICA_JOIN_DELAY);
-
-	/* Remember master's vclock after the last request */
-	vclock_copy(&stop_vclock, &replicaset.wal_vclock);
-
-	/*
-	 * Final stage: feed replica with WALs in range
-	 * (start_vclock, stop_vclock).
-	 */
-	relay_final_join(io->fd, header->sync, &start_vclock, &stop_vclock);
-	say_info("final data sent.");
-
-	/* Send end of WAL stream marker */
-	xrow_encode_vclock_xc(&row, &replicaset.wal_vclock);
-	row.sync = header->sync;
-	if (coio_write_xrow(io, &row) < 0)
-		diag_raise();
-	replica = replica_by_uuid(&instance_uuid);
+	process_replica_registration(io, header->sync, &instance_uuid,
+				     &start_vclock);
 }
 
 void
@@ -1954,20 +1909,9 @@ bootstrap_from_master(struct replica *master)
 	 * Process final data (WALs).
 	 */
 	engine_begin_final_recovery_xc();
-	struct recovery_journal journal;
-	recovery_journal_create(&journal, &replicaset.commit_vclock);
-	journal_set(&journal.base);
 
-	if (!replication_anon) {
-		applier_resume_to_state(applier, APPLIER_JOINED,
-					TIMEOUT_INFINITY);
-	}
 	/* Finalize the new replica */
 	engine_end_recovery_xc();
-
-	/* Switch applier to initial state */
-	applier_resume_to_state(applier, APPLIER_READY, TIMEOUT_INFINITY);
-	assert(applier->state == APPLIER_READY);
 
 	/*
 	 * An engine may write to WAL on its own during the join
@@ -1985,6 +1929,15 @@ bootstrap_from_master(struct replica *master)
 	/* Make the initial checkpoint */
 	if (gc_checkpoint() != 0)
 		panic("failed to create a checkpoint");
+
+	if (!replication_anon) {
+		applier_resume_to_state(applier, APPLIER_JOINED,
+					TIMEOUT_INFINITY);
+	}
+
+	/* Switch applier to initial state */
+	applier_resume_to_state(applier, APPLIER_READY, TIMEOUT_INFINITY);
+	assert(applier->state == APPLIER_READY);
 }
 
 /**
