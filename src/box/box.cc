@@ -1646,6 +1646,17 @@ box_process_join(struct ev_io *io, struct xrow_header *header)
 	relay_initial_join(io->fd, header->sync, &start_vclock);
 	say_info("initial data sent.");
 
+	/* Remember master's vclock after the last request */
+	struct vclock stop_vclock;
+	vclock_copy(&stop_vclock, &replicaset.wal_vclock);
+
+	/* Send end of initial stage data marker */
+	struct xrow_header row;
+	xrow_encode_vclock_xc(&row, &stop_vclock);
+	row.sync = header->sync;
+	if (coio_write_xrow(io, &row) < 0)
+		diag_raise();
+
 	/**
 	 * Call the server-side hook which stores the replica uuid
 	 * in _cluster space after sending the last row but before
@@ -1657,15 +1668,7 @@ box_process_join(struct ev_io *io, struct xrow_header *header)
 	ERROR_INJECT_YIELD(ERRINJ_REPLICA_JOIN_DELAY);
 
 	/* Remember master's vclock after the last request */
-	struct vclock stop_vclock;
 	vclock_copy(&stop_vclock, &replicaset.wal_vclock);
-
-	/* Send end of initial stage data marker */
-	struct xrow_header row;
-	xrow_encode_vclock_xc(&row, &stop_vclock);
-	row.sync = header->sync;
-	if (coio_write_xrow(io, &row) < 0)
-		diag_raise();
 
 	/*
 	 * Final stage: feed replica with WALs in range
