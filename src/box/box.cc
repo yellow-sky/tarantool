@@ -1509,7 +1509,7 @@ box_process_register(struct ev_io *io, struct xrow_header *header)
 		 tt_uuid_str(&instance_uuid), sio_socketname(io->fd));
 
 	struct vclock start_vclock;
-	vclock_copy(&start_vclock, &replicaset.commit_vclock);
+	vclock_copy(&start_vclock, &vclock);
 
 	/**
 	 * Call the server-side hook which stores the replica uuid
