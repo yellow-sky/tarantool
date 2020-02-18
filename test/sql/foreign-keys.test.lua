@@ -179,6 +179,18 @@ box.space.T1:drop()
 box.execute("CREATE TABLE t4 (id INT PRIMARY KEY REFERENCES t4);")
 box.space.T4:drop()
 
+-- gh-4661: UPDATE must work correctly on self-referenced spaces.
+--
+box.execute('CREATE TABLE t5(a INT UNIQUE, b INT REFERENCES t5(a), id INT PRIMARY KEY AUTOINCREMENT)')
+box.execute('INSERT INTO t5(a,b) VALUES(1, null)')
+box.execute('INSERT INTO t5(a,b) VALUES(2, null)')
+box.execute('UPDATE t5 SET b = 2 WHERE a = 1')
+box.execute('UPDATE t5 SET b = 1 WHERE a = 2')
+box.execute('INSERT INTO t5(a,b) VALUES(3, 2)')
+box.execute('UPDATE t5 SET a = 4 WHERE a = 3')
+box.execute('UPDATE t5 SET b = 4 WHERE a = 1')
+box.execute('DROP TABLE t5')
+
 -- Make sure that child space can feature no PK.
 --
 t1 = box.schema.create_space("T1", {format = {'ID'}})

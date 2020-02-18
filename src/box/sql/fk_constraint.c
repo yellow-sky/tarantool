@@ -225,7 +225,8 @@ fk_constraint_lookup_parent(struct Parse *parse_context, struct space *parent,
 	 * we are about to increment the constraint-counter (i.e.
 	 * this is an INSERT operation), then check if the row
 	 * being inserted matches itself. If so, do not increment
-	 * the constraint-counter.
+	 * the constraint-counter. Otherwise, we must inspect the
+	 * table.
 	 *
 	 * If any of the parent-key values are NULL, then the row
 	 * cannot match itself. So set JUMPIFNULL to make sure we
@@ -244,14 +245,14 @@ fk_constraint_lookup_parent(struct Parse *parse_context, struct space *parent,
 		}
 		sqlVdbeGoto(v, ok_label);
 	}
-	/**
+	/*
 	 * Inspect a parent table with OP_Found.
-	 * We mustn't make it for a self-referenced table since
-	 * it's tuple will be modified by the update operation.
-	 * And since the foreign key has already detected a
-	 * conflict, fk counter must be increased.
+	 * We mustn't make it for a self-referenced
+	 * table on deletion during an update operation
+	 * since it's tuple will be modified later.
 	 */
-	if (!(fk_constraint_is_self_referenced(fk_def) && is_update)) {
+	if (!(fk_constraint_is_self_referenced(fk_def) && is_update &&
+	      incr_count == -1)) {
 		int temp_regs = sqlGetTempRange(parse_context, field_count);
 		int rec_reg = sqlGetTempReg(parse_context);
 		vdbe_emit_open_cursor(parse_context, cursor, referenced_idx,
@@ -269,7 +270,41 @@ fk_constraint_lookup_parent(struct Parse *parse_context, struct space *parent,
 				  (char *) sql_index_type_str(parse_context->db,
 							      idx->def),
 				  P4_DYNAMIC);
-		sqlVdbeAddOp4Int(v, OP_Found, cursor, ok_label, rec_reg, 0);
+
+		/*
+		 * In this particular case, we should check, that
+		 * the row we found and the row being updated
+		 * are different, otherwise the update operation
+		 * will violate the constraint. This check is
+		 * correct, since we've already verified that
+		 * the row doesn't match itself.
+		 */
+		bool check_not_equal = incr_count == 1 && is_update &&
+				       fk_constraint_is_self_referenced(fk_def);
+
+		int jump = sqlVdbeCurrentAddr(v) + 1;
+		sqlVdbeAddOp4Int(v, OP_Found, cursor,
+				 check_not_equal ? jump + 1 : ok_label,
+				 rec_reg, 0);
+		if (check_not_equal) {
+			/*
+			 * We've found nothing, there's no need
+			 * to compare rows.
+			 */
+			sqlVdbeGoto(v, jump + 4);
+			/*
+			 * Otherwise, cursor is pointing to the
+			 * found entry, compare its index to the
+			 * index of the tuple being updated.
+			 */
+			int idx_reg = sqlGetTempReg(parse_context);
+			sqlVdbeAddOp3(v, OP_Column, cursor, referenced_idx,
+				      idx_reg);
+			sqlVdbeAddOp3(v, OP_Eq, reg_data + referenced_idx + 1,
+				      jump + 4, idx_reg);
+			sqlReleaseTempReg(parse_context, idx_reg);
+			sqlVdbeGoto(v, ok_label);
+		}
 		sqlReleaseTempReg(parse_context, rec_reg);
 		sqlReleaseTempRange(parse_context, temp_regs, field_count);
 	}
