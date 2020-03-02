@@ -283,6 +283,9 @@ vy_run_new(struct vy_run_env *env, int64_t id)
 	run->id = id;
 	run->dump_lsn = -1;
 	run->fd = -1;
+#ifdef ENABLE_PMEM_DAX
+	run->plp = NULL;
+#endif
 	run->refs = 1;
 	rlist_create(&run->in_lsm);
 	rlist_create(&run->in_unused);
@@ -315,8 +318,14 @@ void
 vy_run_delete(struct vy_run *run)
 {
 	assert(run->refs == 0);
-	if (run->fd >= 0 && close(run->fd) < 0)
+#ifndef ENABLE_PMEM_DAX
+	if (run->fd >= 0 && close(run->fd) < 0) {
 		say_syserror("close failed");
+	}
+#else
+	if (run->plp != NULL)
+		pmemlog_close(run->plp);
+#endif
 	vy_run_clear(run);
 	TRASH(run);
 	free(run);
@@ -897,8 +906,16 @@ vy_page_read(struct vy_page *page, const struct vy_page_info *page_info,
 		diag_set(OutOfMemory, page_info->size, "region gc", "page");
 		return -1;
 	}
-	ssize_t readen = fio_pread(run->fd, data, page_info->size,
-				   page_info->offset);
+	ssize_t readen;
+#ifndef ENABLE_PMEM_DAX
+	readen = fio_pread(run->fd, data, page_info->size, page_info->offset);
+#else
+	struct pmemlog_bundle bundle;
+	bundle.offset = page_info->offset;
+	bundle.len = readen = page_info->size;
+	bundle.dst = data;
+	pmemlog_walk(run->plp, 0, xlog_pmem_fill_bundle, &bundle);
+#endif
 	ERROR_INJECT(ERRINJ_VYRUN_DATA_READ, {
 		readen = -1;
 		errno = EIO;});
@@ -1761,7 +1778,11 @@ vy_run_recover(struct vy_run *run, const char *dir,
 			 XLOG_META_TYPE_RUN, meta->filetype);
 		goto fail_close;
 	}
+#ifndef ENABLE_PMEM_DAX
 	run->fd = cursor.fd;
+#else
+	run->plp = cursor.plp;
+#endif
 	xlog_cursor_close(&cursor, true);
 	return 0;
 
@@ -2365,7 +2386,11 @@ vy_run_writer_commit(struct vy_run_writer *writer)
 			       writer->space_id, writer->iid) != 0)
 		goto out;
 
+#ifndef ENABLE_PMEM_DAX
 	run->fd = writer->data_xlog.fd;
+#else
+	run->plp = writer->data_xlog.plp;
+#endif
 	vy_run_writer_destroy(writer, true);
 	rc = 0;
 out:
@@ -2500,7 +2525,11 @@ vy_run_rebuild_index(struct vy_run *run, const char *dir,
 		prev_tuple = NULL;
 	}
 	region_truncate(region, mem_used);
+#ifndef ENABLE_PMEM_DAX
 	run->fd = cursor.fd;
+#else
+	run->plp = cursor.plp;
+#endif
 	xlog_cursor_close(&cursor, true);
 
 	if (bloom_builder != NULL) {

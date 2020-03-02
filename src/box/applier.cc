@@ -32,7 +32,6 @@
 
 #include <msgpuck.h>
 
-#include "xlog.h"
 #include "fiber.h"
 #include "fiber_cond.h"
 #include "coio.h"

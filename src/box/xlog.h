@@ -42,6 +42,23 @@
 #include "small/ibuf.h"
 #include "small/obuf.h"
 
+#ifdef ENABLE_PMEM_DAX
+#include "libpmemlog.h"
+
+struct pmemlog_bundle {
+	size_t len;
+	size_t offset;
+	void *dst;
+};
+
+/**
+ * Read from buf in pmem to dst, by offset
+ */
+int
+xlog_pmem_fill_bundle(const void *buf, size_t log_len, void *bndl);
+
+#endif /* ENABLE_PMEM_DAX */
+
 struct iovec;
 struct xrow_header;
 
@@ -58,6 +75,10 @@ struct xlog_opts {
 	uint64_t rate_limit;
 	/** Sync interval, in bytes. */
 	uint64_t sync_interval;
+#ifdef ENABLE_PMEM_DAX
+	/** Prealocated size to pmemlog file */
+	uint64_t pmemlog_size;
+#endif
 	/**
 	 * If this flag is set and sync interval is greater than 0,
 	 * page cache will be freed after each sync.
@@ -393,6 +414,10 @@ struct xlog {
 	uint64_t synced_size;
 	/** Time when xlog wast synced last time */
 	double sync_time;
+#ifdef ENABLE_PMEM_DAX
+	/** Assotiated persistent log */
+	PMEMlogpool *plp;
+#endif /* ENABLE_PMEM_DAX */
 };
 
 /**
@@ -469,7 +494,11 @@ xlog_clear(struct xlog *xlog);
 static inline bool
 xlog_is_open(struct xlog *l)
 {
+#ifndef ENABLE_PMEM_DAX
 	return l->fd != -1;
+#else
+	return l->plp != NULL;
+#endif
 }
 
 /**
@@ -666,6 +695,10 @@ struct xlog_cursor
 	struct xlog_tx_cursor tx_cursor;
 	/** ZSTD context for decompression */
 	ZSTD_DStream *zdctx;
+#ifdef ENABLE_PMEM_DAX
+	/** Assotiated persistent log */
+	PMEMlogpool *plp;
+#endif /* ENABLE_PMEM_DAX */
 };
 
 /**
@@ -692,7 +725,7 @@ xlog_cursor_is_eof(const struct xlog_cursor *cursor)
 }
 
 /**
- * Open cursor from file descriptor
+ * Activate cursor from file descriptor
  * @param cursor cursor
  * @param fd file descriptor
  * @param name associated file name
@@ -700,7 +733,20 @@ xlog_cursor_is_eof(const struct xlog_cursor *cursor)
  * @retval -1 error, check diag
  */
 int
-xlog_cursor_openfd(struct xlog_cursor *cursor, int fd, const char *name);
+xlog_cursor_activate_fd(struct xlog_cursor *cursor, int fd, const char *name);
+
+#ifdef ENABLE_PMEM_DAX
+/**
+ * Activate cursor from file descriptor
+ * @param cursor cursor
+ * @param plp PMEMlogpool with xlog
+ * @param name associated file name
+ * @retval 0 succes
+ * @retval -1 error, check diag
+ */
+int
+xlog_cursor_activate_pmem(struct xlog_cursor *cursor, PMEMlogpool *plp, const char *name);
+#endif
 
 /**
  * Open cursor from file
@@ -848,12 +894,12 @@ xdir_open_cursor_xc(struct xdir *dir, int64_t signature,
 }
 
 /**
- * @copydoc xlog_cursor_openfd
+ * @copydoc xlog_cursor_activate_fd
  */
 static inline int
 xlog_cursor_openfd_xc(struct xlog_cursor *cursor, int fd, const char *name)
 {
-	int rc = xlog_cursor_openfd(cursor, fd, name);
+	int rc = xlog_cursor_activate_fd(cursor, fd, name);
 	if (rc == -1)
 		diag_raise();
 	return rc;

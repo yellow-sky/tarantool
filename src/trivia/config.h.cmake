@@ -48,6 +48,12 @@
 #cmakedefine HAVE_CPUID 1
 
 /*
+ * Defined if xlogs and snaps should be writen to Intel Optane DC
+ * persistent memory in DAX mode.
+ */
+#cmakedefine ENABLE_PMEM_DAX 1
+
+/*
  * Defined if gcov instrumentation should be enabled.
  */
 #cmakedefine ENABLE_GCOV 1

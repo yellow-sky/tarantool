@@ -123,6 +123,9 @@ struct vy_run {
 	struct vy_page_info *page_info;
 	/** Run data file. */
 	int fd;
+#ifdef ENABLE_PMEM_DAX
+	PMEMlogpool *plp;
+#endif
 	/** Unique ID of this run. */
 	int64_t id;
 	/** Number of statements in this run. */

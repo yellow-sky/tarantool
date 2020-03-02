@@ -11,6 +11,9 @@ include_directories(${PROJECT_SOURCE_DIR}/src/box)
 include_directories(${CMAKE_SOURCE_DIR}/third_party)
 include_directories(${ICU_INCLUDE_DIRS})
 include_directories(${CURL_INCLUDE_DIRS})
+if (ENABLE_PMEM_DAX)
+    include_directories(${PMDK_INCLUDE_DIRS})
+endif()
 
 add_library(unit STATIC unit.c)
 
@@ -160,7 +163,7 @@ set(ITERATOR_TEST_SOURCES
     ${PROJECT_SOURCE_DIR}/src/box/vy_history.c
     ${PROJECT_SOURCE_DIR}/src/box/vy_mem.c
     ${PROJECT_SOURCE_DIR}/src/box/vy_cache.c)
-set(ITERATOR_TEST_LIBS core tuple xrow unit)
+set(ITERATOR_TEST_LIBS core tuple xrow unit ${PMDK_LIBRARIES})
 
 add_executable(vy_mem.test vy_mem.c ${ITERATOR_TEST_SOURCES})
 target_link_libraries(vy_mem.test ${ITERATOR_TEST_LIBS} dl)
@@ -185,7 +188,7 @@ add_executable(vy_point_lookup.test
     ${PROJECT_SOURCE_DIR}/src/box/schema_def.c
     ${PROJECT_SOURCE_DIR}/src/box/identifier.c
 )
-target_link_libraries(vy_point_lookup.test core tuple xrow xlog unit dl)
+target_link_libraries(vy_point_lookup.test core tuple xrow xlog unit dl ${PMDK_LIBRARIES})
 
 add_executable(column_mask.test
     column_mask.c)

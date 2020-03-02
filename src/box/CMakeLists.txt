@@ -61,7 +61,11 @@ add_library(tuple STATIC
 target_link_libraries(tuple json box_error core ${MSGPUCK_LIBRARIES} ${ICU_LIBRARIES} misc bit)
 
 add_library(xlog STATIC xlog.c)
-target_link_libraries(xlog core box_error crc32 ${ZSTD_LIBRARIES})
+if (ENABLE_PMEM_DAX)
+    include_directories(${PMDK_INCLUDE_DIRS})
+    add_dependencies(xlog libpmdk)
+endif()
+target_link_libraries(xlog core box_error crc32 ${PMDK_LIBRARIES} ${ZSTD_LIBRARIES})
 
 add_library(box STATIC
     iproto.cc

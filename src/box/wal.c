@@ -354,6 +354,9 @@ wal_writer_create(struct wal_writer *writer, enum wal_mode wal_mode,
 
 	struct xlog_opts opts = xlog_opts_default;
 	opts.sync_is_async = true;
+#ifdef ENABLE_PMEM_DAX
+	opts.pmemlog_size = MAX((unsigned)PMEMLOG_MIN_POOL, wal_max_size);
+#endif
 	xdir_create(&writer->wal_dir, wal_dirname, XLOG, instance_uuid, &opts);
 	xlog_clear(&writer->current_wal);
 	if (wal_mode == WAL_FSYNC)

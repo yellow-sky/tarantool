@@ -40,6 +40,21 @@
 #include "third_party/tarantool_eio.h"
 #include <msgpuck.h>
 
+#ifdef ENABLE_PMEM_DAX
+#include "libpmemlog.h"
+/**
+ * Read from buf in pmem to dst, by offset
+ */
+int
+xlog_pmem_fill_bundle(const void *buf, size_t log_len, void *bndl)
+{
+	struct pmemlog_bundle *bundle = (struct pmemlog_bundle *)bndl;
+	memcpy(bundle->dst, (char *)buf + log_len - bundle->offset,
+	       bundle->len);
+	return 0;
+}
+#endif /* ENABLE_PMEM_DAX */
+
 #include "coio_file.h"
 #include "tt_static.h"
 #include "error.h"
@@ -95,6 +110,9 @@ const struct xlog_opts xlog_opts_default = {
 	.free_cache = false,
 	.sync_is_async = false,
 	.no_compression = false,
+#ifdef ENABLE_PMEM_DAX
+	.pmemlog_size = PMEMLOG_MIN_POOL,
+#endif
 };
 
 /* {{{ struct xlog_meta */
@@ -439,13 +457,27 @@ xdir_open_cursor(struct xdir *dir, int64_t signature,
 		 struct xlog_cursor *cursor)
 {
 	const char *filename = xdir_format_filename(dir, signature, NONE);
+#ifndef ENABLE_PMEM_DAX
 	int fd = open(filename, O_RDONLY);
 	if (fd < 0) {
+#else
+	PMEMlogpool *plp;
+	int i = 0;
+again:
+	plp = pmemlog_open(filename);
+	if (plp == NULL) {
+		if (errno == EAGAIN) { assert(i++<20); goto again;} /* Disaster FIXME */
+#endif
 		diag_set(SystemError, "failed to open '%s' file", filename);
 		return -1;
 	}
-	if (xlog_cursor_openfd(cursor, fd, filename) < 0) {
+#ifndef ENABLE_PMEM_DAX
+	if (xlog_cursor_activate_fd(cursor, fd, filename) < 0) {
 		close(fd);
+#else
+	if (xlog_cursor_activate_pmem(cursor, plp, filename) < 0) {
+		pmemlog_close(plp);
+#endif
 		return -1;
 	}
 	struct xlog_meta *meta = &cursor->meta;
@@ -764,6 +796,10 @@ xlog_rename(struct xlog *l)
 static int
 xlog_init(struct xlog *xlog, const struct xlog_opts *opts)
 {
+#if defined(ENABLE_PMEM_DAX) && !defined(HAVE_PMEM_SDS)
+	int sds_write_value = 0;
+	pmemlog_ctl_set(NULL, "sds.at_create", &sds_write_value);
+#endif
 	memset(xlog, 0, sizeof(*xlog));
 	xlog->opts = *opts;
 	xlog->sync_time = ev_monotonic_time();
@@ -797,7 +833,11 @@ xlog_destroy(struct xlog *xlog)
 	obuf_destroy(&xlog->zbuf);
 	ZSTD_freeCCtx(xlog->zctx);
 	TRASH(xlog);
+#ifndef ENABLE_PMEM_DAX
 	xlog->fd = -1;
+#else
+	xlog->plp = NULL;
+#endif
 }
 
 int
@@ -836,8 +876,18 @@ xlog_create(struct xlog *xlog, const char *name, int flags,
 	 * may think that this is a corrupt file and stop
 	 * replication.
 	 */
+#ifndef ENABLE_PMEM_DAX
 	xlog->fd = open(xlog->filename, flags, 0644);
 	if (xlog->fd < 0) {
+#else
+	assert(opts->pmemlog_size > 0);
+	/* PMEM DAX must be available to write */
+	xlog->plp = pmemlog_create(xlog->filename, opts->pmemlog_size, 0666);
+	if (xlog->plp == NULL)
+		xlog->plp = pmemlog_open(xlog->filename);
+
+	if (xlog->plp == NULL) {
+#endif
 		say_syserror("open, [%s]", xlog->filename);
 		diag_set(SystemError, "failed to create file '%s'",
 			 xlog->filename);
@@ -852,7 +902,11 @@ xlog_create(struct xlog *xlog, const char *name, int flags,
 	assert(meta_len < (int)sizeof(meta_buf));
 
 	/* Write metadata */
+#ifndef ENABLE_PMEM_DAX
 	if (fio_writen(xlog->fd, meta_buf, meta_len) < 0) {
+#else
+	if (pmemlog_append(xlog->plp, meta_buf, meta_len) < 0) {
+#endif
 		diag_set(SystemError, "%s: failed to write xlog meta",
 			 xlog->filename);
 		goto err_write;
@@ -861,13 +915,35 @@ xlog_create(struct xlog *xlog, const char *name, int flags,
 	xlog->offset = meta_len; /* first log starts after meta */
 	return 0;
 err_write:
+#ifndef ENABLE_PMEM_DAX
 	close(xlog->fd);
+#else
+	pmemlog_close(xlog->plp);
+#endif
 	unlink(xlog->filename); /* try to remove incomplete file */
 err_open:
 	xlog_destroy(xlog);
 err:
 	return -1;
 }
+
+#ifdef ENABLE_PMEM_DAX
+static int
+xlog_read_pmemlog_meta(const void *buf, size_t meta_len, void *meta_buf)
+{
+	memcpy(meta_buf, buf, meta_len);
+	/* Copy only first `len` bytes and finished reading by return 0 */
+	return 0;
+}
+
+static int
+xlog_read_pmemlog_magic(const void *buf, size_t log_len, void *magic)
+{
+	size_t magic_len = sizeof(log_magic_t);
+	memcpy(magic, buf + log_len - magic_len, magic_len);
+	return 0;
+}
+#endif /* #ifdef ENABLE_PMEM_DAX */
 
 int
 xlog_open(struct xlog *xlog, const char *name, const struct xlog_opts *opts)
@@ -882,6 +958,7 @@ xlog_open(struct xlog *xlog, const char *name, const struct xlog_opts *opts)
 		goto err;
 
 	strncpy(xlog->filename, name, PATH_MAX);
+#ifndef ENABLE_PMEM_DAX
 	xlog->fd = open(xlog->filename, O_RDWR);
 	if (xlog->fd < 0) {
 		say_syserror("open, [%s]", name);
@@ -931,6 +1008,43 @@ no_eof:
 			goto err_read;
 		}
 	}
+#else
+	assert(opts->pmemlog_size > 0);
+	/* PMEM DAX must be available to write */
+	xlog->plp = pmemlog_create(xlog->filename, opts->pmemlog_size, 0666);
+	if (xlog->plp == NULL)
+		xlog->plp = pmemlog_open(xlog->filename);
+	if (xlog->plp == NULL) {
+		say_syserror("open, [%s]", name);
+		diag_set(SystemError, "failed to open file '%s'", name);
+		goto err_open;
+	}
+
+	/* Read and parse meta */
+	meta_len = sizeof(meta_buf);
+	pmemlog_walk(xlog->plp, meta_len, xlog_read_pmemlog_meta, meta_buf);
+
+	rc = xlog_meta_parse(&xlog->meta, &meta, meta + meta_len);
+	if (rc < 0) {
+		goto err_read;
+	} else if (rc > 0) {
+		diag_set(XlogError, "Unexpected end of file");
+		goto err_read;
+	}
+
+	/* Check if the file has EOF marker. */
+	xlog->offset = pmemlog_tell(xlog->plp) - sizeof(magic);
+	if (xlog->offset < 0)
+		goto no_eof;
+	/* Read "all" log to navigate inside from start */
+	pmemlog_walk(xlog->plp, 0, xlog_read_pmemlog_magic, magic);
+	if (load_u32(magic) != eof_marker) {
+no_eof:
+		pmemlog_rewind(xlog->plp); /* Truncate log to zero */
+	} else if (pmemlog_truncate(xlog->plp, xlog->offset) != 0) {
+		goto err_read;
+	}
+#endif
 	return 0;
 err_read:
 	close(xlog->fd);
@@ -1002,7 +1116,7 @@ xdir_create_xlog(struct xdir *dir, struct xlog *xlog,
 ssize_t
 xlog_fallocate(struct xlog *log, size_t len)
 {
-#ifdef HAVE_FALLOCATE
+#if defined(HAVE_FALLOCATE) && !defined(ENABLE_PMEM_DAX)
 	static bool fallocate_not_supported = false;
 	if (fallocate_not_supported)
 		return 0;
@@ -1084,7 +1198,14 @@ xlog_tx_write_plain(struct xlog *log)
 		return -1;
 	});
 
-	ssize_t written = fio_writevn(log->fd, log->obuf.iov, log->obuf.pos + 1);
+#ifndef ENABLE_PMEM_DAX
+	ssize_t written = fio_writevn(log->fd, log->obuf.iov,
+				      log->obuf.pos + 1);
+#else
+	/* Returns 0 if success. Else returns -1 and set errno */
+	ssize_t written = pmemlog_appendv(log->plp, log->obuf.iov,
+					  log->obuf.pos + 1);
+#endif
 	if (written < 0) {
 		diag_set(SystemError, "failed to write to '%s' file",
 			 log->filename);
@@ -1173,9 +1294,14 @@ xlog_tx_write_zstd(struct xlog *log)
 		goto error;
 	});
 
-	ssize_t written;
-	written = fio_writevn(log->fd, log->zbuf.iov,
-			      log->zbuf.pos + 1);
+#ifndef ENABLE_PMEM_DAX
+	ssize_t written = fio_writevn(log->fd, log->zbuf.iov,
+				      log->zbuf.pos + 1);
+#else
+	/* Returns 0 if success. Else returns -1 and set errno */
+	ssize_t written = pmemlog_appendv(log->plp, log->zbuf.iov,
+					  log->zbuf.pos + 1);
+#endif
 	if (written < 0) {
 		diag_set(SystemError, "failed to write to '%s' file",
 			 log->filename);
@@ -1221,9 +1347,14 @@ xlog_tx_write(struct xlog *log)
 	 * position.
 	 */
 	if (written < 0) {
+#ifndef ENABLE_PMEM_DAX
 		if (lseek(log->fd, log->offset, SEEK_SET) < 0 ||
-		    ftruncate(log->fd, log->offset) != 0)
+		    ftruncate(log->fd, log->offset) != 0) {
+#else
+		if (pmemlog_truncate(log->plp, log->offset) < 0) {
+#endif
 			panic_syserror("failed to truncate xlog after write error");
+		}
 		log->allocated = 0;
 		return -1;
 	}
@@ -1249,17 +1380,19 @@ xlog_tx_write(struct xlog *log)
 				ev_sleep(throttle_time);
 		}
 		/** sync data from cache to disk */
-#ifdef HAVE_SYNC_FILE_RANGE
+#ifdef ENABLE_PMEM_DAX
+	/* Nothing to do - it synced automatically */
+#elif defined(HAVE_SYNC_FILE_RANGE)
 		sync_file_range(log->fd, sync_from, sync_len,
 				SYNC_FILE_RANGE_WAIT_BEFORE |
 				SYNC_FILE_RANGE_WRITE |
 				SYNC_FILE_RANGE_WAIT_AFTER);
 #else
 		fdatasync(log->fd);
-#endif /* HAVE_SYNC_FILE_RANGE */
+#endif /* ENABLE_PMEM_DAX */
 		log->sync_time = ev_monotonic_time();
 		if (log->opts.free_cache) {
-#ifdef HAVE_POSIX_FADVISE
+#if defined(HAVE_POSIX_FADVISE) && !defined(ENABLE_PMEM_DAX)
 			/** free page cache */
 			if (posix_fadvise(log->fd, sync_from, sync_len,
 					  POSIX_FADV_DONTNEED) != 0) {
@@ -1268,7 +1401,7 @@ xlog_tx_write(struct xlog *log)
 #else
 			(void) sync_from;
 			(void) sync_len;
-#endif /* HAVE_POSIX_FADVISE */
+#endif /* HAVE_POSIX_FADVISE && !ENABLE_PMEM_DAX */
 		}
 		log->synced_size = log->offset;
 	}
@@ -1390,6 +1523,7 @@ xlog_flush(struct xlog *log)
 	return xlog_tx_write(log);
 }
 
+#ifndef ENABLE_PMEM_DAX
 static int
 sync_cb(eio_req *req)
 {
@@ -1403,10 +1537,12 @@ sync_cb(eio_req *req)
 	close(fd);
 	return 0;
 }
+#endif
 
 int
 xlog_sync(struct xlog *l)
 {
+#ifndef ENABLE_PMEM_DAX
 	if (l->opts.sync_is_async) {
 		int fd = dup(l->fd);
 		if (fd == -1) {
@@ -1418,6 +1554,9 @@ xlog_sync(struct xlog *l)
 		say_syserror("%s: fsync failed", l->filename);
 		return -1;
 	}
+#else
+	(void)l;
+#endif
 	return 0;
 }
 
@@ -1434,12 +1573,22 @@ xlog_write_eof(struct xlog *l)
 	 * Don't write the eof marker if this fails, otherwise
 	 * we'll get "data after eof marker" error on recovery.
 	 */
-	if (l->allocated > 0 && ftruncate(l->fd, l->offset) < 0) {
+	if (l->allocated > 0
+#ifndef ENABLE_PMEM_DAX
+		&& ftruncate(l->fd, l->offset) < 0
+#else
+		&& pmemlog_truncate(l->plp, l->offset) < 0
+#endif
+	) {
 		diag_set(SystemError, "ftruncate() failed");
 		return -1;
 	}
 
+#ifndef ENABLE_PMEM_DAX
 	if (fio_writen(l->fd, &eof_marker, sizeof(eof_marker)) < 0) {
+#else
+	if (pmemlog_append(l->plp, &eof_marker, sizeof(eof_marker)) < 0) {
+#endif
 		diag_set(SystemError, "write() failed");
 		return -1;
 	}
@@ -1460,6 +1609,7 @@ xlog_close(struct xlog *l, bool reuse_fd)
 	 * written file in case of a crash.
 	 * We sync even if file open O_SYNC, simplify code for low cost
 	 */
+#ifndef ENABLE_PMEM_DAX
 	xlog_sync(l);
 
 	if (!reuse_fd) {
@@ -1467,6 +1617,10 @@ xlog_close(struct xlog *l, bool reuse_fd)
 		if (rc < 0)
 			say_syserror("%s: close() failed", l->filename);
 	}
+#else
+	(void)reuse_fd;
+	pmemlog_close(l->plp);
+#endif
 
 	xlog_destroy(l);
 	return rc;
@@ -1484,8 +1638,13 @@ xlog_atfork(struct xlog *xlog)
 	 * make its way into the respective file in
 	 * fclose().
 	 */
+#ifndef ENABLE_PMEM_DAX
 	close(xlog->fd);
 	xlog->fd = -1;
+#else
+	pmemlog_close(xlog->plp);
+	xlog->plp = NULL;
+#endif
 }
 
 /* }}} */
@@ -1520,8 +1679,16 @@ xlog_cursor_ensure(struct xlog_cursor *cursor, size_t count)
 		return -1;
 	}
 	ssize_t readen;
+#ifndef ENABLE_PMEM_DAX
 	readen = fio_pread(cursor->fd, dst, to_load,
-			   cursor->read_offset);
+				   cursor->read_offset);
+#else
+	struct pmemlog_bundle bundle;
+	bundle.offset = cursor->read_offset;
+	bundle.dst = dst;
+	bundle.len = readen = to_load;
+	pmemlog_walk(cursor->plp, 0, xlog_pmem_fill_bundle, &bundle);
+#endif
 	struct errinj *inj = errinj(ERRINJ_XLOG_READ, ERRINJ_INT);
 	if (inj != NULL && inj->iparam >= 0 &&
 	    inj->iparam < cursor->read_offset) {
@@ -1943,11 +2110,9 @@ xlog_cursor_next(struct xlog_cursor *cursor,
 	return 0;
 }
 
-int
-xlog_cursor_openfd(struct xlog_cursor *i, int fd, const char *name)
+static int
+xlog_cursor_activate(struct xlog_cursor *i, const char *name)
 {
-	memset(i, 0, sizeof(*i));
-	i->fd = fd;
 	ibuf_create(&i->rbuf, &cord()->slabc,
 		    XLOG_TX_AUTOCOMMIT_THRESHOLD << 1);
 
@@ -1983,19 +2148,64 @@ error:
 }
 
 int
-xlog_cursor_open(struct xlog_cursor *i, const char *name)
+xlog_cursor_activate_fd(struct xlog_cursor *i, int fd, const char *name)
+{
+	memset(i, 0, sizeof(*i));
+	i->fd = fd;
+	return xlog_cursor_activate(i, name);
+}
+
+int
+xlog_cursor_activate_pmem(struct xlog_cursor *i, PMEMlogpool *plp,
+			  const char *name)
+{
+	memset(i, 0, sizeof(*i));
+	i->plp = plp;
+	return xlog_cursor_activate(i, name);
+}
+
+#ifdef ENABLE_PMEM_DAX
+static int
+xlog_cursor_open_pmem(struct xlog_cursor *i, const char *name)
+{
+	PMEMlogpool *plp = pmemlog_open(name);
+	if (plp == NULL) {
+		diag_set(SystemError, "failed to open '%s' file", name);
+		return -1;
+	}
+	int rc = xlog_cursor_activate_pmem(i, plp, name);
+	if (rc < 0) {
+		pmemlog_close(plp);
+		return -1;
+	}
+	return 0;
+}
+#else
+static int
+xlog_cursor_open_fd(struct xlog_cursor *i, const char *name)
 {
 	int fd = open(name, O_RDONLY);
 	if (fd < 0) {
 		diag_set(SystemError, "failed to open '%s' file", name);
 		return -1;
 	}
-	int rc = xlog_cursor_openfd(i, fd, name);
+	int rc = xlog_cursor_activate_fd(i, fd, name);
 	if (rc < 0) {
 		close(fd);
 		return -1;
 	}
 	return 0;
+}
+#endif
+
+int
+xlog_cursor_open(struct xlog_cursor *i, const char *name)
+{
+#ifndef ENABLE_PMEM_DAX
+	return xlog_cursor_open_fd(i, name);
+#else
+	return xlog_cursor_open_pmem(i, name);
+#endif
 }
 
 int
@@ -2043,8 +2253,14 @@ void
 xlog_cursor_close(struct xlog_cursor *i, bool reuse_fd)
 {
 	assert(xlog_cursor_is_open(i));
+#ifndef ENABLE_PMEM_DAX
 	if (i->fd >= 0 && !reuse_fd)
 		close(i->fd);
+#else
+	(void)reuse_fd;
+	if (i->plp != NULL)
+		pmemlog_close(i->plp);
+#endif
 	assert(i->rbuf.slabc == &cord()->slabc);
 	ibuf_destroy(&i->rbuf);
 	if (i->state == XLOG_CURSOR_TX)

@@ -40,3 +40,7 @@
 [submodule "third_party/curl"]
 	path = third_party/curl
 	url = https://github.com/tarantool/curl.git
+[submodule "third_party/pmdk"]
+	path = third_party/pmdk
+	url = https://github.com/Buristan/pmdk.git
+	branch = skaplun/truncate_pmemlog
