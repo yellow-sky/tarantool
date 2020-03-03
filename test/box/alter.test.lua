@@ -247,14 +247,6 @@ space:drop()
 -- data dictionary compatibility is checked by upgrade.test.lua
 
 test_run:cmd("clear filter")
---
--- create_index() does not modify index options
---
-s = box.schema.space.create('test', {engine='vinyl'})
-opts = {parts={1, 'unsigned'}}
-_ = s:create_index('pk', opts)
-opts
-s:drop()
 
 --
 -- gh-2074: alter a primary key

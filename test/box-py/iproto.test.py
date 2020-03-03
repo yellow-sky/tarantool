@@ -326,7 +326,7 @@ admin("box.space._cluster:delete{2} ~= nil")
 #
 # gh-1280 Segmentation fault on space.select(tuple()) or space.select([2])
 #
-admin("space = box.schema.create_space('gh1280', { engine = 'vinyl' })")
+admin("space = box.schema.create_space('gh1280', { engine = 'memtx' })")
 admin("index = space:create_index('primary')")
 admin("space:insert({1})")
 admin("space:insert({2, 'Music'})")

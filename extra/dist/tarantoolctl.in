@@ -148,12 +148,10 @@ local function load_default_file(default_file)
     d.snap_dir  = nil
     d.log       = d.log       or d.logger or "/var/log/tarantool"
     d.logger    = nil
-    d.vinyl_dir = d.vinyl_dir or "/var/lib/tarantool"
 
     d.pid_file  = fio.pathjoin(d.pid_file,  instance_name .. '.pid')
     d.wal_dir   = fio.pathjoin(d.wal_dir,   instance_name)
     d.memtx_dir = fio.pathjoin(d.memtx_dir, instance_name)
-    d.vinyl_dir = fio.pathjoin(d.vinyl_dir, instance_name)
     d.log       = fio.pathjoin(d.log,       instance_name .. '.log')
 
     language = (d.language or "lua"):lower()
@@ -291,7 +289,6 @@ local function mk_default_dirs(cfg)
         fio.dirname(cfg.pid_file),
         cfg.wal_dir,
         cfg.snap_dir,
-        cfg.vinyl_dir,
     }
     local log_type, log_args = logger_parse(cfg.log)
     if log_type == 'file' then

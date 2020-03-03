@@ -390,45 +390,6 @@ lbox_fillspace(struct lua_State *L, struct space *space, int i)
 		 * __newindex metamethod.
 		 */
 		lua_rawset(L, -3);
-
-		lua_pushstring(L, "sequence_fieldno");
-		if (k == 0 && space->sequence != NULL)
-			lua_pushnumber(L, space->sequence_fieldno +
-				       TUPLE_INDEX_BASE);
-		else
-			lua_pushnil(L);
-		lua_rawset(L, -3);
-
-		lua_pushstring(L, "sequence_path");
-		if (k == 0 && space->sequence_path != NULL)
-			lua_pushstring(L, space->sequence_path);
-		else
-			lua_pushnil(L);
-		lua_rawset(L, -3);
-
-		if (space_is_vinyl(space)) {
-			lua_pushstring(L, "options");
-			lua_newtable(L);
-
-			if (index_opts->range_size > 0) {
-				lua_pushnumber(L, index_opts->range_size);
-				lua_setfield(L, -2, "range_size");
-			}
-
-			lua_pushnumber(L, index_opts->page_size);
-			lua_setfield(L, -2, "page_size");
-
-			lua_pushnumber(L, index_opts->run_count_per_level);
-			lua_setfield(L, -2, "run_count_per_level");
-
-			lua_pushnumber(L, index_opts->run_size_ratio);
-			lua_setfield(L, -2, "run_size_ratio");
-
-			lua_pushnumber(L, index_opts->bloom_fpr);
-			lua_setfield(L, -2, "bloom_fpr");
-
-			lua_settable(L, -3);
-		}
 		lua_setfield(L, -2, index_def->name);
 	}
 
@@ -609,8 +570,6 @@ box_lua_space_init(struct lua_State *L)
 	lua_newtable(L);
 	lua_setfield(L, -2, "schema");
 	lua_getfield(L, -1, "schema");
-	lua_pushnumber(L, BOX_VINYL_DEFERRED_DELETE_ID);
-	lua_setfield(L, -2, "VINYL_DEFERRED_DELETE_ID");
 	lua_pushnumber(L, BOX_SCHEMA_ID);
 	lua_setfield(L, -2, "SCHEMA_ID");
 	lua_pushnumber(L, BOX_SPACE_ID);

@@ -83,24 +83,6 @@ add_library(box STATIC
     blackhole.c
     service_engine.c
     session_settings.c
-    vinyl.c
-    vy_stmt.c
-    vy_mem.c
-    vy_run.c
-    vy_range.c
-    vy_lsm.c
-    vy_tx.c
-    vy_write_iterator.c
-    vy_read_iterator.c
-    vy_point_lookup.c
-    vy_cache.c
-    vy_log.c
-    vy_upsert.c
-    vy_history.c
-    vy_read_set.c
-    vy_scheduler.c
-    vy_regulator.c
-    vy_quota.c
     request.c
     space.c
     space_def.c

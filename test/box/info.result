@@ -90,7 +90,6 @@ t
   - uuid
   - vclock
   - version
-  - vinyl
 ...
 -- Tarantool 1.6.x compat
 box.info.server.id == box.info.id

@@ -79,28 +79,6 @@ cfg_filter(box.cfg)
  |     - true
  |   - - too_long_threshold
  |     - 0.5
- |   - - vinyl_bloom_fpr
- |     - 0.05
- |   - - vinyl_cache
- |     - 134217728
- |   - - vinyl_dir
- |     - <hidden>
- |   - - vinyl_max_tuple_size
- |     - 1048576
- |   - - vinyl_memory
- |     - 134217728
- |   - - vinyl_page_size
- |     - 8192
- |   - - vinyl_read_threads
- |     - 1
- |   - - vinyl_run_count_per_level
- |     - 2
- |   - - vinyl_run_size_ratio
- |     - 3.5
- |   - - vinyl_timeout
- |     - 60
- |   - - vinyl_write_threads
- |     - 4
  |   - - wal_dir
  |     - <hidden>
  |   - - wal_dir_rescan_delay
@@ -182,28 +160,6 @@ cfg_filter(box.cfg)
  |     - true
  |   - - too_long_threshold
  |     - 0.5
- |   - - vinyl_bloom_fpr
- |     - 0.05
- |   - - vinyl_cache
- |     - 134217728
- |   - - vinyl_dir
- |     - <hidden>
- |   - - vinyl_max_tuple_size
- |     - 1048576
- |   - - vinyl_memory
- |     - 134217728
- |   - - vinyl_page_size
- |     - 8192
- |   - - vinyl_read_threads
- |     - 1
- |   - - vinyl_run_count_per_level
- |     - 2
- |   - - vinyl_run_size_ratio
- |     - 3.5
- |   - - vinyl_timeout
- |     - 60
- |   - - vinyl_write_threads
- |     - 4
  |   - - wal_dir
  |     - <hidden>
  |   - - wal_dir_rescan_delay
@@ -255,18 +211,6 @@ box.cfg{memtx_memory = "100500"}
 box.cfg{memtx_memory = -1}
  | ---
  | - error: 'Incorrect value for option ''memtx_memory'': must not be less than 0'
- | ...
-box.cfg{vinyl_memory = -1}
- | ---
- | - error: 'Incorrect value for option ''vinyl_memory'': must not be less than 0'
- | ...
-box.cfg{vinyl = "vinyl"}
- | ---
- | - error: 'Incorrect value for option ''vinyl'': unexpected option'
- | ...
-box.cfg{vinyl_write_threads = "threads"}
- | ---
- | - error: 'Incorrect value for option ''vinyl_write_threads'': should be of type number'
  | ...
 
 --------------------------------------------------------------------------------
@@ -320,9 +264,6 @@ box.cfg{replicaset_uuid = '12345678-0123-5678-1234-abcdefabcdef'}
 box.cfg{memtx_memory = box.cfg.memtx_memory}
  | ---
  | ...
-box.cfg{vinyl_memory = box.cfg.vinyl_memory}
- | ---
- | ...
 box.cfg{sql_cache_size = box.cfg.sql_cache_size}
  | ---
  | ...
@@ -343,11 +284,10 @@ test_run:cmd('switch cfg_tester1')
  | ---
  | - true
  | ...
-box.cfg.memtx_memory, box.cfg.slab_alloc_factor, box.cfg.vinyl_write_threads
+box.cfg.memtx_memory, box.cfg.slab_alloc_factor
  | ---
  | - 268435456
  | - 1.05
- | - 4
  | ...
 test_run:cmd("switch default")
  | ---
@@ -374,11 +314,10 @@ test_run:cmd('switch cfg_tester2')
  | ---
  | - true
  | ...
-box.cfg.memtx_memory, box.cfg.slab_alloc_factor, box.cfg.vinyl_write_threads
+box.cfg.memtx_memory, box.cfg.slab_alloc_factor
  | ---
  | - 214748364
  | - 1.05
- | - 4
  | ...
 test_run:cmd("switch default")
  | ---
@@ -389,68 +328,6 @@ test_run:cmd("stop server cfg_tester2")
  | - true
  | ...
 test_run:cmd("cleanup server cfg_tester2")
- | ---
- | - true
- | ...
-
-test_run:cmd('create server cfg_tester3 with script = "box/lua/cfg_test3.lua"')
- | ---
- | - true
- | ...
-test_run:cmd("start server cfg_tester3")
- | ---
- | - true
- | ...
-test_run:cmd('switch cfg_tester3')
- | ---
- | - true
- | ...
-box.cfg.memtx_memory, box.cfg.slab_alloc_factor, box.cfg.vinyl_write_threads
- | ---
- | - 214748364
- | - 1.05
- | - 10
- | ...
-test_run:cmd("switch default")
- | ---
- | - true
- | ...
-test_run:cmd("stop server cfg_tester3")
- | ---
- | - true
- | ...
-test_run:cmd("cleanup server cfg_tester3")
- | ---
- | - true
- | ...
-
-test_run:cmd('create server cfg_tester4 with script = "box/lua/cfg_test4.lua"')
- | ---
- | - true
- | ...
-test_run:cmd("start server cfg_tester4")
- | ---
- | - true
- | ...
-test_run:cmd('switch cfg_tester4')
- | ---
- | - true
- | ...
-box.cfg.memtx_memory, box.cfg.slab_alloc_factor, box.cfg.vinyl_write_threads
- | ---
- | - 268435456
- | - 3.14
- | - 4
- | ...
-test_run:cmd("switch default")
- | ---
- | - true
- | ...
-test_run:cmd("stop server cfg_tester4")
- | ---
- | - true
- | ...
-test_run:cmd("cleanup server cfg_tester4")
  | ---
  | - true
  | ...
@@ -487,55 +364,6 @@ test_run:cmd("cleanup server cfg_tester5")
  | - true
  | ...
 
---------------------------------------------------------------------------------
--- Check that 'vinyl_dir' cfg option is not checked as long as
--- there is no vinyl indexes (issue #2664)
---------------------------------------------------------------------------------
-
-test_run:cmd('create server cfg_tester with script = "box/lua/cfg_bad_vinyl_dir.lua"')
- | ---
- | - true
- | ...
-test_run:cmd("start server cfg_tester")
- | ---
- | - true
- | ...
-test_run:cmd('switch cfg_tester')
- | ---
- | - true
- | ...
-_ = box.schema.space.create('test_memtx', {engine = 'memtx'})
- | ---
- | ...
-_ = box.space.test_memtx:create_index('pk') -- ok
- | ---
- | ...
-_ = box.schema.space.create('test_vinyl', {engine = 'vinyl'})
- | ---
- | ...
-_ = box.space.test_vinyl:create_index('pk') -- error
- | ---
- | - error: can not access vinyl data directory
- | ...
-box.snapshot()
- | ---
- | - ok
- | ...
-test_run:cmd("restart server cfg_tester")
- | 
-test_run:cmd("switch default")
- | ---
- | - true
- | ...
-test_run:cmd("stop server cfg_tester")
- | ---
- | - true
- | ...
-test_run:cmd("cleanup server cfg_tester")
- | ---
- | - true
- | ...
-
 --
 -- gh-3320: box.cfg{net_msg_max}.
 --
@@ -564,30 +392,6 @@ box.cfg{net_msg_max = old}
  | ...
 
 test_run:cmd("clear filter")
- | ---
- | - true
- | ...
-
---
--- gh-4236: initial box.cfg{} call did not log changes to default state
---
-test_run:cmd('create server cfg_tester6 with script = "box/lua/cfg_test5.lua"')
- | ---
- | - true
- | ...
-test_run:cmd("start server cfg_tester6")
- | ---
- | - true
- | ...
-test_run:grep_log('cfg_tester6', 'set \'vinyl_memory\' configuration option to 1073741824', 1000)
- | ---
- | - set 'vinyl_memory' configuration option to 1073741824
- | ...
-test_run:cmd("stop server cfg_tester6")
- | ---
- | - true
- | ...
-test_run:cmd("cleanup server cfg_tester6")
  | ---
  | - true
  | ...

@@ -10,7 +10,7 @@ box.backup.start(-1)
 
 default_checkpoint_count = box.cfg.checkpoint_count
 
-ENGINES = {'memtx', 'vinyl'}
+ENGINES = {'memtx'}
 BACKUP_DIR = fio.pathjoin(fio.cwd(), 'backup')
 
 -- Make test spaces.
@@ -37,8 +37,6 @@ function do_backup(files)
             dir = box.cfg.wal_dir
         elseif suffix == 'snap' then
             dir = box.cfg.memtx_dir
-        elseif suffix == 'vylog' or suffix == 'run' or suffix == 'index' then
-            dir = box.cfg.vinyl_dir
         end
         assert(dir ~= nil)
         local rel_path = string.sub(path, string.len(dir) + 2)
@@ -79,7 +77,6 @@ _ = test_run:cmd(string.format("create server copy1 with script='box/backup_test
 _ = test_run:cmd("start server copy1")
 _ = test_run:cmd('switch copy1')
 box.space.memtx:select()
-box.space.vinyl:select()
 _ = test_run:cmd('switch default')
 _ = test_run:cmd("stop server copy1")
 _ = test_run:cmd("cleanup server copy1")
@@ -98,7 +95,6 @@ _ = test_run:cmd(string.format("create server copy2 with script='box/backup_test
 _ = test_run:cmd("start server copy2")
 _ = test_run:cmd('switch copy2')
 box.space.memtx:select()
-box.space.vinyl:select()
 _ = test_run:cmd('switch default')
 _ = test_run:cmd("stop server copy2")
 _ = test_run:cmd("cleanup server copy2")
@@ -112,7 +108,6 @@ _ = test_run:cmd(string.format("create server copy3 with script='box/backup_test
 _ = test_run:cmd("start server copy3")
 _ = test_run:cmd('switch copy3')
 box.space.memtx:select()
-box.space.vinyl:select()
 _ = test_run:cmd('switch default')
 _ = test_run:cmd("stop server copy3")
 _ = test_run:cmd("cleanup server copy3")

@@ -153,55 +153,9 @@ target_link_libraries(luaL_iterator.test unit server coll core misc
 add_executable(say.test say.c)
 target_link_libraries(say.test core unit)
 
-set(ITERATOR_TEST_SOURCES
-    vy_iterators_helper.c
-    ${PROJECT_SOURCE_DIR}/src/box/vy_stmt.c
-    ${PROJECT_SOURCE_DIR}/src/box/vy_upsert.c
-    ${PROJECT_SOURCE_DIR}/src/box/vy_history.c
-    ${PROJECT_SOURCE_DIR}/src/box/vy_mem.c
-    ${PROJECT_SOURCE_DIR}/src/box/vy_cache.c)
-set(ITERATOR_TEST_LIBS core tuple xrow unit)
-
-add_executable(vy_mem.test vy_mem.c ${ITERATOR_TEST_SOURCES})
-target_link_libraries(vy_mem.test ${ITERATOR_TEST_LIBS} dl)
-
-add_executable(vy_point_lookup.test
-    vy_point_lookup.c
-    vy_iterators_helper.c
-    vy_log_stub.c
-    ${PROJECT_SOURCE_DIR}/src/box/vy_point_lookup.c
-    ${PROJECT_SOURCE_DIR}/src/box/vy_write_iterator.c
-    ${PROJECT_SOURCE_DIR}/src/box/vy_stmt.c
-    ${PROJECT_SOURCE_DIR}/src/box/vy_mem.c
-    ${PROJECT_SOURCE_DIR}/src/box/vy_run.c
-    ${PROJECT_SOURCE_DIR}/src/box/vy_range.c
-    ${PROJECT_SOURCE_DIR}/src/box/vy_tx.c
-    ${PROJECT_SOURCE_DIR}/src/box/vy_read_set.c
-    ${PROJECT_SOURCE_DIR}/src/box/vy_upsert.c
-    ${PROJECT_SOURCE_DIR}/src/box/vy_history.c
-    ${PROJECT_SOURCE_DIR}/src/box/vy_lsm.c
-    ${PROJECT_SOURCE_DIR}/src/box/vy_cache.c
-    ${PROJECT_SOURCE_DIR}/src/box/index_def.c
-    ${PROJECT_SOURCE_DIR}/src/box/schema_def.c
-    ${PROJECT_SOURCE_DIR}/src/box/identifier.c
-)
-target_link_libraries(vy_point_lookup.test core tuple xrow xlog unit dl)
-
 add_executable(column_mask.test
     column_mask.c)
 target_link_libraries(column_mask.test tuple unit)
-
-add_executable(vy_write_iterator.test
-    vy_write_iterator.c
-    ${PROJECT_SOURCE_DIR}/src/box/vy_run.c
-    ${PROJECT_SOURCE_DIR}/src/box/vy_upsert.c
-    ${PROJECT_SOURCE_DIR}/src/box/vy_write_iterator.c
-    ${ITERATOR_TEST_SOURCES}
-)
-target_link_libraries(vy_write_iterator.test xlog ${ITERATOR_TEST_LIBS} dl)
-
-add_executable(vy_cache.test vy_cache.c ${ITERATOR_TEST_SOURCES})
-target_link_libraries(vy_cache.test ${ITERATOR_TEST_LIBS} dl)
 
 add_executable(coll.test coll.cpp)
 target_link_libraries(coll.test coll unit misc dl)

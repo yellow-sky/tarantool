@@ -54,7 +54,6 @@
 #include "sysview.h"
 #include "blackhole.h"
 #include "service_engine.h"
-#include "vinyl.h"
 #include "space.h"
 #include "index.h"
 #include "port.h"
@@ -581,56 +580,6 @@ box_check_memtx_memory(int64_t memory)
 	return memory;
 }
 
-static int64_t
-box_check_vinyl_memory(int64_t memory)
-{
-	if (memory < 0) {
-		tnt_raise(ClientError, ER_CFG, "vinyl_memory",
-			  "must not be less than 0");
-	}
-	return memory;
-}
-
-static void
-box_check_vinyl_options(void)
-{
-	int read_threads = cfg_geti("vinyl_read_threads");
-	int write_threads = cfg_geti("vinyl_write_threads");
-	int64_t range_size = cfg_geti64("vinyl_range_size");
-	int64_t page_size = cfg_geti64("vinyl_page_size");
-	int run_count_per_level = cfg_geti("vinyl_run_count_per_level");
-	double run_size_ratio = cfg_getd("vinyl_run_size_ratio");
-	double bloom_fpr = cfg_getd("vinyl_bloom_fpr");
-
-	box_check_vinyl_memory(cfg_geti64("vinyl_memory"));
-
-	if (read_threads < 1) {
-		tnt_raise(ClientError, ER_CFG, "vinyl_read_threads",
-			  "must be greater than or equal to 1");
-	}
-	if (write_threads < 2) {
-		tnt_raise(ClientError, ER_CFG, "vinyl_write_threads",
-			  "must be greater than or equal to 2");
-	}
-	if (page_size <= 0 || (range_size > 0 && page_size > range_size)) {
-		tnt_raise(ClientError, ER_CFG, "vinyl_page_size",
-			  "must be greater than 0 and less than "
-			  "or equal to vinyl_range_size");
-	}
-	if (run_count_per_level <= 0) {
-		tnt_raise(ClientError, ER_CFG, "vinyl_run_count_per_level",
-			  "must be greater than 0");
-	}
-	if (run_size_ratio <= 1) {
-		tnt_raise(ClientError, ER_CFG, "vinyl_run_size_ratio",
-			  "must be greater than 1");
-	}
-	if (bloom_fpr <= 0 || bloom_fpr > 1) {
-		tnt_raise(ClientError, ER_CFG, "vinyl_bloom_fpr",
-			  "must be greater than 0 and less than or equal to 1");
-	}
-}
-
 static int
 box_check_sql_cache_size(int size)
 {
@@ -662,8 +611,6 @@ box_check_config()
 	box_check_wal_mode(cfg_gets("wal_mode"));
 	box_check_memtx_memory(cfg_geti64("memtx_memory"));
 	box_check_memtx_min_tuple_size(cfg_geti64("memtx_min_tuple_size"));
-	box_check_vinyl_options();
-	box_check_sql_cache_size(cfg_geti("sql_cache_size"));
 }
 
 /*
@@ -876,10 +823,6 @@ box_set_snap_io_rate_limit(void)
 	assert(memtx != NULL);
 	memtx_engine_set_snap_io_rate_limit(memtx,
 			cfg_getd("snap_io_rate_limit"));
-	struct engine *vinyl = engine_by_name("vinyl");
-	assert(vinyl != NULL);
-	vinyl_engine_set_snap_io_rate_limit(vinyl,
-			cfg_getd("snap_io_rate_limit"));
 }
 
 void
@@ -906,10 +849,6 @@ void
 box_set_too_long_threshold(void)
 {
 	too_long_threshold = cfg_getd("too_long_threshold");
-
-	struct engine *vinyl = engine_by_name("vinyl");
-	assert(vinyl != NULL);
-	vinyl_engine_set_too_long_threshold(vinyl, too_long_threshold);
 }
 
 void
@@ -940,40 +879,6 @@ box_set_checkpoint_wal_threshold(void)
 {
 	int64_t threshold = cfg_geti64("checkpoint_wal_threshold");
 	wal_set_checkpoint_threshold(threshold);
-}
-
-void
-box_set_vinyl_memory(void)
-{
-	struct engine *vinyl = engine_by_name("vinyl");
-	assert(vinyl != NULL);
-	vinyl_engine_set_memory_xc(vinyl,
-		box_check_vinyl_memory(cfg_geti64("vinyl_memory")));
-}
-
-void
-box_set_vinyl_max_tuple_size(void)
-{
-	struct engine *vinyl = engine_by_name("vinyl");
-	assert(vinyl != NULL);
-	vinyl_engine_set_max_tuple_size(vinyl,
-			cfg_geti("vinyl_max_tuple_size"));
-}
-
-void
-box_set_vinyl_cache(void)
-{
-	struct engine *vinyl = engine_by_name("vinyl");
-	assert(vinyl != NULL);
-	vinyl_engine_set_cache(vinyl, cfg_geti64("vinyl_cache"));
-}
-
-void
-box_set_vinyl_timeout(void)
-{
-	struct engine *vinyl = engine_by_name("vinyl");
-	assert(vinyl != NULL);
-	vinyl_engine_set_timeout(vinyl,	cfg_getd("vinyl_timeout"));
 }
 
 void
@@ -1952,17 +1857,6 @@ engine_init()
 
 	struct engine *blackhole = blackhole_engine_new_xc();
 	engine_register(blackhole);
-
-	struct engine *vinyl;
-	vinyl = vinyl_engine_new_xc(cfg_gets("vinyl_dir"),
-				    cfg_geti64("vinyl_memory"),
-				    cfg_geti("vinyl_read_threads"),
-				    cfg_geti("vinyl_write_threads"),
-				    cfg_geti("force_recovery"));
-	engine_register((struct engine *)vinyl);
-	box_set_vinyl_max_tuple_size();
-	box_set_vinyl_cache();
-	box_set_vinyl_timeout();
 }
 
 /**

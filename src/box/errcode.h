@@ -191,7 +191,6 @@ struct errcode_record {
 	/*136 */_(ER_PARTIAL_KEY,		"%s index  does not support selects via a partial key (expected %u parts, got %u). Please Consider changing index type to TREE.") \
 	/*137 */_(ER_TRUNCATE_SYSTEM_SPACE,	"Can't truncate a system space, space '%s'") \
 	/*138 */_(ER_LOAD_MODULE,		"Failed to dynamically load module '%.*s': %s") \
-	/*139 */_(ER_VINYL_MAX_TUPLE_SIZE,	"Failed to allocate %u bytes for tuple: tuple is too large. Check 'vinyl_max_tuple_size' configuration option.") \
 	/*140 */_(ER_WRONG_DD_VERSION,		"Wrong _schema version: expected 'major.minor[.patch]'") \
 	/*141 */_(ER_WRONG_SPACE_FORMAT,	"Wrong space format (field %u): %s") \
 	/*142 */_(ER_CREATE_SEQUENCE,		"Failed to create sequence '%s': %s") \

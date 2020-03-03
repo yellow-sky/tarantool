@@ -5,7 +5,6 @@ default_cfg = {
     pid_file   = workdir,
     wal_dir    = workdir,
     memtx_dir  = workdir,
-    vinyl_dir  = workdir,
     log        = workdir,
     background = false,
 }

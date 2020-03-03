@@ -25,9 +25,6 @@ box.cfg{replication = {}}
 
 box.cfg{memtx_memory = "100500"}
 box.cfg{memtx_memory = -1}
-box.cfg{vinyl_memory = -1}
-box.cfg{vinyl = "vinyl"}
-box.cfg{vinyl_write_threads = "threads"}
 
 --------------------------------------------------------------------------------
 -- Dynamic configuration check
@@ -50,7 +47,6 @@ box.cfg{replicaset_uuid = box.info.cluster.uuid}
 box.cfg{replicaset_uuid = '12345678-0123-5678-1234-abcdefabcdef'}
 
 box.cfg{memtx_memory = box.cfg.memtx_memory}
-box.cfg{vinyl_memory = box.cfg.vinyl_memory}
 box.cfg{sql_cache_size = box.cfg.sql_cache_size}
 
 --------------------------------------------------------------------------------
@@ -60,7 +56,7 @@ box.cfg{sql_cache_size = box.cfg.sql_cache_size}
 test_run:cmd('create server cfg_tester1 with script = "box/lua/cfg_test1.lua"')
 test_run:cmd("start server cfg_tester1")
 test_run:cmd('switch cfg_tester1')
-box.cfg.memtx_memory, box.cfg.slab_alloc_factor, box.cfg.vinyl_write_threads
+box.cfg.memtx_memory, box.cfg.slab_alloc_factor
 test_run:cmd("switch default")
 test_run:cmd("stop server cfg_tester1")
 test_run:cmd("cleanup server cfg_tester1")
@@ -68,26 +64,10 @@ test_run:cmd("cleanup server cfg_tester1")
 test_run:cmd('create server cfg_tester2 with script = "box/lua/cfg_test2.lua"')
 test_run:cmd("start server cfg_tester2")
 test_run:cmd('switch cfg_tester2')
-box.cfg.memtx_memory, box.cfg.slab_alloc_factor, box.cfg.vinyl_write_threads
+box.cfg.memtx_memory, box.cfg.slab_alloc_factor
 test_run:cmd("switch default")
 test_run:cmd("stop server cfg_tester2")
 test_run:cmd("cleanup server cfg_tester2")
-
-test_run:cmd('create server cfg_tester3 with script = "box/lua/cfg_test3.lua"')
-test_run:cmd("start server cfg_tester3")
-test_run:cmd('switch cfg_tester3')
-box.cfg.memtx_memory, box.cfg.slab_alloc_factor, box.cfg.vinyl_write_threads
-test_run:cmd("switch default")
-test_run:cmd("stop server cfg_tester3")
-test_run:cmd("cleanup server cfg_tester3")
-
-test_run:cmd('create server cfg_tester4 with script = "box/lua/cfg_test4.lua"')
-test_run:cmd("start server cfg_tester4")
-test_run:cmd('switch cfg_tester4')
-box.cfg.memtx_memory, box.cfg.slab_alloc_factor, box.cfg.vinyl_write_threads
-test_run:cmd("switch default")
-test_run:cmd("stop server cfg_tester4")
-test_run:cmd("cleanup server cfg_tester4")
 
 --------------------------------------------------------------------------------
 -- Check fix for pid_file option overwritten by tarantoolctl
@@ -100,24 +80,6 @@ box.cfg{pid_file = "current.pid"}
 test_run:cmd("switch default")
 test_run:cmd("stop server cfg_tester5")
 test_run:cmd("cleanup server cfg_tester5")
-
---------------------------------------------------------------------------------
--- Check that 'vinyl_dir' cfg option is not checked as long as
--- there is no vinyl indexes (issue #2664)
---------------------------------------------------------------------------------
-
-test_run:cmd('create server cfg_tester with script = "box/lua/cfg_bad_vinyl_dir.lua"')
-test_run:cmd("start server cfg_tester")
-test_run:cmd('switch cfg_tester')
-_ = box.schema.space.create('test_memtx', {engine = 'memtx'})
-_ = box.space.test_memtx:create_index('pk') -- ok
-_ = box.schema.space.create('test_vinyl', {engine = 'vinyl'})
-_ = box.space.test_vinyl:create_index('pk') -- error
-box.snapshot()
-test_run:cmd("restart server cfg_tester")
-test_run:cmd("switch default")
-test_run:cmd("stop server cfg_tester")
-test_run:cmd("cleanup server cfg_tester")
 
 --
 -- gh-3320: box.cfg{net_msg_max}.
@@ -133,12 +95,3 @@ box.cfg{net_msg_max = old + 1000}
 box.cfg{net_msg_max = old}
 
 test_run:cmd("clear filter")
-
---
--- gh-4236: initial box.cfg{} call did not log changes to default state
---
-test_run:cmd('create server cfg_tester6 with script = "box/lua/cfg_test5.lua"')
-test_run:cmd("start server cfg_tester6")
-test_run:grep_log('cfg_tester6', 'set \'vinyl_memory\' configuration option to 1073741824', 1000)
-test_run:cmd("stop server cfg_tester6")
-test_run:cmd("cleanup server cfg_tester6")

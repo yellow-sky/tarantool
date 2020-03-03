@@ -12,7 +12,6 @@ tempdir = fio.tempdir()
 box.cfg {
     wal_dir = tempdir,
     memtx_dir = tempdir,
-    vinyl_dir = tempdir,
     log       = fio.pathjoin(tempdir, 'tarantool.log'),
     memtx_memory = 104857600 -- for small systems
 }

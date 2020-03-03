@@ -59,7 +59,7 @@ test_run:cmd('switch replica')
 ...
 box.space.test_engine.engine
 ---
-- vinyl
+- memtx
 ...
 box.space.test_local.is_local
 ---

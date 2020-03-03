@@ -408,7 +408,6 @@ setmetatable(_G, nil)
 -- start the database
 box.cfg{
     memtx_max_tuple_size=4996109;
-    vinyl_max_tuple_size=4996109;
     log="tarantool.log";
 }
 

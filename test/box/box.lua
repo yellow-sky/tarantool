@@ -10,7 +10,7 @@ box.cfg{
 require('console').listen(os.getenv('ADMIN'))
 
 local _hide = {
-    pid_file=1, log=1, listen=1, vinyl_dir=1,
+    pid_file=1, log=1, listen=1,
     memtx_dir=1, wal_dir=1,
     memtx_max_tuple_size=1, memtx_min_tuple_size=1
 }

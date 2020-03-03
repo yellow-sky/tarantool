@@ -55,11 +55,6 @@ s:insert{1, 2, {3, 4, 5}}
 -- inserting good value
 s:insert{1, 2, {3, 4, 5, 6}}
 
--- invalid alters
-s.index.spatial:alter({unique = true})
-s.index.spatial:alter({type = 'tree'})
-box.space[box.schema.SPACE_ID]:update({s.id}, {{"=", 4, 'vinyl'}})
-
 -- chech that truncate works
 s.index.spatial:select({0, 0, 10, 10}, {iterator = 'le'})
 s:truncate()
@@ -82,14 +77,6 @@ s.index.spatial:max()
 s.index.spatial:drop()
 s.index.spatial:select({})
 
-s:drop()
-
-s = box.schema.space.create('vinyl', {engine = 'vinyl'})
--- rtree indexes are not enabled in vinyl
-i = s:create_index('spatial', { type = 'rtree', unique = true, parts = {3, 'array'}})
-i = s:create_index('primary', { type = 'tree', parts = {1, 'unsigned'}})
--- ... even secondary
-i = s:create_index('spatial', { type = 'rtree', unique = true, parts = {3, 'array'}})
 s:drop()
 
 -- rtree in temp space must work fine

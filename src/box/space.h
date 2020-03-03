@@ -463,10 +463,6 @@ space_invalidate(struct space *space)
 static inline bool
 space_is_memtx(struct space *space) { return space->engine->id == 0; }
 
-/** Return true if space is run under vinyl engine. */
-static inline bool
-space_is_vinyl(struct space *space) { return strcmp(space->engine->name, "vinyl") == 0; }
-
 struct field_def;
 /**
  * Allocate and initialize a space.

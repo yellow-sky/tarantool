@@ -6,15 +6,8 @@ function trig_local(old, new)
     end
 end
 
-function trig_engine(old, new)
-    if new and new[3] == 'test_engine' and new[4] ~= 'vinyl' then
-        return new:update{{'=', 4, 'vinyl'}}
-    end
-end
-
 box.ctl.on_schema_init(function()
     box.space._space:before_replace(trig_local)
-    box.space._space:before_replace(trig_engine)
 end)
 
 box.cfg({

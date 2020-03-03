@@ -163,8 +163,6 @@ t1 = s:replace{2, 3, 4}
 t2 = s:replace{3, 4, 5, 6}
 t1.field1, t1.field2, t1.field3, t1.field4
 t2.field1, t2.field2, t2.field3, t2.field4
- -- Ensure the tuple is read ok from disk in a case of vinyl.
-if engine == 'vinyl' then box.snapshot() end
 s:select{2}
 
 s:drop()

@@ -126,7 +126,6 @@ If not found, tarantoolctl falls back to built-in defaults:
     pid_file  = "/var/run/tarantool",
     wal_dir   = "/var/lib/tarantool",
     memtx_dir = "/var/lib/tarantool",
-    vinyl_dir = "/var/lib/tarantool",
     log       = "/var/log/tarantool",
     username  = "tarantool",
     }
@@ -151,10 +150,6 @@ Directory for write-ahead *.xlog files; tarantoolctl will add
 Directory for snapshot *.snap files; tarantoolctl will add
 "/instance_name" to the directory name.
 
-=item vinyl_dir
-
-Directory for vinyl files; tarantoolctl will add "/instance_name" to the
-directory name.
 
 =item log
 

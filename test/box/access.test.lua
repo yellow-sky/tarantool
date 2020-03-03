@@ -487,7 +487,7 @@ function access_denied_trigger(op, type, name) obj_type = type; obj_name = name;
 function uid() euid = box.session.euid(); auid = box.session.uid() end
 _ = box.session.on_access_denied(access_denied_trigger)
 _ = box.session.on_access_denied(uid)
-s = box.schema.space.create('admin_space', {engine="vinyl"})
+s = box.schema.space.create('admin_space', {engine="memtx"})
 seq = box.schema.sequence.create('test_sequence')
 index = s:create_index('primary', {type = 'tree', parts = {1, 'unsigned'}})
 box.schema.user.create('test_user', {password="pass"})

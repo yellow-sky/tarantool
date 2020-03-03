@@ -137,21 +137,6 @@ s:insert{1, 2, {3, 4, 5, 6}}
 ---
 - [1, 2, [3, 4, 5, 6]]
 ...
--- invalid alters
-s.index.spatial:alter({unique = true})
----
-- error: 'Can''t create or modify index ''spatial'' in space ''spatial'': RTREE index
-    can not be unique'
-...
-s.index.spatial:alter({type = 'tree'})
----
-- error: 'Can''t create or modify index ''spatial'' in space ''spatial'': field type
-    ''array'' is not supported'
-...
-box.space[box.schema.SPACE_ID]:update({s.id}, {{"=", 4, 'vinyl'}})
----
-- error: 'Can''t modify space ''spatial'': can not change space engine'
-...
 -- chech that truncate works
 s.index.spatial:select({0, 0, 10, 10}, {iterator = 'le'})
 ---
@@ -207,25 +192,6 @@ s.index.spatial:select({})
 ---
 - error: '[string "return s.index.spatial:select({}) "]:1: attempt to index field
     ''spatial'' (a nil value)'
-...
-s:drop()
----
-...
-s = box.schema.space.create('vinyl', {engine = 'vinyl'})
----
-...
--- rtree indexes are not enabled in vinyl
-i = s:create_index('spatial', { type = 'rtree', unique = true, parts = {3, 'array'}})
----
-- error: Unsupported index type supplied for index 'spatial' in space 'vinyl'
-...
-i = s:create_index('primary', { type = 'tree', parts = {1, 'unsigned'}})
----
-...
--- ... even secondary
-i = s:create_index('spatial', { type = 'rtree', unique = true, parts = {3, 'array'}})
----
-- error: Unsupported index type supplied for index 'spatial' in space 'vinyl'
 ...
 s:drop()
 ---

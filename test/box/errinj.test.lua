@@ -565,43 +565,6 @@ errinj = box.error.injection
 #fio.glob(fio.pathjoin(box.cfg.memtx_dir, "*.snap.inprogress")) == 0
 box.space.test:drop()
 
--- Check that run.inprogress, index.inprogress, and vylog.inprogress
--- files are removed.
-_ = box.schema.space.create('test', {engine = 'vinyl'})
-_ = box.space.test:create_index('primary')
-
-errinj.set('ERRINJ_VY_LOG_FILE_RENAME', true)
-box.snapshot()
-errinj.set('ERRINJ_VY_LOG_FILE_RENAME', false)
-
-errinj.set('ERRINJ_VY_GC', true)
-errinj.set('ERRINJ_VY_SCHED_TIMEOUT', 0.001)
-
-errinj.set('ERRINJ_VY_RUN_FILE_RENAME', true)
-box.space.test:insert{1}
-box.snapshot() -- error
-errinj.set('ERRINJ_VY_RUN_FILE_RENAME', false)
-
--- Wait for the scheduler to unthrottle.
-repeat fiber.sleep(0.001) until pcall(box.snapshot)
-
-errinj.set('ERRINJ_VY_INDEX_FILE_RENAME', true)
-box.space.test:insert{2}
-box.snapshot() -- error
-errinj.set('ERRINJ_VY_INDEX_FILE_RENAME', false)
-
-errinj.set('ERRINJ_VY_SCHED_TIMEOUT', 0)
-errinj.set('ERRINJ_VY_GC', false)
-
-test_run:cmd('restart server default')
-
-fio = require('fio')
-#fio.glob(fio.pathjoin(box.cfg.vinyl_dir, '*.vylog.inprogress')) == 0
-#fio.glob(fio.pathjoin(box.cfg.vinyl_dir, box.space.test.id, 0, '*.run.inprogress')) == 0
-#fio.glob(fio.pathjoin(box.cfg.vinyl_dir, box.space.test.id, 0, '*.index.inprogress')) == 0
-
-box.space.test:drop()
-
 -- gh-4276 - check grant privilege rollback
 _ = box.schema.user.create('testg')
 _ = box.schema.space.create('testg'):create_index('pk')

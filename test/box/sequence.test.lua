@@ -383,26 +383,6 @@ box.space._space_sequence:insert{s2.id, box.sequence.test1_seq.id, false, 0, ''}
 s1:drop()
 s2:drop()
 
--- Sequences are compatible with Vinyl spaces.
-s = box.schema.space.create('test', {engine = 'vinyl'})
-_ = s:create_index('pk', {sequence = true})
-
-s:insert{nil, 'a'} -- 1
-s:insert{100, 'b'} -- 100
-
-box.begin()
-s:insert{nil, 'c'} -- 101
-s:insert{nil, 'd'} -- 102
-box.rollback()
-
-box.begin()
-s:insert{nil, 'e'} -- 103
-s:insert{nil, 'f'} -- 104
-box.commit()
-
-s:select() -- {1, 'a'}, {100, 'b'}, {103, 'e'}, {104, 'f'}
-s:drop()
-
 --
 -- Check that sequences are persistent.
 --
@@ -666,30 +646,6 @@ s.index.pk:alter{parts = {1, 'integer'}}
 s.index.pk.parts[1].type
 s.index.pk:alter{sequence = true}
 sequence_id == s.index.pk.sequence_id
-s:drop()
-
---
--- gh-4009: setting sequence for an index part other than the first.
---
-s = box.schema.space.create('test')
-_ = s:create_index('pk', {parts = {1, 'string', 2, 'unsigned', 3, 'unsigned'}, sequence = {field = 2}})
-sequence_id = s.index.pk.sequence_id
-sequence_id ~= nil
-s.index.pk.sequence_fieldno -- 2
-s:insert{'a', box.NULL, 1}
-s:insert{'a', box.NULL, 2}
-s:insert{'b', 10, 10}
-s:insert{'b', box.NULL, 11}
-s.index.pk:alter{sequence = {field = 3}}
-s.index.pk.sequence_fieldno -- 3
-s.index.pk.sequence_id == sequence_id
-s:insert{'c', 100, 100}
-s:insert{'c', 101, box.NULL}
-s.index.pk:alter{sequence = {field = 2}}
-s.index.pk.sequence_fieldno -- 2
-s.index.pk.sequence_id == sequence_id
-s:insert{'d', 1000, 1000}
-s:insert{'d', box.NULL, 1001}
 s:drop()
 
 --

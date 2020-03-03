@@ -1000,17 +1000,6 @@ box.schema.index.create = function(space_id, name, options)
         end
     end
     options = update_param_table(options, options_defaults)
-    if space.engine == 'vinyl' then
-        options_defaults = {
-            page_size = box.cfg.vinyl_page_size,
-            range_size = box.cfg.vinyl_range_size,
-            run_count_per_level = box.cfg.vinyl_run_count_per_level,
-            run_size_ratio = box.cfg.vinyl_run_size_ratio,
-            bloom_fpr = box.cfg.vinyl_bloom_fpr
-        }
-    else
-        options_defaults = {}
-    end
     options = update_param_table(options, options_defaults)
 
     local _index = box.space[box.schema.INDEX_ID]
@@ -1360,8 +1349,6 @@ base_index_mt.__index = base_index_mt
 --
 -- Inherit engine specific index metatables from a base one.
 --
-local vinyl_index_mt = {}
-vinyl_index_mt.__index = vinyl_index_mt
 local memtx_index_mt = {}
 memtx_index_mt.__index = memtx_index_mt
 --
@@ -1370,7 +1357,6 @@ memtx_index_mt.__index = memtx_index_mt
 --
 setmetatable(base_index_mt, {
     __newindex = function(t, k, v)
-        vinyl_index_mt[k] = v
         memtx_index_mt[k] = v
         rawset(t, k, v)
     end
@@ -1591,12 +1577,9 @@ end
 
 local read_ops = {'select', 'get', 'min', 'max', 'count', 'random', 'pairs'}
 for _, op in ipairs(read_ops) do
-    vinyl_index_mt[op] = base_index_mt[op..'_luac']
     memtx_index_mt[op] = base_index_mt[op..'_ffi']
 end
 -- Lua 5.2 compatibility
-vinyl_index_mt.__pairs = vinyl_index_mt.pairs
-vinyl_index_mt.__ipairs = vinyl_index_mt.pairs
 memtx_index_mt.__pairs = memtx_index_mt.pairs
 memtx_index_mt.__ipairs = memtx_index_mt.pairs
 
@@ -1751,7 +1734,6 @@ end
 
 box.schema.index_mt = base_index_mt
 box.schema.memtx_index_mt = memtx_index_mt
-box.schema.vinyl_index_mt = vinyl_index_mt
 box.schema.space_mt = space_mt
 
 --
@@ -1783,11 +1765,7 @@ end
 
 function box.schema.space.bless(space)
     local index_mt_name
-    if space.engine == 'vinyl' then
-        index_mt_name = 'vinyl_index_mt'
-    else
-        index_mt_name = 'memtx_index_mt'
-    end
+    index_mt_name = 'memtx_index_mt'
     local space_mt = wrap_schema_object_mt('space_mt')
 
     setmetatable(space, space_mt)

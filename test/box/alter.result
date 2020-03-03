@@ -626,27 +626,6 @@ test_run:cmd("clear filter")
 - true
 ...
 --
--- create_index() does not modify index options
---
-s = box.schema.space.create('test', {engine='vinyl'})
----
-...
-opts = {parts={1, 'unsigned'}}
----
-...
-_ = s:create_index('pk', opts)
----
-...
-opts
----
-- parts:
-  - 1
-  - unsigned
-...
-s:drop()
----
-...
---
 -- gh-2074: alter a primary key
 --
 s = box.schema.space.create('test')
@@ -680,10 +659,10 @@ s.index.pk
   - type: unsigned
     is_nullable: false
     fieldno: 2
-  type: TREE
   id: 0
-  space_id: 731
+  space_id: 730
   name: pk
+  type: TREE
 ...
 s:select{}
 ---
@@ -710,10 +689,10 @@ s.index.pk
   - type: unsigned
     is_nullable: false
     fieldno: 1
-  space_id: 731
   id: 0
-  type: TREE
+  space_id: 730
   name: pk
+  type: TREE
 ...
 s.index.secondary
 ---
@@ -722,10 +701,10 @@ s.index.secondary
   - type: unsigned
     is_nullable: false
     fieldno: 2
-  type: TREE
   id: 1
-  space_id: 731
+  space_id: 730
   name: secondary
+  type: TREE
 ...
 s.index.secondary:select{}
 ---

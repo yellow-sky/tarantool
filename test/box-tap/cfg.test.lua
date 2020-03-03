@@ -6,7 +6,7 @@ local socket = require('socket')
 local fio = require('fio')
 local uuid = require('uuid')
 local msgpack = require('msgpack')
-test:plan(104)
+test:plan(88)
 
 --------------------------------------------------------------------------------
 -- Invalid values
@@ -41,14 +41,6 @@ invalid('log', ':')
 invalid('log', 'syslog:xxx=')
 invalid('log_level', 'unknown')
 invalid('log', ':test:')
-invalid('vinyl_memory', -1)
-invalid('vinyl_read_threads', 0)
-invalid('vinyl_write_threads', 1)
-invalid('vinyl_page_size', 0)
-invalid('vinyl_run_count_per_level', 0)
-invalid('vinyl_run_size_ratio', 1)
-invalid('vinyl_bloom_fpr', 0)
-invalid('vinyl_bloom_fpr', 1.1)
 
 local function invalid_combinations(name, val)
     local status, result = pcall(box.cfg, val)
@@ -88,16 +80,12 @@ test:ok(status, "box.session without box.cfg")
 status, result = pcall(box.tuple.new, {1, 2, 3})
 test:ok(status and result[1] == 1, "box.tuple without box.cfg")
 
-os.execute("rm -rf vinyl")
 box.cfg{
     log="tarantool.log",
     log_nonblock=false,
     memtx_memory=104857600,
     wal_mode = "", -- "" means default value
 }
-
--- gh-678: vinyl engine creates vinyl dir with empty 'snapshot' file
-test:isnil(io.open("vinyl", 'r'), 'vinyl_dir is not auto-created')
 
 status, result = pcall(testfun)
 test:ok(status and result == 'table', 'configured box')
@@ -177,13 +165,6 @@ function run_script(code)
     return res
 end
 
--- gh-3468: should allow box.cfg with vinyl_memory=0
-code =[[
-box.cfg{vinyl_memory=0}
-os.exit(box.cfg.vinyl_memory == 0 and 0 or 1)
-]]
-test:is(run_script(code), 0, "actually set vinyl_memory to 0")
-
 -- gh-715: Cannot switch to/from 'fsync'
 code = [[ box.cfg{ log="tarantool.log", log_nonblock = false, wal_mode = 'fsync' }; ]]
 test:is(run_script(code), 0, 'wal_mode fsync')
@@ -201,10 +182,6 @@ test:is(run_script(code), PANIC, 'wal_mode write -> fsync is not supported')
 local code;
 code = [[ box.cfg{ work_dir='invalid' } ]]
 test:is(run_script(code), PANIC, 'work_dir is invalid')
-
--- gh-2664: vinyl_dir is checked on the first use
-code = [[ box.cfg{ vinyl_dir='invalid' } ]]
-test:is(run_script(code), 0, 'vinyl_dir is invalid')
 
 code = [[ box.cfg{ memtx_dir='invalid' } ]]
 test:is(run_script(code), PANIC, 'snap_dir is invalid')
@@ -272,27 +249,6 @@ test:is(run_script(code), 0, "wal_mode none and ER_LOADING")
 --
 status, reason = pcall(box.cfg, {replication="3303,3304"})
 test:ok(not status and reason:match("Incorrect"), "invalid replication")
-
---
--- gh-1778 vinyl page can't be greather than range
---
-code = [[
-box.cfg{vinyl_page_size = 4 * 1024 * 1024, vinyl_range_size = 2 * 1024 * 1024}
-os.exit(0)
-]]
-test:is(run_script(code), PANIC, "page size greather than range")
-
-code = [[
-box.cfg{vinyl_page_size = 1 * 1024 * 1024, vinyl_range_size = 2 * 1024 * 1024}
-os.exit(0)
-]]
-test:is(run_script(code), 0, "page size less than range")
-
-code = [[
-box.cfg{vinyl_page_size = 2 * 1024 * 1024, vinyl_range_size = 2 * 1024 * 1024}
-os.exit(0)
-]]
-test:is(run_script(code), 0, "page size equal with range")
 
 -- test memtx options upgrade
 code = [[
@@ -379,51 +335,6 @@ cnt2 = #fio.glob(fio.pathjoin(box.cfg.wal_dir, '*.xlog'))
 os.exit(cnt1 < cnt2 - 8 and 0 or 1)
 ]]
 test:is(run_script(code), 0, "wal_max_size xlog rotation")
-
---
--- gh-2872 bootstrap is aborted if vinyl_dir contains vylog files
--- left from previous runs
---
-vinyl_dir = fio.tempdir()
-run_script(string.format([[
-box.cfg{vinyl_dir = '%s'}
-s = box.schema.space.create('test', {engine = 'vinyl'})
-s:create_index('pk')
-os.exit(0)
-]], vinyl_dir))
-code = string.format([[
-box.cfg{vinyl_dir = '%s'}
-os.exit(0)
-]], vinyl_dir)
-test:is(run_script(code), PANIC, "bootstrap from non-empty vinyl_dir")
-fio.rmtree(vinyl_dir)
-
---
--- gh-2278 vinyl does not support DDL/DML if wal_mode = 'none'
---
-dir = fio.tempdir()
-cfg = string.format("wal_dir = '%s', memtx_dir = '%s', vinyl_dir = '%s'", dir, dir, dir)
-run_script(string.format([[
-box.cfg{%s}
-s = box.schema.space.create('test', {engine = 'vinyl'})
-s:create_index('primary')
-os.exit(0)
-]], cfg))
-
-code = string.format([[
-box.cfg{wal_mode = 'none', %s}
-s = box.space.test
-ok = true
-ok = ok and not pcall(s.create_index, s, 'secondary')
-ok = ok and not pcall(s.index.primary.drop, s.index.primary)
-ok = ok and not pcall(s.drop, s)
-ok = ok and not pcall(s.truncate, s)
-ok = ok and not pcall(s.insert, s, {1})
-ok = ok and pcall(s.select, s)
-os.exit(ok and 0 or 1)
-]], cfg)
-test:is(run_script(code), 0, "wal_mode none -> vinyl DDL/DML is not supported")
-fio.rmtree(dir)
 
 --
 -- Invalid values of instance_uuid or replicaset_uuid.

@@ -35,22 +35,11 @@ box.cfg
 30	sql_cache_size:5242880
 31	strip_core:true
 32	too_long_threshold:0.5
-33	vinyl_bloom_fpr:0.05
-34	vinyl_cache:134217728
-35	vinyl_dir:.
-36	vinyl_max_tuple_size:1048576
-37	vinyl_memory:134217728
-38	vinyl_page_size:8192
-39	vinyl_read_threads:1
-40	vinyl_run_count_per_level:2
-41	vinyl_run_size_ratio:3.5
-42	vinyl_timeout:60
-43	vinyl_write_threads:4
-44	wal_dir:.
-45	wal_dir_rescan_delay:2
-46	wal_max_size:268435456
-47	wal_mode:write
-48	worker_pool_threads:4
+33	wal_dir:.
+34	wal_dir_rescan_delay:2
+35	wal_max_size:268435456
+36	wal_mode:write
+37	worker_pool_threads:4
 --
 -- Test insert from detached fiber
 --

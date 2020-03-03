@@ -409,24 +409,6 @@ t:update({{'+', '[2].b.......', 100}})
 t:update({{'+', '[2].b.c.d.e', 100}})
 t:update({{'-', '[2][*]', 20}})
 
--- Vinyl normalizes field numbers. It should not touch paths,
--- and they should not affect squashing.
-format = {}
-format[1] = {'field1', 'unsigned'}
-format[2] = {'field2', 'any'}
-vy_s = box.schema.create_space('test2', {engine = 'vinyl', format = format})
-pk = vy_s:create_index('pk')
-_ = vy_s:replace(t)
-
-box.begin()
--- Use a scalar operation, only they can be squashed.
-vy_s:upsert({1, 1}, {{'+', 'field2.c.f[1]', 1}})
-vy_s:upsert({1, 1}, {{'+', '[3][3][1][1]', 1}})
-box.commit()
-
-vy_s:select()
-vy_s:drop()
-
 --
 -- Complex updates. Intersected paths, different types.
 --

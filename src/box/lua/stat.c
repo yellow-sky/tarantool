@@ -41,7 +41,6 @@
 #include "box/box.h"
 #include "box/iproto.h"
 #include "box/engine.h"
-#include "box/vinyl.h"
 #include "box/sql.h"
 #include "info/info.h"
 #include "lua/info.h"
@@ -113,17 +112,6 @@ lbox_stat_call(struct lua_State *L)
 	lua_newtable(L);
 	rmean_foreach(rmean_box, set_stat_item, L);
 	rmean_foreach(rmean_error, set_stat_item, L);
-	return 1;
-}
-
-static int
-lbox_stat_vinyl(struct lua_State *L)
-{
-	struct info_handler h;
-	luaT_info_handler_create(&h, L);
-	struct engine *vinyl = engine_by_name("vinyl");
-	assert(vinyl != NULL);
-	vinyl_engine_stat(vinyl, &h);
 	return 1;
 }
 
@@ -228,7 +216,6 @@ void
 box_lua_stat_init(struct lua_State *L)
 {
 	static const struct luaL_Reg statlib [] = {
-		{"vinyl", lbox_stat_vinyl},
 		{"reset", lbox_stat_reset},
 		{"sql", lbox_stat_sql},
 		{NULL, NULL}

@@ -264,9 +264,6 @@ space:drop()
 _ = box.schema.space.create('memtx', {engine='memtx'})
 _ = box.space.memtx:create_index('pk')
 box.space.memtx:insert{1, 'memtx'}
-_ = box.schema.space.create('vinyl', {engine='vinyl'})
-_ = box.space.vinyl:create_index('pk')
-box.space.vinyl:insert{1, 'vinyl'}
 _ = box.schema.space.create('test')
 
 test_run:cmd("setopt delimiter ';'")
@@ -297,12 +294,6 @@ box.space.test:truncate()
 box.space.memtx:select{}
 box.commit();
 
--- DDL and select from a vinyl space. Multi-engine transaction
--- is not allowed.
-box.begin()
-box.space.test:truncate()
-box.space.vinyl:select{}
-
 -- A transaction is left open due to an exception in the Lua fragment
 box.rollback();
 
@@ -324,15 +315,8 @@ box.commit();
 
 box.space.memtx:select{};
 
--- DML as a second statement - works if the engine is the same
-box.begin()
-box.space.test:truncate()
-box.space.vinyl:insert{2, 'truncate'};
-
 -- A transaction is left open due to an exception in the above fragment
 box.rollback();
-
-box.space.vinyl:select{};
 
 -- Two DDL satements in a row
 box.begin()
@@ -343,18 +327,15 @@ box.rollback();
 -- Two DDL stateemnts on different engines
 box.begin()
 box.space.memtx:truncate()
-box.space.vinyl:truncate()
 box.rollback();
 
 box.space.memtx:select{};
-box.space.vinyl:select{};
 
 -- cleanup
 test_run:cmd("setopt delimiter ''");
 
 if box.space.test then box.space.test:drop() end
 box.space.memtx:drop()
-box.space.vinyl:drop()
 
 --
 -- Check that changes done to the schema by a DDL statement are
@@ -384,27 +365,18 @@ function create()
     box.schema.user.create('my_user')
     box.schema.user.grant('my_user', 'my_role')
     box.schema.space.create('memtx_space', {engine = 'memtx'})
-    box.schema.space.create('vinyl_space', {engine = 'vinyl'})
-    box.schema.role.grant('my_role', 'read,write', 'space', 'vinyl_space')
     box.schema.user.grant('my_user', 'read,write', 'space', 'memtx_space')
     box.space.memtx_space:create_index('pk', {sequence = true})
     box.space.memtx_space:create_index('sk', {parts = {2, 'unsigned'}})
-    box.space.vinyl_space:create_index('pk', {sequence = true})
-    box.space.vinyl_space:create_index('sk', {parts = {2, 'unsigned'}})
     box.space.memtx_space:truncate()
-    box.space.vinyl_space:truncate()
     box.space.memtx_space:format({{'a', 'unsigned'}, {'b', 'unsigned'}})
-    box.space.vinyl_space:format({{'a', 'unsigned'}, {'b', 'unsigned'}})
     box.schema.func.create('my_func')
 end;
 function drop()
     box.schema.func.drop('my_func')
     box.space.memtx_space:truncate()
-    box.space.vinyl_space:truncate()
     box.schema.user.revoke('my_user', 'read,write', 'space', 'memtx_space')
-    box.schema.role.revoke('my_role', 'read,write', 'space', 'vinyl_space')
     box.space.memtx_space:drop()
-    box.space.vinyl_space:drop()
     box.schema.user.revoke('my_user', 'my_role')
     box.schema.user.drop('my_user')
     box.schema.role.drop('my_role')

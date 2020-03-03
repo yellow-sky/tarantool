@@ -53,7 +53,7 @@ int execvp(const char *file, char *const argv[]);
 -- background checks
 tctlcfg_code = [[default_cfg = {
     pid_file  = '.', wal_dir = '.', memtx_dir   = '.' ,
-    vinyl_dir = '.', log  = '.', background = true,
+    log  = '.', background = true,
 }
 
 instance_dir = require('fio').abspath('.')]]

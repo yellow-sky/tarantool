@@ -141,7 +141,7 @@ box.space._cluster:delete{2} ~= nil
 ---
 - true
 ...
-space = box.schema.create_space('gh1280', { engine = 'vinyl' })
+space = box.schema.create_space('gh1280', { engine = 'memtx' })
 ---
 ...
 index = space:create_index('primary')

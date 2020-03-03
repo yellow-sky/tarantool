@@ -10,7 +10,7 @@ ID_STEP = 5
 LOGIN = 'test'
 PASSWORD = 'pass123456'
 
-engines = ['memtx', 'vinyl']
+engines = ['memtx']
 
 def insert_tuples(_server, begin, end, msg = "tuple"):
     for engine in engines:
