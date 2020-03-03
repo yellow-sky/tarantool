@@ -52,6 +52,109 @@ enum {
 	VY_CACHE_CLEANUP_MAX_STEPS = 10,
 };
 
+#ifndef NDEBUG
+#define VY_CACHE_DUMP_ENTRIES_CNT 10
+
+static const char *
+vy_cache_entry_str(struct vy_cache_entry *e)
+{
+	char *buf = tt_static_buf();
+	int pos = vy_stmt_snprint(buf, TT_STATIC_BUF_LEN/2, e->stmt);
+	if (pos < 0)
+		return "<failed to format cache entry>";
+	snprintf(buf + pos, TT_STATIC_BUF_LEN/2, ", links=%u", e->flags);
+	return buf;
+}
+
+void
+vy_cache_log_chain(struct vy_cache_tree_iterator *itr, struct vy_cache_entry *e)
+{
+	say_crit("Dumping neighbourhood of a cache entry...");
+	uint32_t i = 0;
+	struct vy_cache_tree *tree = &e->cache->cache_tree;
+	struct vy_cache_tree_iterator *prev = itr;
+	for (i = 0; i < VY_CACHE_DUMP_ENTRIES_CNT/2; i++) {
+		vy_cache_tree_iterator_prev(tree, prev);
+		struct vy_cache_entry **prev_entry =
+		vy_cache_tree_iterator_get_elem(tree, prev);
+		if (prev_entry == NULL)
+			break;
+		say_crit("%u %s", i, vy_cache_entry_str(*prev_entry));
+	}
+	say_crit("%u %s <--- broken entry", i++, vy_cache_entry_str(e));
+	struct vy_cache_tree_iterator *next = itr;
+	for (; i < VY_CACHE_DUMP_ENTRIES_CNT; i++) {
+		vy_cache_tree_iterator_next(tree, next);
+		struct vy_cache_entry **next_entry =
+			vy_cache_tree_iterator_get_elem(tree, next);
+		if (next_entry == NULL)
+			break;
+		say_crit("%u %s", i, vy_cache_entry_str(*next_entry));
+	}
+}
+
+#else
+#define vy_cache_log_chain(itr, e) (void) itr; (void) e;
+#endif
+
+/**
+ * Purely debug sanity check function verifying entry links
+ * consistency with its neighbours. In case chain is broken
+ * log all vital information and abort execution.
+ */
+static void
+vy_cache_entry_check_links(struct vy_cache_entry **entry, const char *where)
+{
+	if (*entry == NULL)
+		return;
+	(void) where;
+#ifndef NDEBUG
+	/*
+	 * If entry has at least one link let's check corresponding
+	 * one of its successor/predecessor.
+	 */
+	struct vy_cache_entry *e = *entry;
+	if ((e->flags & (VY_CACHE_LEFT_LINKED | VY_CACHE_RIGHT_LINKED)) != 0) {
+		struct vy_cache_tree *tree = &e->cache->cache_tree;
+		assert(tree != NULL);
+		bool exact;
+		struct vy_cache_tree_iterator itr =
+			vy_cache_tree_lower_bound(tree, e->stmt, &exact);
+		assert(exact);
+		if ((e->flags & VY_CACHE_LEFT_LINKED) != 0) {
+			struct vy_cache_tree_iterator prev = itr;
+			vy_cache_tree_iterator_prev(tree, &prev);
+			struct vy_cache_entry **prev_entry =
+				vy_cache_tree_iterator_get_elem(tree, &prev);
+			assert(prev_entry != NULL);
+			if (((*prev_entry)->flags & VY_CACHE_RIGHT_LINKED) == 0) {
+				const char *msg = "%s: vinyl cache chain is broken: "\
+					"entry has left link but previous "\
+					"one doesn't have right link.";
+				say_crit(msg, where);
+				vy_cache_log_chain(&itr, e);
+				abort();
+			}
+		}
+		if ((e->flags & VY_CACHE_RIGHT_LINKED) != 0) {
+			struct vy_cache_tree_iterator next = itr;
+			vy_cache_tree_iterator_next(tree, &next);
+			struct vy_cache_entry **next_entry =
+				vy_cache_tree_iterator_get_elem(tree, &next);
+			assert(next_entry != NULL);
+			if (((*next_entry)->flags & VY_CACHE_LEFT_LINKED) == 0) {
+				const char *msg = "%s: vinyl cache chain is broken: "\
+					"entry has right link but previous "\
+					"one doesn't have left link.";
+				say_crit(msg, where);
+				vy_cache_log_chain(&itr, e);
+				abort();
+			}
+		}
+	}
+#endif
+}
+
 void
 vy_cache_env_create(struct vy_cache_env *e, struct slab_cache *slab_cache)
 {
@@ -183,7 +286,20 @@ vy_cache_gc_step(struct vy_cache_env *env)
 			vy_cache_tree_iterator_prev(tree, &prev);
 			struct vy_cache_entry **prev_entry =
 				vy_cache_tree_iterator_get_elem(tree, &prev);
-			assert((*prev_entry)->flags & VY_CACHE_RIGHT_LINKED);
+			if (prev_entry == NULL) {
+				say_crit("Cache GC: previous entry is NULL "
+					 "despite the current entry has left link.");
+				vy_cache_log_chain(&itr, entry);
+				abort();
+			}
+			if (((*prev_entry)->flags & VY_CACHE_RIGHT_LINKED) == 0) {
+				const char *msg = "Cache GC: vinyl cache chain is "\
+					"broken: entry has left link but "\
+					"previous one doesn't have right link.";
+				say_crit(msg);
+				vy_cache_log_chain(&itr, entry);
+				abort();
+			}
 			(*prev_entry)->flags &= ~VY_CACHE_RIGHT_LINKED;
 		}
 		if (entry->flags & VY_CACHE_RIGHT_LINKED) {
@@ -192,7 +308,20 @@ vy_cache_gc_step(struct vy_cache_env *env)
 						    &next);
 			struct vy_cache_entry **next_entry =
 				vy_cache_tree_iterator_get_elem(tree, &next);
-			assert((*next_entry)->flags & VY_CACHE_LEFT_LINKED);
+			if (next_entry == NULL) {
+				say_crit("Cache GC: next entry is NULL "
+					 "despite the current entry has right link.");
+				vy_cache_log_chain(&itr, entry);
+				abort();
+			}
+			if (((*next_entry)->flags & VY_CACHE_LEFT_LINKED) == 0) {
+				const char *msg = "Cache GC: vinyl cache chain is "\
+					"broken: entry has right link but "\
+					"next one doesn't left link.";
+				say_crit(msg);
+				vy_cache_log_chain(&itr, entry);
+				abort();
+			}
 			(*next_entry)->flags &= ~VY_CACHE_LEFT_LINKED;
 		}
 	}
@@ -319,6 +448,7 @@ vy_cache_add(struct vy_cache *cache, struct tuple *stmt,
 	}
 	assert(!vy_cache_tree_iterator_is_invalid(&inserted));
 	if (replaced != NULL) {
+		vy_cache_entry_check_links(&replaced, "chache add");
 		entry->flags = replaced->flags;
 		entry->left_boundary_level = replaced->left_boundary_level;
 		entry->right_boundary_level = replaced->right_boundary_level;
@@ -369,6 +499,7 @@ vy_cache_add(struct vy_cache *cache, struct tuple *stmt,
 			vy_cache_tree_iterator_get_elem(&cache->cache_tree,
 							&inserted);
 		assert(*prev_check_entry != NULL);
+		vy_cache_entry_check_links(prev_check_entry, "cache add");
 		struct tuple *prev_check_stmt = (*prev_check_entry)->stmt;
 		int cmp = vy_tuple_compare(prev_stmt, prev_check_stmt,
 					   cache->cmp_def);
@@ -406,6 +537,7 @@ vy_cache_add(struct vy_cache *cache, struct tuple *stmt,
 		return;
 	}
 	if (replaced != NULL) {
+		vy_cache_entry_check_links(&replaced, "cache add");
 		prev_entry->flags = replaced->flags;
 		prev_entry->left_boundary_level = replaced->left_boundary_level;
 		prev_entry->right_boundary_level = replaced->right_boundary_level;
@@ -426,6 +558,7 @@ vy_cache_get(struct vy_cache *cache, const struct tuple *key)
 		vy_cache_tree_find(&cache->cache_tree, key);
 	if (entry == NULL)
 		return NULL;
+	vy_cache_entry_check_links(entry, "cache get");
 	return (*entry)->stmt;
 }
 
@@ -440,6 +573,8 @@ vy_cache_on_write(struct vy_cache *cache, const struct tuple *stmt,
 	struct vy_cache_entry **entry =
 		vy_cache_tree_iterator_get_elem(&cache->cache_tree, &itr);
 	assert(!exact || entry != NULL);
+	if (entry != NULL)
+		vy_cache_entry_check_links(entry, "on write");
 	/*
 	 * There are three cases possible
 	 * (1) there's a value in cache that is equal to stmt.
@@ -461,6 +596,8 @@ vy_cache_on_write(struct vy_cache *cache, const struct tuple *stmt,
 	vy_cache_tree_iterator_prev(&cache->cache_tree, &prev);
 	struct vy_cache_entry **prev_entry =
 		vy_cache_tree_iterator_get_elem(&cache->cache_tree, &prev);
+	if (prev_entry != NULL)
+		vy_cache_entry_check_links(prev_entry, "on write");
 
 	if (entry != NULL && ((*entry)->flags & VY_CACHE_LEFT_LINKED)) {
 		cache->version++;
@@ -477,6 +614,8 @@ vy_cache_on_write(struct vy_cache *cache, const struct tuple *stmt,
 	vy_cache_tree_iterator_next(&cache->cache_tree, &next);
 	struct vy_cache_entry **next_entry =
 		vy_cache_tree_iterator_get_elem(&cache->cache_tree, &next);
+	if (next_entry != NULL)
+		vy_cache_entry_check_links(next_entry, "on write");
 
 	if (exact && ((*entry)->flags & VY_CACHE_RIGHT_LINKED)) {
 		cache->version++;
@@ -606,6 +745,7 @@ vy_cache_iterator_step(struct vy_cache_iterator *itr, struct tuple **ret)
 		return vy_cache_iterator_is_end_stop(itr, prev_entry);
 	struct vy_cache_entry *entry =
 		*vy_cache_tree_iterator_get_elem(tree, &itr->curr_pos);
+	vy_cache_entry_check_links(&entry, "iterator step");
 
 	if (itr->iterator_type == ITER_EQ &&
 	    vy_stmt_compare(itr->key, entry->stmt, itr->cache->cmp_def)) {
@@ -670,6 +810,7 @@ vy_cache_iterator_seek(struct vy_cache_iterator *itr,
 		return;
 
 	*entry = *vy_cache_tree_iterator_get_elem(tree, &itr->curr_pos);
+	vy_cache_entry_check_links(entry, "iterator seek'");
 }
 
 NODISCARD int
