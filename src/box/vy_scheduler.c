@@ -1319,6 +1319,7 @@ vy_task_dump_new(struct vy_scheduler *scheduler, struct vy_worker *worker,
 
 	struct errinj *inj = errinj(ERRINJ_VY_INDEX_DUMP, ERRINJ_INT);
 	if (inj != NULL && inj->iparam == (int)lsm->index_id) {
+		say_error("%s: index dump failed with index id=%d", vy_lsm_name(lsm), lsm->index_id);
 		diag_set(ClientError, ER_INJECTION, "vinyl index dump");
 		goto err;
 	}

@@ -234,6 +234,8 @@ xlog_meta_parse(struct xlog_meta *meta, const char **data,
 	memset(meta, 0, sizeof(*meta));
 	const char *end = (const char *)memmem(*data, data_end - *data,
 					       "\n\n", 2);
+	
+	say_warn("ALARM: data=%p, len =%d data_end=%p, end=%p", *data, data_end - *data, data_end, end);
 	if (end == NULL)
 		return 1;
 	++end; /* include the trailing \n to simplify the checks */
@@ -1047,7 +1049,11 @@ no_eof:
 #endif
 	return 0;
 err_read:
+#ifndef ENABLE_PMEM_DAX
 	close(xlog->fd);
+#else
+	pmemlog_close(xlog->plp);
+#endif
 err_open:
 	xlog_destroy(xlog);
 err:
@@ -1331,8 +1337,10 @@ xlog_tx_write(struct xlog *log)
 
 	if (!log->opts.no_compression &&
 	    obuf_size(&log->obuf) >= XLOG_TX_COMPRESS_THRESHOLD) {
+		say_warn("[DBG] zstd");
 		written = xlog_tx_write_zstd(log);
 	} else {
+		say_warn("[DBG] plain");
 		written = xlog_tx_write_plain(log);
 	}
 	ERROR_INJECT(ERRINJ_WAL_WRITE, {
@@ -1666,8 +1674,13 @@ xlog_cursor_ensure(struct xlog_cursor *cursor, size_t count)
 	if (ibuf_used(&cursor->rbuf) >= count)
 		return 0;
 	/* in-memory mode */
+#ifndef ENABLE_PMEM_DAX
 	if (cursor->fd < 0)
 		return 1;
+#else
+	if (cursor->plp == NULL)
+		return 1;
+#endif
 
 	size_t to_load = count - ibuf_used(&cursor->rbuf);
 	to_load += XLOG_READ_AHEAD;
@@ -2124,6 +2137,7 @@ xlog_cursor_activate(struct xlog_cursor *i, const char *name)
 	rc = xlog_cursor_ensure(i, XLOG_META_LEN_MAX);
 	if (rc == -1)
 		goto error;
+	say_warn("ALARM: file:%s i->rbuf.rpos=%p, i->rbuf.wpos=%p,", name, &i->rbuf.rpos, i->rbuf.wpos);
 	rc = xlog_meta_parse(&i->meta,
 			     (const char **)&i->rbuf.rpos,
 			     (const char *)i->rbuf.wpos);
@@ -2155,6 +2169,7 @@ xlog_cursor_activate_fd(struct xlog_cursor *i, int fd, const char *name)
 	return xlog_cursor_activate(i, name);
 }
 
+#ifdef ENABLE_PMEM_DAX
 int
 xlog_cursor_activate_pmem(struct xlog_cursor *i, PMEMlogpool *plp,
 			  const char *name)
@@ -2164,7 +2179,6 @@ xlog_cursor_activate_pmem(struct xlog_cursor *i, PMEMlogpool *plp,
 	return xlog_cursor_activate(i, name);
 }
 
-#ifdef ENABLE_PMEM_DAX
 static int
 xlog_cursor_open_pmem(struct xlog_cursor *i, const char *name)
 {
