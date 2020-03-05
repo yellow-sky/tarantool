@@ -299,7 +299,9 @@ whereScanNext(WhereScan * pScan)
 							pX = pTerm->pExpr;
 							enum field_type expr_type =
 								expr_cmp_mutual_type(pX);
-							if (!field_type1_contains_type2(expr_type, pScan->idx_type))
+							if (!field_type1_contains_type2(expr_type, pScan->idx_type) &&
+							    !(sql_type_is_numeric(expr_type) &&
+							      sql_type_is_numeric(pScan->idx_type)))
 								continue;
 							if (pScan->is_column_seen) {
 								Parse *pParse =
