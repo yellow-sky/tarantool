@@ -48,6 +48,7 @@
 struct pmemlog_bundle {
 	size_t len;
 	size_t offset;
+	size_t result;
 	void *dst;
 };
 

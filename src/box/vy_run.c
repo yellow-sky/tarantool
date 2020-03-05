@@ -915,6 +915,7 @@ vy_page_read(struct vy_page *page, const struct vy_page_info *page_info,
 	bundle.len = readen = page_info->size;
 	bundle.dst = data;
 	pmemlog_walk(run->plp, 0, xlog_pmem_fill_bundle, &bundle);
+	readen = bundle.result;
 #endif
 	ERROR_INJECT(ERRINJ_VYRUN_DATA_READ, {
 		readen = -1;

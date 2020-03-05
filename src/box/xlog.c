@@ -49,8 +49,13 @@ int
 xlog_pmem_fill_bundle(const void *buf, size_t log_len, void *bndl)
 {
 	struct pmemlog_bundle *bundle = (struct pmemlog_bundle *)bndl;
-	memcpy(bundle->dst, (char *)buf + log_len - bundle->offset,
-	       bundle->len);
+	if (log_len <= bundle->offset) {
+		bundle->result = 0;
+		return 0;
+	}
+	size_t to_read = MIN(log_len - bundle->offset, bundle->len);
+	memcpy(bundle->dst, (char *)buf + bundle->offset, to_read);
+	bundle->result = to_read;
 	return 0;
 }
 #endif /* ENABLE_PMEM_DAX */
@@ -235,7 +240,6 @@ xlog_meta_parse(struct xlog_meta *meta, const char **data,
 	const char *end = (const char *)memmem(*data, data_end - *data,
 					       "\n\n", 2);
 	
-	say_warn("ALARM: data=%p, len =%d data_end=%p, end=%p", *data, data_end - *data, data_end, end);
 	if (end == NULL)
 		return 1;
 	++end; /* include the trailing \n to simplify the checks */
@@ -464,11 +468,11 @@ xdir_open_cursor(struct xdir *dir, int64_t signature,
 	if (fd < 0) {
 #else
 	PMEMlogpool *plp;
-	int i = 0;
-again:
+	// int i = 0;
+// again:
 	plp = pmemlog_open(filename);
 	if (plp == NULL) {
-		if (errno == EAGAIN) { assert(i++<20); goto again;} /* Disaster FIXME */
+		// if (errno == EAGAIN) { assert(i++<20); goto again;} /* Disaster FIXME */
 #endif
 		diag_set(SystemError, "failed to open '%s' file", filename);
 		return -1;
@@ -1024,6 +1028,7 @@ no_eof:
 
 	/* Read and parse meta */
 	meta_len = sizeof(meta_buf);
+	/* FIXME rewrite to fill */
 	pmemlog_walk(xlog->plp, meta_len, xlog_read_pmemlog_meta, meta_buf);
 
 	rc = xlog_meta_parse(&xlog->meta, &meta, meta + meta_len);
@@ -1337,10 +1342,8 @@ xlog_tx_write(struct xlog *log)
 
 	if (!log->opts.no_compression &&
 	    obuf_size(&log->obuf) >= XLOG_TX_COMPRESS_THRESHOLD) {
-		say_warn("[DBG] zstd");
 		written = xlog_tx_write_zstd(log);
 	} else {
-		say_warn("[DBG] plain");
 		written = xlog_tx_write_plain(log);
 	}
 	ERROR_INJECT(ERRINJ_WAL_WRITE, {
@@ -1626,8 +1629,8 @@ xlog_close(struct xlog *l, bool reuse_fd)
 			say_syserror("%s: close() failed", l->filename);
 	}
 #else
-	(void)reuse_fd;
-	pmemlog_close(l->plp);
+	if (!reuse_fd)
+		pmemlog_close(l->plp);
 #endif
 
 	xlog_destroy(l);
@@ -1699,8 +1702,9 @@ xlog_cursor_ensure(struct xlog_cursor *cursor, size_t count)
 	struct pmemlog_bundle bundle;
 	bundle.offset = cursor->read_offset;
 	bundle.dst = dst;
-	bundle.len = readen = to_load;
+	bundle.len = to_load;
 	pmemlog_walk(cursor->plp, 0, xlog_pmem_fill_bundle, &bundle);
+	readen = bundle.result;
 #endif
 	struct errinj *inj = errinj(ERRINJ_XLOG_READ, ERRINJ_INT);
 	if (inj != NULL && inj->iparam >= 0 &&
@@ -2137,7 +2141,6 @@ xlog_cursor_activate(struct xlog_cursor *i, const char *name)
 	rc = xlog_cursor_ensure(i, XLOG_META_LEN_MAX);
 	if (rc == -1)
 		goto error;
-	say_warn("ALARM: file:%s i->rbuf.rpos=%p, i->rbuf.wpos=%p,", name, &i->rbuf.rpos, i->rbuf.wpos);
 	rc = xlog_meta_parse(&i->meta,
 			     (const char **)&i->rbuf.rpos,
 			     (const char *)i->rbuf.wpos);
@@ -2228,6 +2231,9 @@ xlog_cursor_openmem(struct xlog_cursor *i, const char *data, size_t size,
 {
 	memset(i, 0, sizeof(*i));
 	i->fd = -1;
+#ifdef ENABLE_PMEM_DAX
+	i->plp = NULL;
+#endif
 	ibuf_create(&i->rbuf, &cord()->slabc,
 		    XLOG_TX_AUTOCOMMIT_THRESHOLD << 1);
 
@@ -2271,8 +2277,7 @@ xlog_cursor_close(struct xlog_cursor *i, bool reuse_fd)
 	if (i->fd >= 0 && !reuse_fd)
 		close(i->fd);
 #else
-	(void)reuse_fd;
-	if (i->plp != NULL)
+	if (i->plp != NULL && !reuse_fd)
 		pmemlog_close(i->plp);
 #endif
 	assert(i->rbuf.slabc == &cord()->slabc);
