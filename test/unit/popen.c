@@ -16,6 +16,11 @@
 	POPEN_FLAG_SHELL		|	\
 	POPEN_FLAG_RESTORE_SIGNALS)
 
+/**
+ * A real return value of main_f(), see a comment in swim.c.
+ */
+static int test_result = 1;
+
 static int
 wait_exit(struct popen_handle *handle, int *state, int *exit_code)
 {
@@ -30,7 +35,7 @@ wait_exit(struct popen_handle *handle, int *state, int *exit_code)
 	return 0;
 }
 
-static int
+static void
 popen_write_exit(void)
 {
 	struct popen_handle *handle;
@@ -95,10 +100,10 @@ out_kill:
 
 out:
 	footer();
-	return check_plan();
+	check_plan();
 }
 
-static int
+static void
 popen_read_exit(void)
 {
 	struct popen_handle *handle;
@@ -152,10 +157,10 @@ out_kill:
 
 out:
 	footer();
-	return check_plan();
+	check_plan();
 }
 
-static int
+static void
 popen_kill(void)
 {
 	struct popen_handle *handle;
@@ -205,21 +210,24 @@ out_kill:
 
 out:
 	footer();
-	return check_plan();
+	check_plan();
 }
 
 static int
 main_f(va_list ap)
 {
-	int rc = 0;
+	plan(3);
+	header();
 
-	rc = popen_write_exit();
-	if (rc == 0)
-		rc = popen_read_exit();
-	if (rc == 0)
-		rc = popen_kill();
+	popen_write_exit();
+	popen_read_exit();
+	popen_kill();
 
 	ev_break(loop(), EVBREAK_ALL);
+
+	footer();
+	test_result = check_plan();
+
 	return 0;
 }
 
@@ -237,7 +245,7 @@ main(int argc, char *argv[])
 	if (!loop())
 		panic("%s", "can't init event loop");
 
-	struct fiber *test = fiber_new("coio_stat", main_f);
+	struct fiber *test = fiber_new("main", main_f);
 	fiber_wakeup(test);
 
 	ev_now_update(loop());
@@ -246,5 +254,5 @@ main(int argc, char *argv[])
 	fiber_free();
 	memory_free();
 
-	return 0;
+	return test_result;
 }
