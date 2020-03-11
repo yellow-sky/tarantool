@@ -523,7 +523,15 @@ setmetatable(box, {
      end
 })
 
+local function box_is_configured()
+    return ffi.C.box_is_configured()
+end
+
 local function load_cfg(cfg)
+    if box_is_configured() then
+        reload_cfg(cfg)
+        return
+    end
     cfg = upgrade_cfg(cfg, translate_cfg)
     cfg = prepare_cfg(cfg, default_cfg, template_cfg, modify_cfg)
     apply_default_cfg(cfg, default_cfg);
@@ -563,10 +571,6 @@ local function load_cfg(cfg)
     end
 end
 box.cfg = locked(load_cfg)
-
-local function box_is_configured()
-    return ffi.C.box_is_configured()
-end
 
 --
 -- box.execute is <box_load_and_execute> when box is not loaded,
