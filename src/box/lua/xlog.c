@@ -97,12 +97,6 @@ lbox_xlog_parse_body_kv(struct lua_State *L, int type, const char **beg, const c
 	uint32_t v = mp_decode_uint(beg);
 	if (iproto_type_is_dml(type) && iproto_key_name(v)) {
 		lbox_xlog_pushkey(L, iproto_key_name(v));
-	} else if (type == VY_INDEX_RUN_INFO && vy_run_info_key_name(v)) {
-		lbox_xlog_pushkey(L, vy_run_info_key_name(v));
-	} else if (type == VY_INDEX_PAGE_INFO && vy_page_info_key_name(v)) {
-		lbox_xlog_pushkey(L, vy_page_info_key_name(v));
-	} else if (type == VY_RUN_ROW_INDEX && vy_row_index_key_name(v)) {
-		lbox_xlog_pushkey(L, vy_row_index_key_name(v));
 	} else {
 		lua_pushinteger(L, v); /* unknown key */
 	}

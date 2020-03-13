@@ -218,13 +218,6 @@ enum iproto_type {
 	/** REGISTER request to leave anonymous replication. */
 	IPROTO_REGISTER = 70,
 
-	/** Vinyl run info stored in .index file */
-	VY_INDEX_RUN_INFO = 100,
-	/** Vinyl page info stored in .index file */
-	VY_INDEX_PAGE_INFO = 101,
-	/** Vinyl row index stored in .run file */
-	VY_RUN_ROW_INDEX = 102,
-
 	/** Non-final response type. */
 	IPROTO_CHUNK = 128,
 
@@ -254,16 +247,7 @@ iproto_type_name(uint32_t type)
 	if (type < IPROTO_TYPE_STAT_MAX)
 		return iproto_type_strs[type];
 
-	switch (type) {
-	case VY_INDEX_RUN_INFO:
-		return "RUNINFO";
-	case VY_INDEX_PAGE_INFO:
-		return "PAGEINFO";
-	case VY_RUN_ROW_INDEX:
-		return "ROWINDEX";
-	default:
-		return NULL;
-	}
+	return NULL;
 }
 
 /**
