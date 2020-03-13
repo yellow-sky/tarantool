@@ -197,7 +197,7 @@ perf_bootstrap:
   <<: *perf_only_definition
   stage: test
   tags:
-    - perf
+    - deploy
   script:
     - ${GITLAB_MAKE} perf_prepare
 
