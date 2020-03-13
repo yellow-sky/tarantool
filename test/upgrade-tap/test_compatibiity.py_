@@ -1,0 +1,99 @@
+import pytest
+import os
+import sys
+import yaml
+
+sys.path.append(os.path.abspath("../test-run/"))
+from lib.tarantool_server import TarantoolServer
+
+"""
+Testing plan:
+
+- install tarantool public release version (specified in parameters)
+  using packages
+- setup a cluster (what topology?) with Tarantool instances
+- generate data in cluster
+- install new version (specified in parameters) using packages
+- restart one instance
+- run specific functional checks (TBD) against this instance
+- restart the rest instance
+- upgrade schema on both instances
+- run specific functional checks (TBD) against both(?) instances
+"""
+
+@pytest.mark.parametrize(
+    "old_version,new_version",
+    [("1.10", "latest"),
+    ("2.2", "latest"),
+    ("2.3", "latest")])
+def test_compat(old_version, new_version):
+    print(old_version, new_version)
+
+    master = server
+    master_id = master.get_param('id')
+    master.admin("box.schema.user.grant('guest', 'replication')")
+
+    master.admin("space = box.schema.space.create('test', {id =  42})")
+    master.admin("index = space:create_index('primary', { type = 'tree'})")
+
+    master.admin('for k = 1, 9 do space:insert{k, k*k} end')
+
+    replica = TarantoolServer(server.ini)
+    replica.script = 'replication-py/replica.lua'
+    replica.vardir = server.vardir #os.path.join(server.vardir, 'replica')
+    replica.rpl_master = master
+    replica.deploy()
+    replica.admin('box.space.test:select()')
+
+    replica.restart()
+    replica.admin('box.space.test:select()')
+    replica.stop()
+    replica.cleanup()
+
+    print '-------------------------------------------------------------'
+    print 'replica test 2 (must be ok)'
+    print '-------------------------------------------------------------'
+
+    master.restart()
+    master.admin('for k = 10, 19 do box.space[42]:insert{k, k*k*k} end')
+    master.admin("for k = 20, 29 do box.space[42]:upsert({k}, {}) end")
+    lsn = master.get_lsn(master_id)
+
+    replica = TarantoolServer(server.ini)
+    replica.script = 'replication-py/replica.lua'
+    replica.vardir = server.vardir #os.path.join(server.vardir, 'replica')
+    replica.rpl_master = master
+    replica.deploy()
+
+    replica.admin('space = box.space.test');
+    replica.wait_lsn(master_id, lsn)
+    for i in range(1, 20):
+        replica.admin('space:get{%d}' % i)
+
+    replica.stop()
+    replica.cleanup()
+
+    server.stop()
+    replica = TarantoolServer(server.ini)
+    replica.script = 'replication-py/replica.lua'
+    replica.vardir = server.vardir
+    replica.rpl_master = master
+    replica.deploy(wait=False)
+
+    print 'waiting reconnect on JOIN...'
+    server.start()
+    replica.wait_until_started()
+    print 'ok'
+
+    replica.stop()
+    server.stop()
+
+    replica.start(wait=False)
+    server.start()
+    replica.wait_until_started()
+
+    replica.stop()
+    replica.cleanup()
+
+    server.stop()
+    server.deploy()
