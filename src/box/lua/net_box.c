@@ -39,7 +39,6 @@
 #include "box/lua/tuple.h" /* luamp_convert_tuple() / luamp_convert_key() */
 #include "box/xrow.h"
 #include "box/tuple.h"
-#include "box/execute.h"
 
 #include "lua/msgpack.h"
 #include "third_party/base64.h"
@@ -559,64 +558,6 @@ handle_error:
 	return 2;
 }
 
-static int
-netbox_encode_execute(lua_State *L)
-{
-	if (lua_gettop(L) < 5)
-		return luaL_error(L, "Usage: netbox.encode_execute(ibuf, "\
-				  "sync, query, parameters, options)");
-	struct mpstream stream;
-	size_t svp = netbox_prepare_request(L, &stream, IPROTO_EXECUTE);
-
-	mpstream_encode_map(&stream, 3);
-
-	if (lua_type(L, 3) == LUA_TNUMBER) {
-		uint32_t query_id = lua_tointeger(L, 3);
-		mpstream_encode_uint(&stream, IPROTO_STMT_ID);
-		mpstream_encode_uint(&stream, query_id);
-	} else {
-		size_t len;
-		const char *query = lua_tolstring(L, 3, &len);
-		mpstream_encode_uint(&stream, IPROTO_SQL_TEXT);
-		mpstream_encode_strn(&stream, query, len);
-	}
-
-	mpstream_encode_uint(&stream, IPROTO_SQL_BIND);
-	luamp_encode_tuple(L, cfg, &stream, 4);
-
-	mpstream_encode_uint(&stream, IPROTO_OPTIONS);
-	luamp_encode_tuple(L, cfg, &stream, 5);
-
-	netbox_encode_request(&stream, svp);
-	return 0;
-}
-
-static int
-netbox_encode_prepare(lua_State *L)
-{
-	if (lua_gettop(L) < 3)
-		return luaL_error(L, "Usage: netbox.encode_prepare(ibuf, "\
-				     "sync, query)");
-	struct mpstream stream;
-	size_t svp = netbox_prepare_request(L, &stream, IPROTO_PREPARE);
-
-	mpstream_encode_map(&stream, 1);
-
-	if (lua_type(L, 3) == LUA_TNUMBER) {
-		uint32_t query_id = lua_tointeger(L, 3);
-		mpstream_encode_uint(&stream, IPROTO_STMT_ID);
-		mpstream_encode_uint(&stream, query_id);
-	} else {
-		size_t len;
-		const char *query = lua_tolstring(L, 3, &len);
-		mpstream_encode_uint(&stream, IPROTO_SQL_TEXT);
-		mpstream_encode_strn(&stream, query, len);
-	};
-
-	netbox_encode_request(&stream, svp);
-	return 0;
-}
-
 /**
  * Decode IPROTO_DATA into tuples array.
  * @param L Lua stack to push result on.
@@ -670,220 +611,6 @@ netbox_decode_select(struct lua_State *L)
 	return 2;
 }
 
-/** Decode optional (i.e. may be present in response) metadata fields. */
-static void
-decode_metadata_optional(struct lua_State *L, const char **data,
-			 uint32_t map_size, const char *name, uint32_t name_len)
-{
-	/* 2 is default metadata map size (field name + field size). */
-	while (map_size-- > 2) {
-		uint32_t key = mp_decode_uint(data);
-		uint32_t len;
-		if (key == IPROTO_FIELD_COLL) {
-			const char *coll = mp_decode_str(data, &len);
-			lua_pushlstring(L, coll, len);
-			lua_setfield(L, -2, "collation");
-		} else if (key == IPROTO_FIELD_IS_NULLABLE) {
-			bool is_nullable = mp_decode_bool(data);
-			lua_pushboolean(L, is_nullable);
-			lua_setfield(L, -2, "is_nullable");
-		} else if (key == IPROTO_FIELD_SPAN) {
-			/*
-			 * There's an agreement: if span is not
-			 * presented in metadata (encoded as NIL),
-			 * then it is the same as name. It allows
-			 * avoid sending the same string twice.
-			 */
-			const char *span = NULL;
-			if (mp_typeof(**data) == MP_STR) {
-				span = mp_decode_str(data, &len);
-			} else {
-				assert(mp_typeof(**data) == MP_NIL);
-				mp_decode_nil(data);
-				span = name;
-				len = name_len;
-			}
-			lua_pushlstring(L, span, len);
-			lua_setfield(L, -2, "span");
-		} else {
-			assert(key == IPROTO_FIELD_IS_AUTOINCREMENT);
-			bool is_autoincrement = mp_decode_bool(data);
-			lua_pushboolean(L, is_autoincrement);
-			lua_setfield(L, -2, "is_autoincrement");
-		}
-	}
-}
-
-/**
- * Decode IPROTO_METADATA into array of maps.
- * @param L Lua stack to push result on.
- * @param data MessagePack.
- */
-static void
-netbox_decode_metadata(struct lua_State *L, const char **data)
-{
-	uint32_t count = mp_decode_array(data);
-	lua_createtable(L, count, 0);
-	for (uint32_t i = 0; i < count; ++i) {
-		uint32_t map_size = mp_decode_map(data);
-		assert(map_size >= 2 && map_size <= 6);
-		uint32_t key = mp_decode_uint(data);
-		assert(key == IPROTO_FIELD_NAME);
-		(void) key;
-		lua_createtable(L, 0, map_size);
-		uint32_t name_len, type_len;
-		const char *str = mp_decode_str(data, &name_len);
-		lua_pushlstring(L, str, name_len);
-		lua_setfield(L, -2, "name");
-		key = mp_decode_uint(data);
-		assert(key == IPROTO_FIELD_TYPE);
-		const char *type = mp_decode_str(data, &type_len);
-		lua_pushlstring(L, type, type_len);
-		lua_setfield(L, -2, "type");
-		decode_metadata_optional(L, data, map_size, str, name_len);
-		lua_rawseti(L, -2, i + 1);
-	}
-}
-
-/**
- * Decode IPROTO_SQL_INFO into map.
- * @param L Lua stack to push result on.
- * @param data MessagePack.
- */
-static void
-netbox_decode_sql_info(struct lua_State *L, const char **data)
-{
-	uint32_t map_size = mp_decode_map(data);
-	assert(map_size == 1 || map_size == 2);
-	lua_newtable(L);
-	/*
-	 * First element in data is SQL_INFO_ROW_COUNT.
-	 */
-	uint32_t key = mp_decode_uint(data);
-	assert(key == SQL_INFO_ROW_COUNT);
-	uint32_t row_count = mp_decode_uint(data);
-	lua_pushinteger(L, row_count);
-	lua_setfield(L, -2, sql_info_key_strs[SQL_INFO_ROW_COUNT]);
-	/*
-	 * If data have two elements then second is
-	 * SQL_INFO_AUTOINCREMENT_IDS.
-	 */
-	if (map_size == 2) {
-		key = mp_decode_uint(data);
-		assert(key == SQL_INFO_AUTOINCREMENT_IDS);
-		(void)key;
-		uint64_t count = mp_decode_array(data);
-		assert(count > 0);
-		lua_createtable(L, 0, count);
-		for (uint32_t j = 0; j < count; ++j) {
-			int64_t id = INT64_MIN;
-			mp_read_int64(data, &id);
-			luaL_pushint64(L, id);
-			lua_rawseti(L, -2, j + 1);
-		}
-		lua_setfield(L, -2,
-			     sql_info_key_strs[SQL_INFO_AUTOINCREMENT_IDS]);
-	}
-}
-
-static int
-netbox_decode_execute(struct lua_State *L)
-{
-	uint32_t ctypeid;
-	const char *data = *(const char **)luaL_checkcdata(L, 1, &ctypeid);
-	assert(mp_typeof(*data) == MP_MAP);
-	uint32_t map_size = mp_decode_map(&data);
-	int rows_index = 0, meta_index = 0, info_index = 0;
-	for (uint32_t i = 0; i < map_size; ++i) {
-		uint32_t key = mp_decode_uint(&data);
-		switch(key) {
-		case IPROTO_DATA:
-			netbox_decode_data(L, &data, tuple_format_runtime);
-			rows_index = i - map_size;
-			break;
-		case IPROTO_METADATA:
-			netbox_decode_metadata(L, &data);
-			meta_index = i - map_size;
-			break;
-		default:
-			assert(key == IPROTO_SQL_INFO);
-			netbox_decode_sql_info(L, &data);
-			info_index = i - map_size;
-			break;
-		}
-	}
-	if (info_index == 0) {
-		assert(meta_index != 0);
-		assert(rows_index != 0);
-		lua_createtable(L, 0, 2);
-		lua_pushvalue(L, meta_index - 1);
-		lua_setfield(L, -2, "metadata");
-		lua_pushvalue(L, rows_index - 1);
-		lua_setfield(L, -2, "rows");
-	} else {
-		assert(meta_index == 0);
-		assert(rows_index == 0);
-	}
-	*(const char **)luaL_pushcdata(L, ctypeid) = data;
-	return 2;
-}
-
-static int
-netbox_decode_prepare(struct lua_State *L)
-{
-	uint32_t ctypeid;
-	const char *data = *(const char **)luaL_checkcdata(L, 1, &ctypeid);
-	assert(mp_typeof(*data) == MP_MAP);
-	uint32_t map_size = mp_decode_map(&data);
-	int stmt_id_idx = 0, meta_idx = 0, bind_meta_idx = 0,
-	    bind_count_idx = 0;
-	uint32_t stmt_id = 0;
-	for (uint32_t i = 0; i < map_size; ++i) {
-		uint32_t key = mp_decode_uint(&data);
-		switch(key) {
-		case IPROTO_STMT_ID: {
-			stmt_id = mp_decode_uint(&data);
-			luaL_pushuint64(L, stmt_id);
-			stmt_id_idx = i - map_size;
-			break;
-		}
-		case IPROTO_METADATA: {
-			netbox_decode_metadata(L, &data);
-			meta_idx = i - map_size;
-			break;
-		}
-		case IPROTO_BIND_METADATA: {
-			netbox_decode_metadata(L, &data);
-			bind_meta_idx = i - map_size;
-			break;
-		}
-		default: {
-			assert(key == IPROTO_BIND_COUNT);
-			uint32_t bind_count = mp_decode_uint(&data);
-			luaL_pushuint64(L, bind_count);
-			bind_count_idx = i - map_size;
-			break;
-		}}
-	}
-	/* These fields must be present in response. */
-	assert(stmt_id_idx * bind_meta_idx * bind_count_idx != 0);
-	/* General meta is presented only in DQL responses. */
-	lua_createtable(L, 0, meta_idx != 0 ? 4 : 3);
-	lua_pushvalue(L, stmt_id_idx - 1);
-	lua_setfield(L, -2, "stmt_id");
-	lua_pushvalue(L, bind_count_idx - 1);
-	lua_setfield(L, -2, "param_count");
-	lua_pushvalue(L, bind_meta_idx - 1);
-	lua_setfield(L, -2, "params");
-	if (meta_idx != 0) {
-		lua_pushvalue(L, meta_idx - 1);
-		lua_setfield(L, -2, "metadata");
-	}
-
-	*(const char **)luaL_pushcdata(L, ctypeid) = data;
-	return 2;
-}
-
 int
 luaopen_net_box(struct lua_State *L)
 {
@@ -898,14 +625,10 @@ luaopen_net_box(struct lua_State *L)
 		{ "encode_delete",  netbox_encode_delete },
 		{ "encode_update",  netbox_encode_update },
 		{ "encode_upsert",  netbox_encode_upsert },
-		{ "encode_execute", netbox_encode_execute},
-		{ "encode_prepare", netbox_encode_prepare},
 		{ "encode_auth",    netbox_encode_auth },
 		{ "decode_greeting",netbox_decode_greeting },
 		{ "communicate",    netbox_communicate },
 		{ "decode_select",  netbox_decode_select },
-		{ "decode_execute", netbox_decode_execute },
-		{ "decode_prepare", netbox_decode_prepare },
 		{ NULL, NULL}
 	};
 	/* luaL_register_module polutes _G */

@@ -44,7 +44,6 @@
 #include "info/info.h"
 #include "box/gc.h"
 #include "box/engine.h"
-#include "box/sql_stmt_cache.h"
 #include "main.h"
 #include "version.h"
 #include "box/box.h"
@@ -467,29 +466,6 @@ lbox_info_gc(struct lua_State *L)
 	return 1;
 }
 
-static int
-lbox_info_sql_call(struct lua_State *L)
-{
-	struct info_handler h;
-	luaT_info_handler_create(&h, L);
-	sql_stmt_cache_stat(&h);
-
-	return 1;
-}
-
-static int
-lbox_info_sql(struct lua_State *L)
-{
-	lua_newtable(L);
-	lua_newtable(L); /* metatable */
-	lua_pushstring(L, "__call");
-	lua_pushcfunction(L, lbox_info_sql_call);
-	lua_settable(L, -3);
-
-	lua_setmetatable(L, -2);
-	return 1;
-}
-
 static const struct luaL_Reg lbox_info_dynamic_meta[] = {
 	{"id", lbox_info_id},
 	{"uuid", lbox_info_uuid},
@@ -504,7 +480,6 @@ static const struct luaL_Reg lbox_info_dynamic_meta[] = {
 	{"cluster", lbox_info_cluster},
 	{"memory", lbox_info_memory},
 	{"gc", lbox_info_gc},
-	{"sql", lbox_info_sql},
 	{NULL, NULL}
 };
 

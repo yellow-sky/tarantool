@@ -163,8 +163,6 @@ struct space {
 	struct rlist before_replace;
 	/** Triggers fired after space_replace() -- see txn_commit_stmt(). */
 	struct rlist on_replace;
-	/** SQL Trigger list. */
-	struct sql_trigger *sql_triggers;
 	/**
 	 * The number of *enabled* indexes in the space.
 	 *
@@ -213,32 +211,6 @@ struct space {
 	 * fields is guaranteed by another unique index.
 	 */
 	void *check_unique_constraint_map;
-	/**
-	 * List of check constraints linked with
-	 * ck_constraint::link.
-	 */
-	struct rlist ck_constraint;
-	/** Trigger that performs ck constraint validation. */
-	struct trigger *ck_constraint_trigger;
-	/**
-	 * Lists of foreign key constraints. In SQL terms child
-	 * space is the "from" table i.e. the table that contains
-	 * the REFERENCES clause. Parent space is "to" table, in
-	 * other words the table that is named in the REFERENCES
-	 * clause.
-	 */
-	struct rlist parent_fk_constraint;
-	struct rlist child_fk_constraint;
-	/**
-	 * Mask indicates which fields are involved in foreign
-	 * key constraint checking routine. Includes fields
-	 * of parent constraints as well as child ones.
-	 */
-	uint64_t fk_constraint_mask;
-	/**
-	 * Hash table with constraint identifiers hashed by name.
-	 */
-	struct mh_strnptr_t *constraint_ids;
 };
 
 /** Initialize a base space instance. */
@@ -285,17 +257,6 @@ space_index(struct space *space, uint32_t id)
 	if (id <= space->index_id_max)
 		return space->index_map[id];
 	return NULL;
-}
-
-/**
- * Return true if the unique constraint must be checked for
- * the index with the given id before inserting a tuple into
- * the space.
- */
-static inline bool
-space_needs_check_unique_constraint(struct space *space, uint32_t index_id)
-{
-	return bit_test(space->check_unique_constraint_map, index_id);
 }
 
 /**
@@ -432,10 +393,8 @@ static inline int
 space_build_index(struct space *src_space, struct space *new_space,
 		  struct index *new_index)
 {
-	bool check = space_needs_check_unique_constraint(new_space,
-							 new_index->def->iid);
 	return src_space->vtab->build_index(src_space, new_index,
-					    new_space->format, check);
+					    new_space->format, true);
 }
 
 static inline void

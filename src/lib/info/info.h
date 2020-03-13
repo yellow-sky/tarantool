@@ -32,6 +32,7 @@
  */
 
 #include <stdint.h>
+#include "box/index.h"
 
 /**
  * @file

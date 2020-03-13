@@ -228,7 +228,6 @@ txn_begin(void)
 	txn->signature = -1;
 	txn->engine = NULL;
 	txn->engine_tx = NULL;
-	txn->fk_deferred_count = 0;
 	rlist_create(&txn->savepoints);
 	txn->fiber = NULL;
 	fiber_set_txn(fiber(), txn);
@@ -541,15 +540,6 @@ txn_prepare(struct txn *txn)
 		return -1;
 	}
 	/*
-	 * If transaction has been started in SQL, deferred
-	 * foreign key constraints must not be violated.
-	 * If not so, just rollback transaction.
-	 */
-	if (txn->fk_deferred_count != 0) {
-		diag_set(ClientError, ER_FOREIGN_KEY_CONSTRAINT);
-		return -1;
-	}
-	/*
 	 * Perform transaction conflict resolution. Engine == NULL when
 	 * we have a bunch of IPROTO_NOP statements.
 	 */
@@ -756,13 +746,7 @@ txn_savepoint_new(struct txn *txn, const char *name)
 	}
 	svp->stmt = stailq_last(&txn->stmts);
 	svp->in_sub_stmt = txn->in_sub_stmt;
-	svp->fk_deferred_count = txn->fk_deferred_count;
 	if (name != NULL) {
-		/*
-		 * If savepoint with given name already exists,
-		 * erase it from the list. This has to be done
-		 * in accordance with ANSI SQL compliance.
-		 */
 		struct txn_savepoint *old_svp =
 			txn_savepoint_by_name(txn, name);
 		if (old_svp != NULL)
@@ -824,7 +808,6 @@ box_txn_rollback_to_savepoint(box_txn_savepoint_t *svp)
 	/* Discard from list all newer savepoints. */
 	RLIST_HEAD(discard);
 	rlist_cut_before(&discard, &txn->savepoints, &svp->link);
-	txn->fk_deferred_count = svp->fk_deferred_count;
 	return 0;
 }
 

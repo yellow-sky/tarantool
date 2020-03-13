@@ -36,7 +36,6 @@
 #include "user.h"
 #include "error.h"
 #include "tt_static.h"
-#include "sql_stmt_cache.h"
 
 const char *session_type_strs[] = {
 	"background",
@@ -140,9 +139,6 @@ session_create(enum session_type type)
 	session->id = sid_max();
 	memset(&session->meta, 0, sizeof(session->meta));
 	session_set_type(session, type);
-	session->sql_flags = default_flags;
-	session->sql_default_engine = SQL_STORAGE_ENGINE_MEMTX;
-	session->sql_stmts = NULL;
 
 	/* For on_connect triggers. */
 	credentials_create(&session->credentials, guest_user);
@@ -178,38 +174,6 @@ session_create_on_demand()
 	fiber_set_session(fiber(), s);
 	fiber_set_user(fiber(), &s->credentials);
 	return s;
-}
-
-bool
-session_check_stmt_id(struct session *session, uint32_t stmt_id)
-{
-	if (session->sql_stmts == NULL)
-		return false;
-	mh_int_t i = mh_i32ptr_find(session->sql_stmts, stmt_id, NULL);
-	return i != mh_end(session->sql_stmts);
-}
-
-int
-session_add_stmt_id(struct session *session, uint32_t id)
-{
-	if (session->sql_stmts == NULL) {
-		session->sql_stmts = mh_i32ptr_new();
-		if (session->sql_stmts == NULL) {
-			diag_set(OutOfMemory, 0, "mh_i32ptr_new",
-				 "session stmt hash");
-			return -1;
-		}
-	}
-	return sql_session_stmt_hash_add_id(session->sql_stmts, id);
-}
-
-void
-session_remove_stmt_id(struct session *session, uint32_t stmt_id)
-{
-	assert(session->sql_stmts != NULL);
-	mh_int_t i = mh_i32ptr_find(session->sql_stmts, stmt_id, NULL);
-	assert(i != mh_end(session->sql_stmts));
-	mh_i32ptr_del(session->sql_stmts, i, NULL);
 }
 
 /**
@@ -261,7 +225,6 @@ session_destroy(struct session *session)
 	struct mh_i64ptr_node_t node = { session->id, NULL };
 	mh_i64ptr_remove(session_registry, &node, NULL);
 	credentials_destroy(&session->credentials);
-	sql_session_stmt_hash_erase(session->sql_stmts);
 	mempool_free(&session_pool, session);
 }
 

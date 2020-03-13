@@ -123,9 +123,7 @@ const uint64_t iproto_body_key_map[IPROTO_TYPE_STAT_MAX] = {
 	0,                                                     /* EVAL */
 	bit(SPACE_ID) | bit(OPS) | bit(TUPLE),                 /* UPSERT */
 	0,                                                     /* CALL */
-	0,                                                     /* EXECUTE */
 	0,                                                     /* NOP */
-	0,                                                     /* PREPARE */
 };
 #undef bit
 
@@ -194,9 +192,6 @@ const char *iproto_key_strs[IPROTO_KEY_MAX] = {
 	NULL,               /* 0x3d */
 	NULL,               /* 0x3e */
 	NULL,               /* 0x3f */
-	"SQL text",         /* 0x40 */
-	"SQL bind",         /* 0x41 */
-	"SQL info",         /* 0x42 */
 	"stmt id",          /* 0x43 */
 };
 

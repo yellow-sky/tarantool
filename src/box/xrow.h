@@ -557,38 +557,6 @@ int
 iproto_reply_error(struct obuf *out, const struct error *e, uint64_t sync,
 		   uint32_t schema_version);
 
-/** EXECUTE/PREPARE request. */
-struct sql_request {
-	/** SQL statement text. */
-	const char *sql_text;
-	/** MessagePack array of parameters. */
-	const char *bind;
-	/** ID of prepared statement. In this case @sql_text == NULL. */
-	const char *stmt_id;
-};
-
-/**
- * Parse the EXECUTE request.
- * @param row Encoded data.
- * @param[out] request Request to decode to.
- *
- * @retval  0 Sucess.
- * @retval -1 Format or memory error.
- */
-int
-xrow_decode_sql(const struct xrow_header *row, struct sql_request *request);
-
-/**
- * Write the SQL header.
- * @param buf Out buffer.
- * @param svp Savepoint of the header beginning.
- * @param sync Request sync.
- * @param schema_version Schema version.
- */
-void
-iproto_reply_sql(struct obuf *buf, struct obuf_svp *svp, uint64_t sync,
-		 uint32_t schema_version);
-
 /**
  * Write an IPROTO_CHUNK header from a specified position in a
  * buffer.

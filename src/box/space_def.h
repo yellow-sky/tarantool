@@ -52,8 +52,6 @@ struct space_opts {
 	 * - it is empty at server start
 	 * - changes are not written to WAL
 	 * - changes are not part of a snapshot
-         * - in SQL: space_def memory is allocated on region and
-         *   does not require manual release.
 	 */
 	bool is_temporary;
 	/**
@@ -61,14 +59,6 @@ struct space_opts {
 	 * its format might be re-used.
 	 */
 	bool is_ephemeral;
-	/**
-	 * If the space is a view, then it can't feature any
-	 * indexes, and must have SQL statement. Moreover,
-	 * this flag can't be changed after space creation.
-	 */
-	bool is_view;
-	/** SQL statement that produced this space. */
-	char *sql;
 };
 
 extern const struct space_opts space_opts_default;
@@ -113,8 +103,6 @@ struct space_def {
 	struct field_def *fields;
 	/** Length of @a fields. */
 	uint32_t field_count;
-	/** Number of SQL views which refer to this space. */
-	uint32_t view_ref_count;
 	struct space_opts opts;
 	char name[0];
 };

@@ -302,11 +302,6 @@ n
 ts:drop()
 
 --
--- Try insert incorrect sql in index and space opts.
---
-box.space._space:replace{600, 1, 'test', 'memtx', 0, { sql = 100 }, {}}
-
---
 -- gh-2914: Allow any space name which consists of printable characters
 --
 identifier = require("identifier")

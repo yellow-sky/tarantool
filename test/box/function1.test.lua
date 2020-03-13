@@ -11,7 +11,6 @@ id = box.func["function1"].id
 function setmap(tab) return setmetatable(tab, { __serialize = 'map' }) end
 datetime = os.date("%Y-%m-%d %H:%M:%S")
 box.space._func:replace{id, 1, 'function1', 0, 'LUA', '', 'procedure', {}, 'any', 'none', 'none', false, false, true, {"LUA"}, setmap({}), '', datetime, datetime}
-box.space._func:replace{id, 1, 'function1', 0, 'LUA', '', 'function', {}, 'any', 'none', 'reads', false, false, true, {"LUA"}, setmap({}), '', datetime, datetime}
 box.space._func:replace{id, 1, 'function1', 0, 'LUA', '', 'function', {}, 'any', 'none', 'none', false, false, false, {"LUA"}, setmap({}), '', datetime, datetime}
 box.space._func:replace{id, 1, 'function1', 0, 'LUA', '', 'function', {}, 'data', 'none', 'none', false, false, true, {"LUA"}, setmap({}), '', datetime, datetime}
 box.space._func:replace{id, 1, 'function1', 0, 'LUA', '', 'function', {}, 'any', 'none', 'none', false, false, true, {"LUA", "C"}, setmap({}), '', datetime, datetime}
@@ -128,69 +127,6 @@ identifier.run_test(
 test_run:cmd("setopt delimiter ''");
 c:close()
 
---
--- gh-2233: Invoke Lua functions created outside SQL.
---
-box.schema.func.create('WAITFOR', {language = 'SQL_BUILTIN', \
-	param_list = {'integer'}, returns = 'integer',exports = {'SQL'}})
-
-test_run:cmd("setopt delimiter ';'")
-box.schema.func.create("function1.divide", {language = 'C', returns = 'number',
-					    is_deterministic = true,
-					    exports = {'LUA'}})
-test_run:cmd("setopt delimiter ''");
-box.execute('SELECT "function1.divide"()')
-box.func["function1.divide"]:drop()
-test_run:cmd("setopt delimiter ';'")
-box.schema.func.create("function1.divide", {language = 'C', returns = 'number',
-					    is_deterministic = true,
-					    exports = {'LUA', 'SQL'}})
-test_run:cmd("setopt delimiter ''");
-box.execute('SELECT "function1.divide"()')
-box.execute('SELECT "function1.divide"(6)')
-box.execute('SELECT "function1.divide"(6, 3)')
-box.func["function1.divide"]:drop()
-test_run:cmd("setopt delimiter ';'")
-box.schema.func.create("function1.divide", {language = 'C', returns = 'number',
-					    param_list = {'number', 'number'},
-					    is_deterministic = true,
-					    exports = {'LUA', 'SQL'}})
-test_run:cmd("setopt delimiter ''");
-box.execute('SELECT "function1.divide"()')
-box.execute('SELECT "function1.divide"(6)')
-box.execute('SELECT "function1.divide"(6, 3, 3)')
-box.execute('SELECT "function1.divide"(6, 3)')
-box.execute('SELECT "function1.divide"(5, 2)')
-box.func["function1.divide"]:drop()
-
-function SUMMARIZE(a, b) return a + b end
-test_run:cmd("setopt delimiter ';'")
-box.schema.func.create("SUMMARIZE", {language = 'LUA', returns = 'number',
-				     is_deterministic = true,
-				     param_list = {'number', 'number'},
-				     exports = {'LUA', 'SQL'}})
-test_run:cmd("setopt delimiter ''");
-box.execute('SELECT summarize(1, 2)')
-box.func.SUMMARIZE:drop()
-
-test_run:cmd("setopt delimiter ';'")
-box.schema.func.create("SUMMARIZE", {language = 'LUA', returns = 'number',
-				     body = 'function (a, b) return a + b end',
-				     is_deterministic = true,
-				     param_list = {'number', 'number'},
-				     exports = {'LUA', 'SQL'}})
-test_run:cmd("setopt delimiter ''");
-box.execute('SELECT summarize(1, 2)')
-box.func.SUMMARIZE:drop()
-
---
--- gh-4113: Valid method to use Lua from SQL
---
-box.execute('SELECT lua(\'return 1 + 1\')')
-box.execute('SELECT lua(\'return box.cfg\')')
-box.execute('SELECT lua(\'return box.cfg()\')')
-box.execute('SELECT lua(\'return box.cfg.memtx_memory\')')
-
 -- Test registered functions interface.
 function divide(a, b) return a / b end
 box.schema.func.create("divide", {comment = 'Divide two values'})
@@ -255,18 +191,6 @@ conn:close()
 box.schema.user.revoke('guest', 'execute', 'function', 'secret_leak')
 box.schema.func.drop('secret_leak')
 box.schema.func.drop('secret')
-
--- UDF corner cases for SQL: no value returned, too many values returned
-box.execute("SELECT LUA('a = 1 + 1')")
-box.execute("SELECT LUA('return 1, 2')")
-
-box.schema.func.create('function1', {language = "C", exports = {'LUA', 'SQL'}})
-box.execute("SELECT \"function1\"()")
-box.schema.func.drop("function1")
-
-box.schema.func.create('function1.multireturn', {language = "C", exports = {'LUA', 'SQL'}})
-box.execute("SELECT \"function1.multireturn\"()")
-box.schema.func.drop("function1.multireturn")
 
 --
 -- gh-4182: Introduce persistent Lua functions.
@@ -346,35 +270,6 @@ box.begin() box.space._func:delete{f.id} f = box.func.test box.rollback()
 f == nil
 box.func.test ~= nil
 box.func.test:drop()
-
--- Check SQL builtins
-test_run:cmd("setopt delimiter ';'")
-sql_builtin_list = {
-	"TRIM", "TYPEOF", "PRINTF", "UNICODE", "CHAR", "HEX", "VERSION",
-	"QUOTE", "REPLACE", "SUBSTR", "GROUP_CONCAT", "JULIANDAY", "DATE",
-	"TIME", "DATETIME", "STRFTIME", "CURRENT_TIME", "CURRENT_TIMESTAMP",
-	"CURRENT_DATE", "LENGTH", "POSITION", "ROUND", "UPPER", "LOWER",
-	"IFNULL", "RANDOM", "CEIL", "CEILING", "CHARACTER_LENGTH",
-	"CHAR_LENGTH", "FLOOR", "MOD", "OCTET_LENGTH", "ROW_COUNT", "COUNT",
-	"LIKE", "ABS", "EXP", "LN", "POWER", "SQRT", "SUM", "TOTAL", "AVG",
-	"RANDOMBLOB", "NULLIF", "ZEROBLOB", "MIN", "MAX", "COALESCE", "EVERY",
-	"EXISTS", "EXTRACT", "SOME", "GREATER", "LESSER", "SOUNDEX",
-	"LIKELIHOOD", "LIKELY", "UNLIKELY", "_sql_stat_get", "_sql_stat_push",
-	"_sql_stat_init", "GREATEST", "LEAST"
-}
-test_run:cmd("setopt delimiter ''");
-ok = true
-for _, v in pairs(sql_builtin_list) do ok = ok and (box.space._func.index.name:get(v) ~= nil) end
-ok == true
-
-box.func.LUA:call({"return 1 + 1"})
-
-box.schema.user.grant('guest', 'execute', 'function', 'SUM')
-c = net.connect(box.cfg.listen)
-c:call("SUM")
-c:close()
-box.schema.user.revoke('guest', 'execute', 'function', 'SUM')
-box.schema.func.drop("SUM")
 
 -- Introduce function options
 box.schema.func.create('test', {body = "function(tuple) return tuple end", is_deterministic = true, opts = {is_multikey = true}})

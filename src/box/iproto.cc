@@ -49,7 +49,6 @@
 #include "memory.h"
 #include "random.h"
 
-#include "bind.h"
 #include "port.h"
 #include "box.h"
 #include "call.h"
@@ -60,7 +59,6 @@
 #include "replication.h" /* instance_uuid */
 #include "iproto_constants.h"
 #include "rmean.h"
-#include "execute.h"
 #include "errinj.h"
 #include "tt_static.h"
 
@@ -178,8 +176,6 @@ struct iproto_msg
 		struct call_request call;
 		/** Authentication request. */
 		struct auth_request auth;
-		/* SQL request, if this is the EXECUTE/PREPARE request. */
-		struct sql_request sql;
 		/** In case of iproto parse error, saved diagnostics. */
 		struct diag diag;
 	};
@@ -1147,9 +1143,6 @@ static void
 tx_process_select(struct cmsg *msg);
 
 static void
-tx_process_sql(struct cmsg *msg);
-
-static void
 tx_reply_error(struct iproto_msg *msg);
 
 static void
@@ -1190,11 +1183,6 @@ static const struct cmsg_hop process1_route[] = {
 	{ net_send_msg, NULL },
 };
 
-static const struct cmsg_hop sql_route[] = {
-	{ tx_process_sql, &net_pipe },
-	{ net_send_msg, NULL },
-};
-
 static const struct cmsg_hop *dml_route[IPROTO_TYPE_STAT_MAX] = {
 	NULL,                                   /* IPROTO_OK */
 	select_route,                           /* IPROTO_SELECT */
@@ -1207,9 +1195,7 @@ static const struct cmsg_hop *dml_route[IPROTO_TYPE_STAT_MAX] = {
 	call_route,                             /* IPROTO_EVAL */
 	process1_route,                         /* IPROTO_UPSERT */
 	call_route,                             /* IPROTO_CALL */
-	sql_route,                              /* IPROTO_EXECUTE */
 	NULL,                                   /* IPROTO_NOP */
-	sql_route,                              /* IPROTO_PREPARE */
 };
 
 static const struct cmsg_hop join_route[] = {
@@ -1263,12 +1249,6 @@ iproto_msg_decode(struct iproto_msg *msg, const char **pos, const char *reqend,
 		if (xrow_decode_call(&msg->header, &msg->call))
 			goto error;
 		cmsg_init(&msg->base, call_route);
-		break;
-	case IPROTO_EXECUTE:
-	case IPROTO_PREPARE:
-		if (xrow_decode_sql(&msg->header, &msg->sql) != 0)
-			goto error;
-		cmsg_init(&msg->base, sql_route);
 		break;
 	case IPROTO_PING:
 		cmsg_init(&msg->base, misc_route);
@@ -1709,98 +1689,6 @@ error:
 	tx_reply_error(msg);
 }
 
-static void
-tx_process_sql(struct cmsg *m)
-{
-	struct iproto_msg *msg = tx_accept_msg(m);
-	struct obuf *out;
-	struct port port;
-	struct sql_bind *bind = NULL;
-	int bind_count = 0;
-	const char *sql;
-	uint32_t len;
-	bool is_unprepare = false;
-
-	if (tx_check_schema(msg->header.schema_version))
-		goto error;
-	assert(msg->header.type == IPROTO_EXECUTE ||
-	       msg->header.type == IPROTO_PREPARE);
-	tx_inject_delay();
-	if (msg->sql.bind != NULL) {
-		bind_count = sql_bind_list_decode(msg->sql.bind, &bind);
-		if (bind_count < 0)
-			goto error;
-	}
-	/*
-	 * There are four options:
-	 * 1. Prepare SQL query (IPROTO_PREPARE + SQL string);
-	 * 2. Unprepare SQL query (IPROTO_PREPARE + stmt id);
-	 * 3. Execute SQL query (IPROTO_EXECUTE + SQL string);
-	 * 4. Execute prepared query (IPROTO_EXECUTE + stmt id).
-	 */
-	if (msg->header.type == IPROTO_EXECUTE) {
-		if (msg->sql.sql_text != NULL) {
-			assert(msg->sql.stmt_id == NULL);
-			sql = msg->sql.sql_text;
-			sql = mp_decode_str(&sql, &len);
-			if (sql_prepare_and_execute(sql, len, bind, bind_count,
-						    &port, &fiber()->gc) != 0)
-				goto error;
-		} else {
-			assert(msg->sql.sql_text == NULL);
-			assert(msg->sql.stmt_id != NULL);
-			sql = msg->sql.stmt_id;
-			uint32_t stmt_id = mp_decode_uint(&sql);
-			if (sql_execute_prepared(stmt_id, bind, bind_count,
-						 &port, &fiber()->gc) != 0)
-				goto error;
-		}
-	} else {
-		/* IPROTO_PREPARE */
-		if (msg->sql.sql_text != NULL) {
-			assert(msg->sql.stmt_id == NULL);
-			sql = msg->sql.sql_text;
-			sql = mp_decode_str(&sql, &len);
-			if (sql_prepare(sql, len, &port) != 0)
-				goto error;
-		} else {
-			/* UNPREPARE */
-			assert(msg->sql.sql_text == NULL);
-			assert(msg->sql.stmt_id != NULL);
-			sql = msg->sql.stmt_id;
-			uint32_t stmt_id = mp_decode_uint(&sql);
-			if (sql_unprepare(stmt_id) != 0)
-				goto error;
-			is_unprepare = true;
-		}
-	}
-
-	/*
-	 * Take an obuf only after execute(). Else the buffer can
-	 * become out of date during yield.
-	 */
-	out = msg->connection->tx.p_obuf;
-	struct obuf_svp header_svp;
-	/* Prepare memory for the iproto header. */
-	if (iproto_prepare_header(out, &header_svp, IPROTO_HEADER_LEN) != 0) {
-		port_destroy(&port);
-		goto error;
-	}
-	/* Nothing to dump in case of UNPREPARE request. */
-	if (!is_unprepare) {
-		if (port_dump_msgpack(&port, out) != 0) {
-			port_destroy(&port);
-			obuf_rollback_to_svp(out, &header_svp);
-			goto error;
-		}
-		port_destroy(&port);
-	}
-	iproto_reply_sql(out, &header_svp, msg->header.sync, schema_version);
-	iproto_wpos_create(&msg->wpos, out);
-	return;
-error:
-	tx_reply_error(msg);
-}
 
 static void
 tx_process_replication(struct cmsg *m)

@@ -386,10 +386,6 @@ restore:
 static struct func *
 func_c_new(struct func_def *def);
 
-/** Construct a SQL builtin function object. */
-extern struct func *
-func_sql_builtin_new(struct func_def *def);
-
 struct func *
 func_new(struct func_def *def)
 {
@@ -400,9 +396,6 @@ func_new(struct func_def *def)
 		break;
 	case FUNC_LANGUAGE_LUA:
 		func = func_lua_new(def);
-		break;
-	case FUNC_LANGUAGE_SQL_BUILTIN:
-		func = func_sql_builtin_new(def);
 		break;
 	default:
 		unreachable();

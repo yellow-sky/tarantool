@@ -44,7 +44,6 @@
 #include "xrow.h"
 #include "iproto_constants.h"
 #include "schema.h"
-#include "ck_constraint.h"
 #include "assoc.h"
 #include "constraint_id.h"
 
@@ -176,9 +175,6 @@ space_create(struct space *space, struct engine *engine,
 				index_def->iid);
 	}
 	space_fill_index_map(space);
-	rlist_create(&space->parent_fk_constraint);
-	rlist_create(&space->child_fk_constraint);
-	rlist_create(&space->ck_constraint);
 
 	/*
 	 * Check if there are unique indexes that are contained
@@ -203,12 +199,6 @@ space_create(struct space *space, struct engine *engine,
 				break;
 			}
 		}
-	}
-	space->constraint_ids = mh_strnptr_new();
-	if (space->constraint_ids == NULL) {
-		diag_set(OutOfMemory, sizeof(*space->constraint_ids), "malloc",
-			 "constraint_ids");
-		goto fail;
 	}
 	return 0;
 
@@ -252,7 +242,6 @@ space_new_ephemeral(struct space_def *def, struct rlist *key_list)
 void
 space_delete(struct space *space)
 {
-	assert(space->ck_constraint_trigger == NULL);
 	for (uint32_t j = 0; j <= space->index_id_max; j++) {
 		struct index *index = space->index_map[j];
 		if (index != NULL)
@@ -265,17 +254,6 @@ space_delete(struct space *space)
 	trigger_destroy(&space->before_replace);
 	trigger_destroy(&space->on_replace);
 	space_def_delete(space->def);
-	/*
-	 * SQL triggers and constraints should be deleted with
-	 * on_replace_dd_ triggers on deletion from corresponding
-	 * system space.
-	 */
-	assert(mh_size(space->constraint_ids) == 0);
-	mh_strnptr_delete(space->constraint_ids);
-	assert(space->sql_triggers == NULL);
-	assert(rlist_empty(&space->parent_fk_constraint));
-	assert(rlist_empty(&space->child_fk_constraint));
-	assert(rlist_empty(&space->ck_constraint));
 	space->vtab->destroy(space);
 }
 
@@ -594,77 +572,6 @@ space_execute_dml(struct space *space, struct txn *txn,
 		*result = NULL;
 	}
 	return 0;
-}
-
-int
-space_add_ck_constraint(struct space *space, struct ck_constraint *ck)
-{
-	rlist_add_entry(&space->ck_constraint, ck, link);
-	if (space->ck_constraint_trigger == NULL) {
-		struct trigger *ck_trigger =
-			(struct trigger *) malloc(sizeof(*ck_trigger));
-		if (ck_trigger == NULL) {
-			diag_set(OutOfMemory, sizeof(*ck_trigger), "malloc",
-				 "ck_trigger");
-			return -1;
-		}
-		trigger_create(ck_trigger, ck_constraint_on_replace_trigger,
-			       NULL, (trigger_f0) free);
-		trigger_add(&space->on_replace, ck_trigger);
-		space->ck_constraint_trigger = ck_trigger;
-	}
-	return 0;
-}
-
-void
-space_remove_ck_constraint(struct space *space, struct ck_constraint *ck)
-{
-	rlist_del_entry(ck, link);
-	if (rlist_empty(&space->ck_constraint)) {
-		struct trigger *ck_trigger = space->ck_constraint_trigger;
-		trigger_clear(ck_trigger);
-		ck_trigger->destroy(ck_trigger);
-		space->ck_constraint_trigger = NULL;
-	}
-}
-
-struct constraint_id *
-space_find_constraint_id(struct space *space, const char *name)
-{
-	struct mh_strnptr_t *ids = space->constraint_ids;
-	uint32_t len = strlen(name);
-	mh_int_t pos = mh_strnptr_find_inp(ids, name, len);
-	if (pos == mh_end(ids))
-		return NULL;
-	return (struct constraint_id *) mh_strnptr_node(ids, pos)->val;
-}
-
-int
-space_add_constraint_id(struct space *space, struct constraint_id *id)
-{
-	assert(space_find_constraint_id(space, id->name) == NULL);
-	struct mh_strnptr_t *ids = space->constraint_ids;
-	uint32_t len = strlen(id->name);
-	uint32_t hash = mh_strn_hash(id->name, len);
-	const struct mh_strnptr_node_t name_node = {id->name, len, hash, id};
-	if (mh_strnptr_put(ids, &name_node, NULL, NULL) == mh_end(ids)) {
-		diag_set(OutOfMemory, sizeof(name_node), "malloc", "node");
-		return -1;
-	}
-	return 0;
-}
-
-struct constraint_id *
-space_pop_constraint_id(struct space *space, const char *name)
-{
-	struct mh_strnptr_t *ids = space->constraint_ids;
-	uint32_t len = strlen(name);
-	mh_int_t pos = mh_strnptr_find_inp(ids, name, len);
-	assert(pos != mh_end(ids));
-	struct constraint_id *id = (struct constraint_id *)
-		mh_strnptr_node(ids, pos)->val;
-	mh_strnptr_del(ids, pos, NULL);
-	return id;
 }
 
 /* {{{ Virtual method stubs */

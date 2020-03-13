@@ -41,7 +41,6 @@
  * type list is used by setting iterators.
  */
 enum session_setting_type {
-	SESSION_SETTING_SQL,
 	session_setting_type_MAX,
 };
 

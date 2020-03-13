@@ -73,7 +73,6 @@ t
   - on_commit
   - on_rollback
   - once
-  - prepare
   - priv
   - rollback
   - rollback_to_savepoint
@@ -87,7 +86,6 @@ t
   - space
   - stat
   - tuple
-  - unprepare
 ...
 t = nil
 ---
@@ -323,7 +321,6 @@ t;
   - EVAL
   - CALL
   - ERROR
-  - PREPARE
   - REPLACE
   - UPSERT
   - AUTH
@@ -580,61 +577,37 @@ t;
   152: box.error.NO_SUCH_FIELD_NAME_IN_SPACE
   153: box.error.TRANSACTION_YIELD
   154: box.error.NO_SUCH_GROUP
-  155: box.error.SQL_BIND_VALUE
-  156: box.error.SQL_BIND_TYPE
-  157: box.error.SQL_BIND_PARAMETER_MAX
-  158: box.error.SQL_EXECUTE
-  159: box.error.UPDATE_DECIMAL_OVERFLOW
-  160: box.error.SQL_BIND_NOT_FOUND
-  161: box.error.ACTION_MISMATCH
-  162: box.error.VIEW_MISSING_SQL
-  163: box.error.FOREIGN_KEY_CONSTRAINT
-  164: box.error.NO_SUCH_MODULE
-  165: box.error.NO_SUCH_COLLATION
-  166: box.error.CREATE_FK_CONSTRAINT
-  167: box.error.DROP_FK_CONSTRAINT
-  168: box.error.NO_SUCH_CONSTRAINT
-  169: box.error.CONSTRAINT_EXISTS
-  170: box.error.SQL_TYPE_MISMATCH
-  171: box.error.ROWID_OVERFLOW
-  172: box.error.DROP_COLLATION
-  173: box.error.ILLEGAL_COLLATION_MIX
-  174: box.error.SQL_NO_SUCH_PRAGMA
-  175: box.error.SQL_CANT_RESOLVE_FIELD
-  176: box.error.INDEX_EXISTS_IN_SPACE
-  177: box.error.INCONSISTENT_TYPES
-  178: box.error.SQL_SYNTAX_WITH_POS
-  179: box.error.SQL_STACK_OVERFLOW
-  180: box.error.SQL_SELECT_WILDCARD
-  181: box.error.SQL_STATEMENT_EMPTY
-  183: box.error.SQL_SYNTAX_NEAR_TOKEN
-  184: box.error.SQL_UNKNOWN_TOKEN
-  185: box.error.SQL_PARSER_GENERIC
-  186: box.error.SQL_ANALYZE_ARGUMENT
-  187: box.error.SQL_COLUMN_COUNT_MAX
-  188: box.error.HEX_LITERAL_MAX
-  189: box.error.INT_LITERAL_MAX
-  190: box.error.SQL_PARSER_LIMIT
-  191: box.error.INDEX_DEF_UNSUPPORTED
-  192: box.error.CK_DEF_UNSUPPORTED
-  193: box.error.MULTIKEY_INDEX_MISMATCH
-  194: box.error.CREATE_CK_CONSTRAINT
-  195: box.error.CK_CONSTRAINT_FAILED
-  196: box.error.SQL_COLUMN_COUNT
-  197: box.error.FUNC_INDEX_FUNC
-  198: box.error.FUNC_INDEX_FORMAT
-  199: box.error.FUNC_INDEX_PARTS
-  200: box.error.NO_SUCH_FIELD_NAME
-  201: box.error.FUNC_WRONG_ARG_COUNT
-  202: box.error.BOOTSTRAP_READONLY
-  203: box.error.SQL_FUNC_WRONG_RET_COUNT
-  204: box.error.FUNC_INVALID_RETURN_TYPE
-  205: box.error.SQL_PARSER_GENERIC_WITH_POS
-  206: box.error.REPLICA_NOT_ANON
-  207: box.error.CANNOT_REGISTER
-  208: box.error.SESSION_SETTING_INVALID_VALUE
-  209: box.error.SQL_PREPARE
-  210: box.error.WRONG_QUERY_ID
+  155: box.error.ACTION_MISMATCH
+  156: box.error.FOREIGN_KEY_CONSTRAINT
+  157: box.error.NO_SUCH_MODULE
+  158: box.error.NO_SUCH_COLLATION
+  159: box.error.CREATE_FK_CONSTRAINT
+  160: box.error.DROP_FK_CONSTRAINT
+  161: box.error.NO_SUCH_CONSTRAINT
+  162: box.error.CONSTRAINT_EXISTS
+  163: box.error.ROWID_OVERFLOW
+  164: box.error.DROP_COLLATION
+  165: box.error.ILLEGAL_COLLATION_MIX
+  166: box.error.INDEX_EXISTS_IN_SPACE
+  167: box.error.INCONSISTENT_TYPES
+  168: box.error.HEX_LITERAL_MAX
+  169: box.error.INT_LITERAL_MAX
+  170: box.error.INDEX_DEF_UNSUPPORTED
+  171: box.error.CK_DEF_UNSUPPORTED
+  172: box.error.MULTIKEY_INDEX_MISMATCH
+  173: box.error.CREATE_CK_CONSTRAINT
+  174: box.error.CK_CONSTRAINT_FAILED
+  175: box.error.FUNC_INDEX_FUNC
+  176: box.error.FUNC_INDEX_FORMAT
+  177: box.error.FUNC_INDEX_PARTS
+  178: box.error.NO_SUCH_FIELD_NAME
+  179: box.error.FUNC_WRONG_ARG_COUNT
+  180: box.error.BOOTSTRAP_READONLY
+  181: box.error.FUNC_INVALID_RETURN_TYPE
+  182: box.error.REPLICA_NOT_ANON
+  183: box.error.CANNOT_REGISTER
+  184: box.error.SESSION_SETTING_INVALID_VALUE
+  185: box.error.UPDATE_DECIMAL_OVERFLOW
 ...
 test_run:cmd("setopt delimiter ''");
 ---

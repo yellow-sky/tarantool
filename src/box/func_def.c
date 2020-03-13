@@ -34,7 +34,7 @@
 #include "diag.h"
 #include "error.h"
 
-const char *func_language_strs[] = {"LUA", "C", "SQL", "SQL_BUILTIN"};
+const char *func_language_strs[] = {"LUA", "C"};
 
 const char *func_aggregate_strs[] = {"none", "group"};
 
@@ -113,14 +113,6 @@ func_def_check(struct func_def *def)
 			diag_set(ClientError, ER_CREATE_FUNCTION, def->name,
 				 "is_sandboxed option may be set only for a persistent "
 				 "Lua function (one with a non-empty body)");
-			return -1;
-		}
-		break;
-	case FUNC_LANGUAGE_SQL_BUILTIN:
-		if (def->body != NULL || def->is_sandboxed) {
-			diag_set(ClientError, ER_CREATE_FUNCTION, def->name,
-				 "body and is_sandboxed options are not compatible "
-				 "with SQL language");
 			return -1;
 		}
 		break;

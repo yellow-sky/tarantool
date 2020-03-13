@@ -69,12 +69,9 @@ local function set_system_triggers(val)
     box.space._user:run_triggers(val)
     box.space._func:run_triggers(val)
     box.space._priv:run_triggers(val)
-    box.space._trigger:run_triggers(val)
     box.space._collation:run_triggers(val)
     box.space._schema:run_triggers(val)
     box.space._cluster:run_triggers(val)
-    box.space._fk_constraint:run_triggers(val)
-    box.space._ck_constraint:run_triggers(val)
 end
 
 --------------------------------------------------------------------------------
@@ -91,11 +88,8 @@ local function erase()
     truncate(box.space._sequence)
     truncate(box.space._truncate)
     truncate(box.space._collation)
-    truncate(box.space._trigger)
     truncate(box.space._schema)
     truncate(box.space._cluster)
-    truncate(box.space._fk_constraint)
-    truncate(box.space._ck_constraint)
 end
 
 local function create_sysview(source_id, target_id)
@@ -527,42 +521,7 @@ end
 local function upgrade_to_2_1_0()
     local _space = box.space[box.schema.SPACE_ID]
     local _index = box.space[box.schema.INDEX_ID]
-    local _trigger = box.space[box.schema.TRIGGER_ID]
     local MAP = setmap({})
-
-    log.info("create space _trigger")
-    local format = {{name='name', type='string'},
-                    {name='space_id', type='unsigned'},
-                    {name='opts', type='map'}}
-    _space:insert{_trigger.id, ADMIN, '_trigger', 'memtx', 0, MAP, format}
-
-    log.info("create index primary on _trigger")
-    _index:insert{_trigger.id, 0, 'primary', 'tree', { unique = true },
-                  {{0, 'string'}}}
-    log.info("create index secondary on _trigger")
-    _index:insert{_trigger.id, 1, 'space_id', 'tree', { unique = false },
-                  {{1, 'unsigned'}}}
-
-    local fk_constr_ft = {{name='name', type='string'},
-                          {name='child_id', type='unsigned'},
-                          {name='parent_id', type='unsigned'},
-                          {name='is_deferred', type='boolean'},
-                          {name='match', type='string'},
-                          {name='on_delete', type='string'},
-                          {name='on_update', type='string'},
-                          {name='child_cols', type='array'},
-                          {name='parent_cols', type='array'}}
-    log.info("create space _fk_constraint")
-    _space:insert{box.schema.FK_CONSTRAINT_ID, ADMIN, '_fk_constraint', 'memtx',
-                  0, setmap({}), fk_constr_ft}
-
-    log.info("create index primary on _fk_constraint")
-    _index:insert{box.schema.FK_CONSTRAINT_ID, 0, 'primary', 'tree',
-                  {unique = true}, {{0, 'string'}, {1, 'unsigned'}}}
-
-    log.info("create secondary index child_id on _fk_constraint")
-    _index:insert{box.schema.FK_CONSTRAINT_ID, 1, 'child_id', 'tree',
-                  {unique = false}, {{1, 'unsigned'}}}
 
     -- Nullability wasn't skipable. This was fixed in 1-7.
     -- Now, abscent field means NULL, so we can safely set second
@@ -764,110 +723,11 @@ local function upgrade_sequence_to_2_2_1()
     _space_sequence:format(format)
 end
 
-local function upgrade_ck_constraint_to_2_2_1()
-    -- In previous Tarantool releases check constraints were
-    -- stored in space opts. Now we use separate space
-    -- _ck_constraint for this purpose. Perform legacy data
-    -- migration.
-    local MAP = setmap({})
-    local _space = box.space._space
-    local _index = box.space._index
-    local _ck_constraint = box.space._ck_constraint
-    log.info("create space _ck_constraint")
-    local format = {{name='space_id', type='unsigned'},
-                    {name='name', type='string'},
-                    {name='is_deferred', type='boolean'},
-                    {name='language', type='str'}, {name='code', type='str'}}
-    _space:insert{_ck_constraint.id, ADMIN, '_ck_constraint', 'memtx', 0, MAP, format}
-
-    log.info("create index primary on _ck_constraint")
-    _index:insert{_ck_constraint.id, 0, 'primary', 'tree',
-                  {unique = true}, {{0, 'unsigned'}, {1, 'string'}}}
-
-    for _, space in _space:pairs() do
-        local flags = space.flags
-        if flags.checks then
-            for i, check in pairs(flags.checks) do
-                local expr_str = check.expr
-                local check_name = check.name or
-                                   "CK_CONSTRAINT_"..i.."_"..space.name
-                _ck_constraint:insert({space.id, check_name, false,
-                                       'SQL', expr_str})
-            end
-            flags.checks = nil
-            _space:replace({space.id, space.owner, space.name, space.engine,
-                            space.field_count, flags, space.format})
-        end
-    end
-end
-
 local function create_vcollation_space()
     local _collation = box.space._collation
     local format = _collation:format()
     create_sysview(box.schema.COLLATION_ID, box.schema.VCOLLATION_ID)
     box.space[box.schema.VCOLLATION_ID]:format(format)
-end
-
-local function upgrade_func_to_2_2_1()
-    log.info("Update _func format")
-    local _func = box.space[box.schema.FUNC_ID]
-    local _priv = box.space[box.schema.PRIV_ID]
-    local datetime = os.date("%Y-%m-%d %H:%M:%S")
-    for _, v in box.space._func:pairs() do
-        box.space._func:replace({v.id, v.owner, v.name, v.setuid, v[5] or 'LUA',
-                                 '', 'function', {}, 'any', 'none', 'none',
-                                 false, false, true, v[15] or {'LUA'},
-                                 setmap({}), '', datetime, datetime})
-    end
-    local sql_builtin_list = {
-        "TRIM", "TYPEOF", "PRINTF", "UNICODE", "CHAR", "HEX", "VERSION",
-        "QUOTE", "REPLACE", "SUBSTR", "GROUP_CONCAT", "JULIANDAY", "DATE",
-        "TIME", "DATETIME", "STRFTIME", "CURRENT_TIME", "CURRENT_TIMESTAMP",
-        "CURRENT_DATE", "LENGTH", "POSITION", "ROUND", "UPPER", "LOWER",
-        "IFNULL", "RANDOM", "CEIL", "CEILING", "CHARACTER_LENGTH",
-        "CHAR_LENGTH", "FLOOR", "MOD", "OCTET_LENGTH", "ROW_COUNT", "COUNT",
-        "LIKE", "ABS", "EXP", "LN", "POWER", "SQRT", "SUM", "TOTAL", "AVG",
-        "RANDOMBLOB", "NULLIF", "ZEROBLOB", "MIN", "MAX", "COALESCE", "EVERY",
-        "EXISTS", "EXTRACT", "SOME", "GREATER", "LESSER", "SOUNDEX",
-        "LIKELIHOOD", "LIKELY", "UNLIKELY", "_sql_stat_get", "_sql_stat_push",
-        "_sql_stat_init",
-    }
-    for _, v in pairs(sql_builtin_list) do
-        local t = _func:auto_increment({ADMIN, v, 1, 'SQL_BUILTIN', '',
-                                       'function', {}, 'any', 'none', 'none',
-                                        false, false, true, {}, setmap({}), '',
-                                        datetime, datetime})
-        _priv:replace{ADMIN, PUBLIC, 'function', t.id, box.priv.X}
-    end
-    local t = _func:auto_increment({ADMIN, 'LUA', 1, 'LUA',
-                        'function(code) return assert(loadstring(code))() end',
-                        'function', {'string'}, 'any', 'none', 'none',
-                        false, false, true, {'LUA', 'SQL'},
-                        setmap({}), '', datetime, datetime})
-    _priv:replace{ADMIN, PUBLIC, 'function', t.id, box.priv.X}
-    local format = {}
-    format[1] = {name='id', type='unsigned'}
-    format[2] = {name='owner', type='unsigned'}
-    format[3] = {name='name', type='string'}
-    format[4] = {name='setuid', type='unsigned'}
-    format[5] = {name='language', type='string'}
-    format[6] = {name='body', type='string'}
-    format[7] = {name='routine_type', type='string'}
-    format[8] = {name='param_list', type='array'}
-    format[9] = {name='returns', type='string'}
-    format[10] = {name='aggregate', type='string'}
-    format[11] = {name='sql_data_access', type='string'}
-    format[12] = {name='is_deterministic', type='boolean'}
-    format[13] = {name='is_sandboxed', type='boolean'}
-    format[14] = {name='is_null_call', type='boolean'}
-    format[15] = {name='exports', type='array'}
-    format[16] = {name='opts', type='map'}
-    format[17] = {name='comment', type='string'}
-    format[18] = {name='created', type='string'}
-    format[19] = {name='last_altered', type='string'}
-    _func:format(format)
-    _func.index.name:alter({parts = {{'name', 'string',
-                                      collation = 'unicode_ci'}}})
 end
 
 local function create_func_index()
@@ -889,42 +749,8 @@ end
 
 local function upgrade_to_2_2_1()
     upgrade_sequence_to_2_2_1()
-    upgrade_ck_constraint_to_2_2_1()
     create_vcollation_space()
-    upgrade_func_to_2_2_1()
     create_func_index()
-end
-
---------------------------------------------------------------------------------
--- Tarantool 2.3.0
---------------------------------------------------------------------------------
-
-local function upgrade_to_2_3_0()
-    log.info("Create GREATEST and LEAST SQL Builtins")
-    local _func = box.space[box.schema.FUNC_ID]
-    local _priv = box.space[box.schema.PRIV_ID]
-    local datetime = os.date("%Y-%m-%d %H:%M:%S")
-    local new_builtins = {"GREATEST", "LEAST"}
-    for _, v in pairs(new_builtins) do
-        local t = _func:auto_increment({ADMIN, v, 1, 'SQL_BUILTIN', '',
-                                       'function', {}, 'any', 'none', 'none',
-                                        false, false, true, {}, setmap({}), '',
-                                        datetime, datetime})
-        _priv:replace{ADMIN, PUBLIC, 'function', t.id, box.priv.X}
-    end
-
-    log.info("Extend _ck_constraint space format with is_enabled field")
-    local _ck_constraint = box.space._ck_constraint
-    for _, tuple in _ck_constraint:pairs() do
-        _ck_constraint:update({tuple[1], tuple[2]}, {{'=', 6, true}})
-    end
-    local format = {{name='space_id', type='unsigned'},
-                    {name='name', type='string'},
-                    {name='is_deferred', type='boolean'},
-                    {name='language', type='str'},
-                    {name='code', type='str'},
-                    {name='is_enabled', type='boolean'}}
-    _ck_constraint:format(format)
 end
 
 --------------------------------------------------------------------------------
@@ -989,7 +815,6 @@ local function upgrade(options)
         {version = mkversion(2, 1, 2), func = upgrade_to_2_1_2, auto = true},
         {version = mkversion(2, 1, 3), func = upgrade_to_2_1_3, auto = true},
         {version = mkversion(2, 2, 1), func = upgrade_to_2_2_1, auto = true},
-        {version = mkversion(2, 3, 0), func = upgrade_to_2_3_0, auto = true},
         {version = mkversion(2, 3, 1), func = upgrade_to_2_3_1, auto = true},
     }
 

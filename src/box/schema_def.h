@@ -174,7 +174,6 @@ enum {
 	BOX_FUNC_FIELD_PARAM_LIST = 7,
 	BOX_FUNC_FIELD_RETURNS = 8,
 	BOX_FUNC_FIELD_AGGREGATE = 9,
-	BOX_FUNC_FIELD_SQL_DATA_ACCESS = 10,
 	BOX_FUNC_FIELD_IS_DETERMINISTIC = 11,
 	BOX_FUNC_FIELD_IS_SANDBOXED = 12,
 	BOX_FUNC_FIELD_IS_NULL_CALL = 13,
@@ -311,15 +310,6 @@ enum schema_object_type {
 	SC_ENTITY_SEQUENCE,
 	SC_ENTITY_COLLATION
 };
-
-/** SQL Storage engine. */
-enum sql_storage_engine {
-    SQL_STORAGE_ENGINE_MEMTX = 0,
-    SQL_STORAGE_ENGINE_VINYL = 1,
-    sql_storage_engine_MAX = 2
-};
-
-extern const char *sql_storage_engine_strs[];
 
 /**
  * Given a object type, return an entity type it belongs to.

@@ -1,7 +1,5 @@
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/src/box/lua)
 
-add_subdirectory(sql)
-
 set(lua_sources)
 lua_source(lua_sources lua/load_cfg.lua)
 lua_source(lua_sources lua/schema.lua)
@@ -24,7 +22,6 @@ add_custom_target(box_generate_lua_sources
 set_property(DIRECTORY PROPERTY ADDITIONAL_MAKE_CLEAN_FILES ${lua_sources})
 
 include_directories(${ZSTD_INCLUDE_DIRS})
-include_directories(${CMAKE_BINARY_DIR}/src/box/sql)
 
 add_library(box_error STATIC error.cc errcode.c vclock.c)
 target_link_libraries(box_error core stat)
@@ -87,8 +84,6 @@ add_library(box STATIC
     space.c
     space_def.c
     sequence.c
-    ck_constraint.c
-    fk_constraint.c
     constraint_id.c
     func.c
     func_def.c
@@ -111,10 +106,6 @@ add_library(box STATIC
     applier.cc
     relay.cc
     journal.c
-    sql.c
-    bind.c
-    execute.c
-    sql_stmt_cache.c
     wal.c
     call.c
     merger.c
@@ -136,11 +127,10 @@ add_library(box STATIC
     lua/session.c
     lua/net_box.c
     lua/xlog.c
-    lua/execute.c
     lua/key_def.c
     lua/merger.c
     ${bin_sources})
 
 target_link_libraries(box box_error tuple stat xrow xlog vclock crc32 scramble
-                      sql ${common_libraries})
+                      ${common_libraries})
 add_dependencies(box build_bundled_libs)

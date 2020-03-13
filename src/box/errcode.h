@@ -207,14 +207,7 @@ struct errcode_record {
 	/*153 */_(ER_NO_SUCH_FIELD_NAME_IN_SPACE,	"Field '%s' was not found in space '%s' format") \
 	/*154 */_(ER_TRANSACTION_YIELD,		"Transaction has been aborted by a fiber yield") \
 	/*155 */_(ER_NO_SUCH_GROUP,		"Replication group '%s' does not exist") \
-	/*156 */_(ER_SQL_BIND_VALUE,            "Bind value for parameter %s is out of range for type %s") \
-	/*157 */_(ER_SQL_BIND_TYPE,             "Bind value type %s for parameter %s is not supported") \
-	/*158 */_(ER_SQL_BIND_PARAMETER_MAX,    "SQL bind parameter limit reached: %d") \
-	/*159 */_(ER_SQL_EXECUTE,               "Failed to execute SQL statement: %s") \
-	/*160 */_(ER_UPDATE_DECIMAL_OVERFLOW,	"Decimal overflow when performing operation '%c' on field %s") \
-	/*161 */_(ER_SQL_BIND_NOT_FOUND,	"Parameter %s was not found in the statement") \
 	/*162 */_(ER_ACTION_MISMATCH,		"Field %s contains %s on conflict action, but %s in index parts") \
-	/*163 */_(ER_VIEW_MISSING_SQL,		"Space declared as a view must have SQL statement") \
 	/*164 */_(ER_FOREIGN_KEY_CONSTRAINT,	"Can not commit transaction: deferred foreign keys violations are not resolved") \
 	/*165 */_(ER_NO_SUCH_MODULE,		"Module '%s' does not exist") \
 	/*166 */_(ER_NO_SUCH_COLLATION,		"Collation '%s' does not exist") \
@@ -222,48 +215,29 @@ struct errcode_record {
 	/*168 */_(ER_DROP_FK_CONSTRAINT,	"Failed to drop foreign key constraint '%s': %s") \
 	/*169 */_(ER_NO_SUCH_CONSTRAINT,	"Constraint %s does not exist") \
 	/*170 */_(ER_CONSTRAINT_EXISTS,		"%s constraint '%s' already exists in space '%s'") \
-	/*171 */_(ER_SQL_TYPE_MISMATCH,		"Type mismatch: can not convert %s to %s") \
 	/*172 */_(ER_ROWID_OVERFLOW,            "Rowid is overflowed: too many entries in ephemeral space") \
 	/*173 */_(ER_DROP_COLLATION,		"Can't drop collation %s : %s") \
 	/*174 */_(ER_ILLEGAL_COLLATION_MIX,	"Illegal mix of collations") \
-	/*175 */_(ER_SQL_NO_SUCH_PRAGMA,	"Pragma '%s' does not exist") \
-	/*176 */_(ER_SQL_CANT_RESOLVE_FIELD,	"Can’t resolve field '%s'") \
 	/*177 */_(ER_INDEX_EXISTS_IN_SPACE,	"Index '%s' already exists in space '%s'") \
 	/*178 */_(ER_INCONSISTENT_TYPES,	"Inconsistent types: expected %s got %s") \
-	/*179 */_(ER_SQL_SYNTAX_WITH_POS,	"Syntax error at line %d at or near position %d: %s") \
-	/*180 */_(ER_SQL_STACK_OVERFLOW,	"Failed to parse SQL statement: parser stack limit reached") \
-	/*181 */_(ER_SQL_SELECT_WILDCARD,	"Failed to expand '*' in SELECT statement without FROM clause") \
-	/*182 */_(ER_SQL_STATEMENT_EMPTY,	"Failed to execute an empty SQL statement") \
-	/*183 */_(ER_SQL_KEYWORD_IS_RESERVED,	"At line %d at or near position %d: keyword '%.*s' is reserved. Please use double quotes if '%.*s' is an identifier.") \
-	/*184 */_(ER_SQL_SYNTAX_NEAR_TOKEN,	"Syntax error at line %d near '%.*s'") \
-	/*185 */_(ER_SQL_UNKNOWN_TOKEN,		"At line %d at or near position %d: unrecognized token '%.*s'") \
-	/*186 */_(ER_SQL_PARSER_GENERIC,	"%s") \
-	/*187 */_(ER_SQL_ANALYZE_ARGUMENT,	"ANALYZE statement argument %s is not a base table") \
-	/*188 */_(ER_SQL_COLUMN_COUNT_MAX,	"Failed to create space '%s': space column count %d exceeds the limit (%d)") \
 	/*189 */_(ER_HEX_LITERAL_MAX,		"Hex literal %s%s length %d exceeds the supported limit (%d)") \
 	/*190 */_(ER_INT_LITERAL_MAX,		"Integer literal %s%s exceeds the supported range [-9223372036854775808, 18446744073709551615]") \
-	/*191 */_(ER_SQL_PARSER_LIMIT,		"%s %d exceeds the limit (%d)") \
 	/*192 */_(ER_INDEX_DEF_UNSUPPORTED,	"%s are prohibited in an index definition") \
 	/*193 */_(ER_CK_DEF_UNSUPPORTED,	"%s are prohibited in a ck constraint definition") \
 	/*194 */_(ER_MULTIKEY_INDEX_MISMATCH,	"Field %s is used as multikey in one index and as single key in another") \
 	/*195 */_(ER_CREATE_CK_CONSTRAINT,	"Failed to create check constraint '%s': %s") \
 	/*196 */_(ER_CK_CONSTRAINT_FAILED,	"Check constraint failed '%s': %s") \
-	/*197 */_(ER_SQL_COLUMN_COUNT,		"Unequal number of entries in row expression: left side has %u, but right side - %u") \
 	/*198 */_(ER_FUNC_INDEX_FUNC,		"Failed to build a key for functional index '%s' of space '%s': %s") \
 	/*199 */_(ER_FUNC_INDEX_FORMAT,		"Key format doesn't match one defined in functional index '%s' of space '%s': %s") \
 	/*200 */_(ER_FUNC_INDEX_PARTS,		"Wrong functional index definition: %s") \
 	/*201 */_(ER_NO_SUCH_FIELD_NAME,	"Field '%s' was not found in the tuple") \
 	/*202 */_(ER_FUNC_WRONG_ARG_COUNT,	"Wrong number of arguments is passed to %s(): expected %s, got %d") \
 	/*203 */_(ER_BOOTSTRAP_READONLY,	"Trying to bootstrap a local read-only instance as master") \
-	/*204 */_(ER_SQL_FUNC_WRONG_RET_COUNT,	"SQL expects exactly one argument returned from %s, got %d")\
 	/*205 */_(ER_FUNC_INVALID_RETURN_TYPE,	"Function '%s' returned value of invalid type: expected %s got %s") \
-	/*206 */_(ER_SQL_PARSER_GENERIC_WITH_POS,"At line %d at or near position %d: %s") \
 	/*207 */_(ER_REPLICA_NOT_ANON, "Replica '%s' is not anonymous and cannot register.") \
 	/*208 */_(ER_CANNOT_REGISTER, "Couldn't find an instance to register this replica on.") \
 	/*209 */_(ER_SESSION_SETTING_INVALID_VALUE,	"Session setting %s expected a value of type %s") \
-	/*210 */_(ER_SQL_PREPARE,		"Failed to prepare SQL statement: %s") \
-	/*211 */_(ER_WRONG_QUERY_ID,		"Prepared statement with id %u does not exist") \
-
+	/*160 */_(ER_UPDATE_DECIMAL_OVERFLOW,   "Decimal overflow when performing operation '%c' on field %s") \
 /*
  * !IMPORTANT! Please follow instructions at start of the file
  * when adding new errors.

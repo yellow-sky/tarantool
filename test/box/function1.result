@@ -29,10 +29,6 @@ box.space._func:replace{id, 1, 'function1', 0, 'LUA', '', 'procedure', {}, 'any'
 ---
 - error: 'Failed to create function ''function1'': unsupported routine_type value'
 ...
-box.space._func:replace{id, 1, 'function1', 0, 'LUA', '', 'function', {}, 'any', 'none', 'reads', false, false, true, {"LUA"}, setmap({}), '', datetime, datetime}
----
-- error: 'Failed to create function ''function1'': unsupported sql_data_access value'
-...
 box.space._func:replace{id, 1, 'function1', 0, 'LUA', '', 'function', {}, 'any', 'none', 'none', false, false, false, {"LUA"}, setmap({}), '', datetime, datetime}
 ---
 - error: 'Failed to create function ''function1'': unsupported is_null_call value'
@@ -97,7 +93,7 @@ box.func["function1.args"]
   exports:
     lua: true
     sql: false
-  id: 68
+  id: 2
   setuid: false
   is_multikey: false
   is_deterministic: false
@@ -366,182 +362,6 @@ test_run:cmd("setopt delimiter ''");
 c:close()
 ---
 ...
---
--- gh-2233: Invoke Lua functions created outside SQL.
---
-box.schema.func.create('WAITFOR', {language = 'SQL_BUILTIN', \
-	param_list = {'integer'}, returns = 'integer',exports = {'SQL'}})
----
-- error: 'Failed to create function ''WAITFOR'': given built-in is not predefined'
-...
-test_run:cmd("setopt delimiter ';'")
----
-- true
-...
-box.schema.func.create("function1.divide", {language = 'C', returns = 'number',
-					    is_deterministic = true,
-					    exports = {'LUA'}})
-test_run:cmd("setopt delimiter ''");
----
-...
-box.execute('SELECT "function1.divide"()')
----
-- null
-- function function1.divide() is not available in SQL
-...
-box.func["function1.divide"]:drop()
----
-...
-test_run:cmd("setopt delimiter ';'")
----
-- true
-...
-box.schema.func.create("function1.divide", {language = 'C', returns = 'number',
-					    is_deterministic = true,
-					    exports = {'LUA', 'SQL'}})
-test_run:cmd("setopt delimiter ''");
----
-...
-box.execute('SELECT "function1.divide"()')
----
-- null
-- invalid argument
-...
-box.execute('SELECT "function1.divide"(6)')
----
-- null
-- 'Wrong number of arguments is passed to function1.divide(): expected 0, got 1'
-...
-box.execute('SELECT "function1.divide"(6, 3)')
----
-- null
-- 'Wrong number of arguments is passed to function1.divide(): expected 0, got 2'
-...
-box.func["function1.divide"]:drop()
----
-...
-test_run:cmd("setopt delimiter ';'")
----
-- true
-...
-box.schema.func.create("function1.divide", {language = 'C', returns = 'number',
-					    param_list = {'number', 'number'},
-					    is_deterministic = true,
-					    exports = {'LUA', 'SQL'}})
-test_run:cmd("setopt delimiter ''");
----
-...
-box.execute('SELECT "function1.divide"()')
----
-- null
-- 'Wrong number of arguments is passed to function1.divide(): expected 2, got 0'
-...
-box.execute('SELECT "function1.divide"(6)')
----
-- null
-- 'Wrong number of arguments is passed to function1.divide(): expected 2, got 1'
-...
-box.execute('SELECT "function1.divide"(6, 3, 3)')
----
-- null
-- 'Wrong number of arguments is passed to function1.divide(): expected 2, got 3'
-...
-box.execute('SELECT "function1.divide"(6, 3)')
----
-- metadata:
-  - name: '"function1.divide"(6, 3)'
-    type: number
-  rows:
-  - [2]
-...
-box.execute('SELECT "function1.divide"(5, 2)')
----
-- metadata:
-  - name: '"function1.divide"(5, 2)'
-    type: number
-  rows:
-  - [2.5]
-...
-box.func["function1.divide"]:drop()
----
-...
-function SUMMARIZE(a, b) return a + b end
----
-...
-test_run:cmd("setopt delimiter ';'")
----
-- true
-...
-box.schema.func.create("SUMMARIZE", {language = 'LUA', returns = 'number',
-				     is_deterministic = true,
-				     param_list = {'number', 'number'},
-				     exports = {'LUA', 'SQL'}})
-test_run:cmd("setopt delimiter ''");
----
-...
-box.execute('SELECT summarize(1, 2)')
----
-- metadata:
-  - name: summarize(1, 2)
-    type: number
-  rows:
-  - [3]
-...
-box.func.SUMMARIZE:drop()
----
-...
-test_run:cmd("setopt delimiter ';'")
----
-- true
-...
-box.schema.func.create("SUMMARIZE", {language = 'LUA', returns = 'number',
-				     body = 'function (a, b) return a + b end',
-				     is_deterministic = true,
-				     param_list = {'number', 'number'},
-				     exports = {'LUA', 'SQL'}})
-test_run:cmd("setopt delimiter ''");
----
-...
-box.execute('SELECT summarize(1, 2)')
----
-- metadata:
-  - name: summarize(1, 2)
-    type: number
-  rows:
-  - [3]
-...
-box.func.SUMMARIZE:drop()
----
-...
---
--- gh-4113: Valid method to use Lua from SQL
---
-box.execute('SELECT lua(\'return 1 + 1\')')
----
-- metadata:
-  - name: lua('return 1 + 1')
-    type: any
-  rows:
-  - [2]
-...
-box.execute('SELECT lua(\'return box.cfg\')')
----
-- null
-- 'Failed to execute SQL statement: Unsupported type passed from Lua'
-...
-box.execute('SELECT lua(\'return box.cfg()\')')
----
-- null
-- SQL expects exactly one argument returned from Lua, got 0
-...
-box.execute('SELECT lua(\'return box.cfg.memtx_memory\')')
----
-- metadata:
-  - name: lua('return box.cfg.memtx_memory')
-    type: any
-  rows:
-  - [107374182]
-...
 -- Test registered functions interface.
 function divide(a, b) return a / b end
 ---
@@ -593,7 +413,7 @@ func
   exports:
     lua: true
     sql: false
-  id: 68
+  id: 2
   setuid: false
   is_multikey: false
   is_deterministic: false
@@ -665,7 +485,7 @@ func
   exports:
     lua: true
     sql: false
-  id: 68
+  id: 2
   setuid: false
   is_multikey: false
   is_deterministic: false
@@ -755,39 +575,6 @@ box.schema.func.drop('secret_leak')
 ---
 ...
 box.schema.func.drop('secret')
----
-...
--- UDF corner cases for SQL: no value returned, too many values returned
-box.execute("SELECT LUA('a = 1 + 1')")
----
-- null
-- SQL expects exactly one argument returned from Lua, got 0
-...
-box.execute("SELECT LUA('return 1, 2')")
----
-- null
-- SQL expects exactly one argument returned from Lua, got 2
-...
-box.schema.func.create('function1', {language = "C", exports = {'LUA', 'SQL'}})
----
-...
-box.execute("SELECT \"function1\"()")
----
-- null
-- SQL expects exactly one argument returned from C, got 0
-...
-box.schema.func.drop("function1")
----
-...
-box.schema.func.create('function1.multireturn', {language = "C", exports = {'LUA', 'SQL'}})
----
-...
-box.execute("SELECT \"function1.multireturn\"()")
----
-- null
-- SQL expects exactly one argument returned from C, got 2
-...
-box.schema.func.drop("function1.multireturn")
 ---
 ...
 --
@@ -998,61 +785,6 @@ box.func.test ~= nil
 ...
 box.func.test:drop()
 ---
-...
--- Check SQL builtins
-test_run:cmd("setopt delimiter ';'")
----
-- true
-...
-sql_builtin_list = {
-	"TRIM", "TYPEOF", "PRINTF", "UNICODE", "CHAR", "HEX", "VERSION",
-	"QUOTE", "REPLACE", "SUBSTR", "GROUP_CONCAT", "JULIANDAY", "DATE",
-	"TIME", "DATETIME", "STRFTIME", "CURRENT_TIME", "CURRENT_TIMESTAMP",
-	"CURRENT_DATE", "LENGTH", "POSITION", "ROUND", "UPPER", "LOWER",
-	"IFNULL", "RANDOM", "CEIL", "CEILING", "CHARACTER_LENGTH",
-	"CHAR_LENGTH", "FLOOR", "MOD", "OCTET_LENGTH", "ROW_COUNT", "COUNT",
-	"LIKE", "ABS", "EXP", "LN", "POWER", "SQRT", "SUM", "TOTAL", "AVG",
-	"RANDOMBLOB", "NULLIF", "ZEROBLOB", "MIN", "MAX", "COALESCE", "EVERY",
-	"EXISTS", "EXTRACT", "SOME", "GREATER", "LESSER", "SOUNDEX",
-	"LIKELIHOOD", "LIKELY", "UNLIKELY", "_sql_stat_get", "_sql_stat_push",
-	"_sql_stat_init", "GREATEST", "LEAST"
-}
-test_run:cmd("setopt delimiter ''");
----
-...
-ok = true
----
-...
-for _, v in pairs(sql_builtin_list) do ok = ok and (box.space._func.index.name:get(v) ~= nil) end
----
-...
-ok == true
----
-- true
-...
-box.func.LUA:call({"return 1 + 1"})
----
-- 2
-...
-box.schema.user.grant('guest', 'execute', 'function', 'SUM')
----
-...
-c = net.connect(box.cfg.listen)
----
-...
-c:call("SUM")
----
-- error: sql builtin function does not support Lua frontend
-...
-c:close()
----
-...
-box.schema.user.revoke('guest', 'execute', 'function', 'SUM')
----
-...
-box.schema.func.drop("SUM")
----
-- error: 'Can''t drop function 1: function is SQL built-in'
 ...
 -- Introduce function options
 box.schema.func.create('test', {body = "function(tuple) return tuple end", is_deterministic = true, opts = {is_multikey = true}})

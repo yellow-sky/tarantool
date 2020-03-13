@@ -530,13 +530,6 @@ sysview_engine_create_space(struct engine *engine, struct space_def *def,
 		return NULL;
 	}
 	int key_count = 0;
-	/*
-	 * Despite the fact that space with sysview engine
-	 * actually doesn't own tuples, setup of format will be
-	 * useful in order to unify it with SQL views and to use
-	 * same machinery to do selects from such views from Lua
-	 * land.
-	 */
 	struct key_def **keys = index_def_to_key_def(key_list, &key_count);
 	if (keys == NULL) {
 		free(space);

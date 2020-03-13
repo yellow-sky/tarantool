@@ -39,8 +39,6 @@ local IPROTO_ERRNO_MASK    = 0x7FFF
 local IPROTO_SYNC_KEY      = 0x01
 local IPROTO_SCHEMA_VERSION_KEY = 0x05
 local IPROTO_METADATA_KEY = 0x32
-local IPROTO_SQL_INFO_KEY = 0x42
-local SQL_INFO_ROW_COUNT_KEY = 0
 local IPROTO_FIELD_NAME_KEY = 0
 local IPROTO_DATA_KEY      = 0x30
 local IPROTO_ERROR_KEY     = 0x31
@@ -1190,38 +1188,6 @@ function remote_methods:eval(code, args, opts)
         return res
     end
     return unpack(res)
-end
-
-function remote_methods:execute(query, parameters, sql_opts, netbox_opts)
-    check_remote_arg(self, "execute")
-    if sql_opts ~= nil then
-        box.error(box.error.UNSUPPORTED, "execute", "options")
-    end
-    return self:_request('execute', netbox_opts, nil, query, parameters or {},
-                         sql_opts or {})
-end
-
-function remote_methods:prepare(query, parameters, sql_opts, netbox_opts)
-    check_remote_arg(self, "prepare")
-    if type(query) ~= "string" then
-        box.error(box.error.SQL_PREPARE, "expected string as SQL statement")
-    end
-    if sql_opts ~= nil then
-        box.error(box.error.UNSUPPORTED, "prepare", "options")
-    end
-    return self:_request('prepare', netbox_opts, nil, query)
-end
-
-function remote_methods:unprepare(query, parameters, sql_opts, netbox_opts)
-    check_remote_arg(self, "unprepare")
-    if type(query) ~= "number" then
-        box.error("query id is expected to be numeric")
-    end
-    if sql_opts ~= nil then
-        box.error(box.error.UNSUPPORTED, "unprepare", "options")
-    end
-    return self:_request('unprepare', netbox_opts, nil, query, parameters or {},
-                         sql_opts or {})
 end
 
 function remote_methods:wait_state(state, timeout)

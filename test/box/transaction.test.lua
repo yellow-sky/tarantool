@@ -406,12 +406,6 @@ test_run:cmd("setopt delimiter ''");
 check1, check2, check3, check4
 
 --
--- gh-4365: DDL reverted by yield triggers crash.
---
-box.begin() box.execute([[CREATE TABLE test(id INTEGER PRIMARY KEY AUTOINCREMENT)]]) fiber.yield()
-box.rollback()
-
---
 -- gh-4368: transaction rollback leads to a crash if DDL and DML statements
 -- are mixed in the same transaction.
 --

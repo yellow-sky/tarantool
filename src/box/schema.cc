@@ -431,12 +431,6 @@ schema_init()
 	sc_space_new(BOX_CLUSTER_ID, "_cluster", key_parts, 1,
 		     &on_replace_cluster);
 
-	/* _trigger - all existing SQL triggers. */
-	key_parts[0].fieldno = 0;
-	key_parts[0].type = FIELD_TYPE_STRING;
-	sc_space_new(BOX_TRIGGER_ID, "_trigger", key_parts, 1,
-		     &on_replace_trigger);
-
 	/* _index - definition of all space indexes. */
 	key_parts[0].fieldno = 0; /* space id */
 	key_parts[0].type = FIELD_TYPE_UNSIGNED;
@@ -444,22 +438,6 @@ schema_init()
 	key_parts[1].type = FIELD_TYPE_UNSIGNED;
 	sc_space_new(BOX_INDEX_ID, "_index", key_parts, 2,
 		     &alter_space_on_replace_index);
-
-	/* _fk_сonstraint - foreign keys constraints. */
-	key_parts[0].fieldno = 0; /* constraint name */
-	key_parts[0].type = FIELD_TYPE_STRING;
-	key_parts[1].fieldno = 1; /* child space */
-	key_parts[1].type = FIELD_TYPE_UNSIGNED;
-	sc_space_new(BOX_FK_CONSTRAINT_ID, "_fk_constraint", key_parts, 2,
-		     &on_replace_fk_constraint);
-
-	/* _ck_сonstraint - check constraints. */
-	key_parts[0].fieldno = 0; /* space id */
-	key_parts[0].type = FIELD_TYPE_UNSIGNED;
-	key_parts[1].fieldno = 1; /* constraint name */
-	key_parts[1].type = FIELD_TYPE_STRING;
-	sc_space_new(BOX_CK_CONSTRAINT_ID, "_ck_constraint", key_parts, 2,
-		     &on_replace_ck_constraint);
 
 	/* _func_index - check constraints. */
 	key_parts[0].fieldno = 0; /* space id */

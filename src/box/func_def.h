@@ -46,8 +46,6 @@ extern "C" {
 enum func_language {
 	FUNC_LANGUAGE_LUA,
 	FUNC_LANGUAGE_C,
-	FUNC_LANGUAGE_SQL,
-	FUNC_LANGUAGE_SQL_BUILTIN,
 	func_language_MAX,
 };
 
