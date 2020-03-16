@@ -17,10 +17,6 @@ endfunction()
 add_compile_flags("C;CXX"
     "-Wno-unused-parameter")
 
-if(POLICY CMP0037)
-    cmake_policy(SET CMP0037 OLD)
-endif(POLICY CMP0037)
-
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/luajit-tap
     COMMAND ${CMAKE_COMMAND} -E create_symlink
         ${PROJECT_SOURCE_DIR}/third_party/luajit/test
