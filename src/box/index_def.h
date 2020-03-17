@@ -143,8 +143,6 @@ index_opts_cmp(const struct index_opts *o1, const struct index_opts *o2)
 		return o1->run_size_ratio < o2->run_size_ratio ? -1 : 1;
 	if (o1->bloom_fpr != o2->bloom_fpr)
 		return o1->bloom_fpr < o2->bloom_fpr ? -1 : 1;
-	if (o1->func_id != o2->func_id)
-		return o1->func_id - o2->func_id;
 	return 0;
 }
 

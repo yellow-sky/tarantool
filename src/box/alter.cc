@@ -241,25 +241,6 @@ index_opts_decode(struct index_opts *opts, const char *map,
 }
 
 /**
- * Helper routine for functional index function verification:
- * only a deterministic persistent Lua function may be used in
- * functional index for now.
- */
-static int
-func_index_check_func(struct func *func) {
-	assert(func != NULL);
-	if (func->def->language != FUNC_LANGUAGE_LUA ||
-	    func->def->body == NULL || !func->def->is_deterministic ||
-	    !func->def->is_sandboxed) {
-		diag_set(ClientError, ER_WRONG_INDEX_OPTIONS, 0,
-			  "referenced function doesn't satisfy "
-			  "functional index function constraints");
-		return -1;
-	}
-	return 0;
-}
-
-/**
  * Create a index_def object from a record in _index
  * system space.
  *
@@ -326,8 +307,7 @@ index_def_new_from_tuple(struct tuple *tuple, struct space *space)
 				 space->def->fields,
 				 space->def->field_count, &fiber()->gc) != 0)
 		return NULL;
-	bool for_func_index = opts.func_id > 0;
-	key_def = key_def_new(part_def, part_count, for_func_index);
+	key_def = key_def_new(part_def, part_count);
 	if (key_def == NULL)
 		return NULL;
 	struct index_def *index_def =
@@ -340,27 +320,6 @@ index_def_new_from_tuple(struct tuple *tuple, struct space *space)
 		return NULL;
 	if (space_check_index_def(space, index_def) != 0)
 		return NULL;
-	/*
-	 * In case of functional index definition, resolve a
-	 * function pointer to perform a complete index build
-	 * (istead of initializing it in inactive state) in
-	 * on_replace_dd_index trigger. This allows wrap index
-	 * creation operation into transaction: only the first
-	 * opperation in transaction is allowed to yeld.
-	 *
-	 * The initialisation during recovery is slightly
-	 * different, because function cache is not initialized
-	 * during _index space loading. Therefore the completion
-	 * of a functional index creation is performed in
-	 * _func_index space's trigger, via IndexRebuild
-	 * operation.
-	 */
-	struct func *func = NULL;
-	if (for_func_index && (func = func_by_id(opts.func_id)) != NULL) {
-		if (func_index_check_func(func) != 0)
-			return NULL;
-		index_def_set_func(index_def, func);
-	}
 	if (index_def->iid == 0 && space->sequence != NULL)
 		if (index_def_check_sequence(index_def, space->sequence_fieldno,
 					     space->sequence_path,
@@ -1500,27 +1459,6 @@ RebuildIndex::~RebuildIndex()
 	if (new_index_def != NULL)
 		index_def_delete(new_index_def);
 }
-
-/**
- * RebuildFuncIndex - prepare func index definition,
- * drop the old index data and rebuild index from by reading the
- * primary key.
- */
-class RebuildFuncIndex: public RebuildIndex
-{
-	struct index_def *
-	func_index_def_new(struct index_def *index_def, struct func *func)
-	{
-		struct index_def *new_index_def = index_def_dup_xc(index_def);
-		index_def_set_func(new_index_def, func);
-		return new_index_def;
-	}
-public:
-	RebuildFuncIndex(struct alter_space *alter,
-			 struct index_def *old_index_def_arg, struct func *func) :
-		RebuildIndex(alter, func_index_def_new(old_index_def_arg, func),
-			     old_index_def_arg) {}
-};
 
 /** TruncateIndex - truncate an index. */
 class TruncateIndex: public AlterSpaceOp
@@ -4171,106 +4109,6 @@ on_replace_dd_space_sequence(struct trigger * /* trigger */, void *event)
 
 /* }}} sequence */
 
-/** A trigger invoked on replace in the _func_index space. */
-static int
-on_replace_dd_func_index(struct trigger *trigger, void *event)
-{
-	(void) trigger;
-	struct txn *txn = (struct txn *) event;
-	struct txn_stmt *stmt = txn_current_stmt(txn);
-	struct tuple *old_tuple = stmt->old_tuple;
-	struct tuple *new_tuple = stmt->new_tuple;
-
-	struct alter_space *alter = NULL;
-	struct func *func = NULL;
-	struct index *index;
-	struct space *space;
-	if (old_tuple == NULL && new_tuple != NULL) {
-		uint32_t space_id;
-		uint32_t index_id;
-		uint32_t fid;
-		if (tuple_field_u32(new_tuple, BOX_FUNC_INDEX_FIELD_SPACE_ID,
-				    &space_id) != 0)
-			return -1;
-		if (tuple_field_u32(new_tuple, BOX_FUNC_INDEX_FIELD_INDEX_ID,
-				    &index_id) != 0)
-			return -1;
-		if (tuple_field_u32(new_tuple, BOX_FUNC_INDEX_FUNCTION_ID,
-	       			    &fid) != 0)
-			return -1;
-		space = space_cache_find(space_id);
-		if (space == NULL)
-			return -1;
-		index = index_find(space, index_id);
-		if (index == NULL)
-			return -1;
-		func = func_by_id(fid);
-		if (func == NULL) {
-			diag_set(ClientError, ER_NO_SUCH_FUNCTION, int2str(fid));
-			return -1;
-		}
-		if (func_index_check_func(func) != 0)
-			return -1;
-		if (index->def->opts.func_id != func->def->fid) {
-			diag_set(ClientError, ER_WRONG_INDEX_OPTIONS, 0,
-				  "Function ids defined in _index and "
-				  "_func_index don't match");
-			return -1;
-		}
-	} else if (old_tuple != NULL && new_tuple == NULL) {
-		uint32_t space_id;
-		uint32_t index_id;
-		if (tuple_field_u32(old_tuple, BOX_FUNC_INDEX_FIELD_SPACE_ID,
-				    &space_id) != 0)
-			return -1;
-		if (tuple_field_u32(old_tuple, BOX_FUNC_INDEX_FIELD_INDEX_ID,
-				    &index_id) != 0)
-			return -1;
-		space = space_cache_find(space_id);
-		if (space == NULL)
-			return -1;
-		index = index_find(space, index_id);
-		if (index == NULL)
-			return -1;
-		func = NULL;
-	} else {
-		assert(old_tuple != NULL && new_tuple != NULL);
-		diag_set(ClientError, ER_UNSUPPORTED, "functional index", "alter");
-		return -1;
-	}
-
-	/**
-	 * Index is already initialized for corresponding
-	 * function. Index rebuild is not required.
-	 */
-	if (index_def_get_func(index->def) == func)
-		return 0;
-
-	alter = alter_space_new(space);
-	if (alter == NULL)
-		return -1;
-	auto scoped_guard = make_scoped_guard([=] {alter_space_delete(alter);});
-	if (alter_space_move_indexes(alter, 0, index->def->iid) != 0)
-		return -1;
-	try {
-		(void) new RebuildFuncIndex(alter, index->def, func);
-	} catch (Exception *e) {
-		return -1;
-	}
-	if (alter_space_move_indexes(alter, index->def->iid + 1,
-				     space->index_id_max + 1) != 0)
-		return -1;
-	try {
-		(void) new UpdateSchemaVersion(alter);
-		alter_space_do(stmt, alter);
-	} catch (Exception *e) {
-		return -1;
-	}
-
-	scoped_guard.is_active = false;
-	return 0;
-}
-
 struct trigger alter_space_on_replace_space = {
 	RLIST_LINK_INITIALIZER, on_replace_dd_space, NULL, NULL
 };
@@ -4317,10 +4155,6 @@ struct trigger on_replace_sequence_data = {
 
 struct trigger on_replace_space_sequence = {
 	RLIST_LINK_INITIALIZER, on_replace_dd_space_sequence, NULL, NULL
-};
-
-struct trigger on_replace_func_index = {
-	RLIST_LINK_INITIALIZER, on_replace_dd_func_index, NULL, NULL
 };
 
 /* vim: set foldmethod=marker */

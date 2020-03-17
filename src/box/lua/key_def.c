@@ -463,7 +463,7 @@ lbox_key_def_new(struct lua_State *L)
 		lua_pop(L, 1);
 	}
 
-	struct key_def *key_def = key_def_new(parts, part_count, false);
+	struct key_def *key_def = key_def_new(parts, part_count);
 	region_truncate(region, region_svp);
 	if (key_def == NULL)
 		return luaT_error(L);

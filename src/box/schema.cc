@@ -266,7 +266,7 @@ sc_space_new(uint32_t id, const char *name,
 	     uint32_t key_part_count,
 	     struct trigger *replace_trigger)
 {
-	struct key_def *key_def = key_def_new(key_parts, key_part_count, false);
+	struct key_def *key_def = key_def_new(key_parts, key_part_count);
 	if (key_def == NULL)
 		diag_raise();
 	auto key_def_guard =
@@ -438,14 +438,6 @@ schema_init()
 	key_parts[1].type = FIELD_TYPE_UNSIGNED;
 	sc_space_new(BOX_INDEX_ID, "_index", key_parts, 2,
 		     &alter_space_on_replace_index);
-
-	/* _func_index - check constraints. */
-	key_parts[0].fieldno = 0; /* space id */
-	key_parts[0].type = FIELD_TYPE_UNSIGNED;
-	key_parts[1].fieldno = 1; /* index id */
-	key_parts[1].type = FIELD_TYPE_UNSIGNED;
-	sc_space_new(BOX_FUNC_INDEX_ID, "_func_index", key_parts, 2,
-		     &on_replace_func_index);
 
 	/*
 	 * Run the triggers right after creating all the system

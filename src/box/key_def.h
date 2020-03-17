@@ -354,8 +354,7 @@ key_def_sizeof(uint32_t part_count, uint32_t path_pool_size)
  * and initialize its parts.
  */
 struct key_def *
-key_def_new(const struct key_part_def *parts, uint32_t part_count,
-	    bool for_func_index);
+key_def_new(const struct key_part_def *parts, uint32_t part_count);
 
 /**
  * Dump part definitions of the given key def.

@@ -493,9 +493,6 @@ box.schema.space.drop = function(space_id, space_name, opts)
         -- Delete automatically generated sequence.
         box.schema.sequence.drop(sequence_tuple.sequence_id)
     end
-    for _, t in _func_index.index.primary:pairs({space_id}) do
-        _func_index:delete({space_id, t.index_id})
-    end
     local keys = _vindex:select(space_id)
     for i = #keys, 1, -1 do
         local v = keys[i]
@@ -923,7 +920,6 @@ local index_options = {
     range_size = 'number',
     page_size = 'number',
     bloom_fpr = 'number',
-    func = 'number, string',
 }
 
 --
@@ -947,15 +943,6 @@ end
 --
 local create_index_template = table.deepcopy(alter_index_template)
 create_index_template.if_not_exists = "boolean"
-
--- Find a function id by given function name
-local function func_id_by_name(func_name)
-    local func = box.space._func.index.name:get(func_name)
-    if func == nil then
-        box.error(box.error.NO_SUCH_FUNCTION, func_name)
-    end
-    return func.id
-end
 
 box.schema.index.create = function(space_id, name, options)
     check_param(space_id, 'space_id', 'number')
@@ -1027,7 +1014,6 @@ box.schema.index.create = function(space_id, name, options)
             run_count_per_level = options.run_count_per_level,
             run_size_ratio = options.run_size_ratio,
             bloom_fpr = options.bloom_fpr,
-            func = options.func,
     }
     local field_type_aliases = {
         num = 'unsigned'; -- Deprecated since 1.7.2
@@ -1048,18 +1034,11 @@ box.schema.index.create = function(space_id, name, options)
     if parts_can_be_simplified then
         parts = simplify_index_parts(parts)
     end
-    if index_opts.func ~= nil and type(index_opts.func) == 'string' then
-        index_opts.func = func_id_by_name(index_opts.func)
-    end
     local sequence_proxy = space_sequence_alter_prepare(format, parts, options,
                                                         space_id, iid,
                                                         space.name, name)
     _index:insert{space_id, iid, name, options.type, index_opts, parts}
     space_sequence_alter_commit(sequence_proxy)
-    if index_opts.func ~= nil then
-        local _func_index = box.space[box.schema.FUNC_INDEX_ID]
-        _func_index:insert{space_id, iid, index_opts.func}
-    end
     return space.index[name]
 end
 
@@ -1075,10 +1054,6 @@ box.schema.index.drop = function(space_id, index_id)
         end
     end
     local _index = box.space[box.schema.INDEX_ID]
-    local _func_index = box.space[box.schema.FUNC_INDEX_ID]
-    for _, v in box.space._func_index:pairs{space_id, index_id} do
-        _func_index:delete({v.space_id, v.index_id})
-    end
     _index:delete{space_id, index_id}
 end
 
@@ -1175,18 +1150,11 @@ box.schema.index.alter = function(space_id, index_id, options)
             parts = simplify_index_parts(parts)
         end
     end
-    if index_opts.func ~= nil and type(index_opts.func) == 'string' then
-        index_opts.func = func_id_by_name(index_opts.func)
-    end
     local sequence_proxy = space_sequence_alter_prepare(format, parts, options,
                                                         space_id, index_id,
                                                         space.name, options.name)
     _index:replace{space_id, index_id, options.name, options.type,
                    index_opts, parts}
-    if index_opts.func ~= nil then
-        local _func_index = box.space[box.schema.FUNC_INDEX_ID]
-        _func_index:insert{space_id, iid, index_opts.func}
-    end
     space_sequence_alter_commit(sequence_proxy)
 end
 
