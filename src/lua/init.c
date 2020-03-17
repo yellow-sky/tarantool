@@ -30,6 +30,7 @@
  */
 #include "lua/init.h"
 #include "lua/utils.h"
+#include "small/static.h"
 #include "main.h"
 #if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__APPLE__)
 #include <libgen.h>
@@ -64,6 +65,7 @@
 #include <small/ibuf.h>
 
 #include <ctype.h>
+#include <fcntl.h>
 #include <readline/readline.h>
 #include <readline/history.h>
 
@@ -359,10 +361,107 @@ tarantool_lua_setpaths(struct lua_State *L)
 	lua_pop(L, 1); /* package */
 }
 
+/* dump bt all fibers {{{ */
+
+#ifdef ENABLE_BACKTRACE
+
+struct dump_frame_ctx {
+	/* Dump file */
+	int fd;
+	/* Lua stack to trace. */
+	struct lua_State *L;
+	/* Current Lua frame. */
+	int lua_frame;
+};
+
+static int
+dump_frame_cb(int frameno, void *frameret, const char *func, size_t offset,
+	      void *cb_ctx)
+{
+	int blen;
+	char buf[512];
+	struct dump_frame_ctx *df_ctx = cb_ctx;
+	lua_State *L = df_ctx->L;
+	if (strstr(func, "lj_BC_FUNCC") == func) {
+		/* We are in the LUA vm. */
+		lua_Debug ar;
+		while (L && lua_getstack(L, df_ctx->lua_frame, &ar) > 0) {
+			/* Skip all following C-frames. */
+			lua_getinfo(L, "Sln", &ar);
+			if (*ar.what != 'C')
+				break;
+			df_ctx->lua_frame++;
+			if (ar.name == NULL)
+				continue;
+			/* Dump frame if it is a C built-in call. */
+			blen = snprintf(buf, sizeof(buf),
+					"L   %s in %s at line %i\n",
+					ar.name != NULL ? ar.name : "(unnamed)",
+					ar.source, ar.currentline);
+			write(df_ctx->fd, buf, blen);
+		}
+		while (L && lua_getstack(L, df_ctx->lua_frame, &ar) > 0) {
+			/* Trace Lua frame. */
+			lua_getinfo(L, "Sln", &ar);
+			if (*ar.what == 'C')
+				break;
+			df_ctx->lua_frame++;
+			blen = snprintf(buf, sizeof(buf),
+					"L   %s in %s at line %i\n",
+					ar.name != NULL ? ar.name : "(unnamed)",
+					ar.source, ar.currentline);
+			write(df_ctx->fd, buf, blen);
+		}
+	}
+	blen = snprintf(buf, sizeof(buf), "#%-2d %p in ", frameno, frameret);
+	if (func)
+		blen += snprintf(buf + blen, sizeof(buf) - blen, "%s+%zu\n",
+				 func, offset);
+	else
+		blen += snprintf(buf + blen, sizeof(buf) - blen, "?\n");
+	write(df_ctx->fd, buf, blen);
+	return 0;
+}
+
+#define HEADER "===== fiber no. %-10d (%p) " \
+	       "====================================\n"
+#define FOOTER "--------------------------------------------" \
+	       "------------------------------------\n"
+#define LENGTH 81
+
+void
+dump_backtrace_all(const char *fname)
+{
+	struct dump_frame_ctx df_ctx;
+	struct fiber *fiber;
+	char *header;
+	df_ctx.fd = open(fname, O_WRONLY | O_CREAT,
+			 S_IRUSR | S_IWUSR | S_IRGRP);
+
+	rlist_foreach_entry(fiber, &cord()->alive, link) {
+		df_ctx.L = fiber->storage.lua.stack;
+		df_ctx.lua_frame = 0;
+		header = (char *)static_alloc(SMALL_STATIC_SIZE);
+		snprintf(header, LENGTH + 1, HEADER, fiber->fid, fiber);
+		write(df_ctx.fd, header, LENGTH);
+		backtrace_foreach(dump_frame_cb,
+				  fiber != fiber() ? &fiber->ctx : NULL,
+				  &df_ctx);
+		write(df_ctx.fd, FOOTER, LENGTH);
+	}
+
+	close(df_ctx.fd);
+}
+
+#endif /* ENABLE_BACKTRACE */
+
+/* }}} */
+
 static int
 tarantool_panic_handler(lua_State *L) {
 	const char *problem = lua_tostring(L, -1);
 #ifdef ENABLE_BACKTRACE
+	dump_backtrace_all("bt-all-fibers.txt");
 	print_backtrace();
 #endif /* ENABLE_BACKTRACE */
 	say_crit("%s", problem);
