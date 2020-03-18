@@ -27,17 +27,23 @@ local mkversion = {}
 mkversion.__index = mkversion
 setmetatable(mkversion, {__call = function(c, ...) return c.new(...) end})
 
-function mkversion.new(major, minor, patch)
+function mkversion.new(major, minor, patch, build)
     local self = setmetatable({}, mkversion)
     self.major = major
     self.minor = minor
     self.patch = patch
+    self.build = build or 0
     self.id = bit.bor(bit.lshift(bit.bor(bit.lshift(major, 8), minor), 8), patch)
+    self.id = bit.bor(bit.lshift(self.id, 8), self.build)
     return self
 end
 
 function mkversion.__tostring(self)
-    return string.format('%s.%s.%s', self.major, self.minor, self.patch)
+    local s = string.format('%s.%s.%s', self.major, self.minor, self.patch)
+    if self.build ~= 0 then
+        s = s .. string.format('.%s', self.build)
+    end
+    return s
 end
 
 function mkversion.__eq(lhs, rhs)
@@ -982,8 +988,9 @@ local function get_version()
     local major = version[2]
     local minor = version[3]
     local patch = version[4] or 0
+    local build = version[5] or 0
 
-    return mkversion(major, minor, patch)
+    return mkversion(major, minor, patch, build)
 end
 
 local function upgrade(options)
@@ -1025,7 +1032,8 @@ local function upgrade(options)
         box.space._schema:replace({'version',
                                    handler.version.major,
                                    handler.version.minor,
-                                   handler.version.patch})
+                                   handler.version.patch,
+                                   handler.version.build})
         ::continue::
     end
 end
