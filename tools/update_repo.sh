@@ -702,7 +702,7 @@ function pack_rpm {
             for metafile in repodata.base/other \
                             repodata.base/filelists \
                             repodata.base/primary ; do
-                up_lines=''
+                up_full_lines=''
                 if [ "$metafile" == "repodata.base/primary" ]; then
                     up_full_lines='(\N+\n)*'
                 fi
@@ -848,7 +848,7 @@ function remove_rpm {
             #       entry in damaged file, to fix it all found entries
             #       of this file need to be removed
             for metafile in other filelists primary ; do
-                up_lines=''
+                up_full_lines=''
                 if [ "$metafile" == "primary" ]; then
                     up_full_lines='(\N+\n)*'
                 fi
