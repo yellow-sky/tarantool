@@ -2,7 +2,6 @@
 --
 local ffi = require('ffi')
 local msgpack = require('msgpack')
-local msgpackffi = require('msgpackffi')
 local fun = require('fun')
 local log = require('log')
 local fio = require('fio')
@@ -210,7 +209,7 @@ local function revoke_object_privs(object_type, object_id)
     local _vpriv = box.space[box.schema.VPRIV_ID]
     local _priv = box.space[box.schema.PRIV_ID]
     local privs = _vpriv.index.object:select{object_type, object_id}
-    for k, tuple in pairs(privs) do
+    for _, tuple in pairs(privs) do
         local uid = tuple.grantee
         _priv:delete{uid, object_type, object_id}
     end
@@ -274,7 +273,6 @@ local function check_param_table(table, template)
             local haystack = ',' .. good_types .. ','
             local needle = ',' .. param_type(v) .. ','
             if (string.find(haystack, needle) == nil) then
-                good_types = string.gsub(good_types, ',', ', ')
                 box.error(box.error.ILLEGAL_PARAMS,
                           "options parameter '" .. k ..
                           "' should be one of types: " .. template[k])
@@ -349,10 +347,57 @@ box.atomic = function(fun, ...)
     return atomic_tail(pcall(fun, ...))
 end
 
+local function transactional_ddl_wrapper_tail(status, ...)
+    box.commit()
+    if not status then
+        error((...), 2)
+    end
+    return ...
+end
+
+local function transactional_ddl_wrapper(fun)
+    return function(...)
+        if not box.is_in_txn() then
+            box.begin()
+            return transactional_ddl_wrapper_tail(pcall(fun, ...))
+        end
+        return fun(...)
+    end
+end
+
+local function make_transactional(methods, ignore_list)
+    ignore_list = ignore_list or {}
+    for name, method in pairs(methods) do
+        if ignore_list[name] == nil then
+            methods[name] = transactional_ddl_wrapper(method)
+        end
+    end
+end
+
+local function space_is_empty(space_id)
+    local space = box.space[space_id]
+    if space.engine == 'memtx' then
+        return space:len() == 0
+    end
+    -- space:len() for vinyl returns approximate value
+    local iter = box.space[space_id]:pairs()
+    return iter.gen(iter.param, iter.state) == nil
+end
+
+local function transactional_ddl_wrapper_for_empty_space(fun)
+    return function(space_id, ...)
+        if not box.is_in_txn() and space_is_empty(space_id) then
+            box.begin()
+            return transactional_ddl_wrapper_tail(pcall(fun, space_id, ...))
+        end
+        return fun(space_id, ...)
+    end
+end
+
 -- box.commit yields, so it's defined as Lua/C binding
 -- box.rollback and box.rollback_to_savepoint yields as well
 
-function update_format(format)
+local function update_format(format)
     local result = {}
     for i, given in ipairs(format) do
         local field = {}
@@ -1144,7 +1189,7 @@ box.schema.index.alter = function(space_id, index_id, options)
         local can_update_field = {id = true, name = true, type = true }
         local can_update = true
         local cant_update_fields = ''
-        for k,v in pairs(options) do
+        for k in pairs(options) do
             if not can_update_field[k] then
                 can_update = false
                 cant_update_fields = cant_update_fields .. ' ' .. k
@@ -1281,7 +1326,6 @@ end
 
 -- global struct port instance to use by select()/get()
 local port_tuple = ffi.new('struct port_tuple')
-local port_tuple_entry_t = ffi.typeof('struct port_tuple_entry')
 
 -- Helper function to check space:method() usage
 local function check_space_arg(space, method)
@@ -2485,7 +2529,7 @@ local function revoke(uid, name, privilege, object_type, object_name, options)
     end
 end
 
-local function drop(uid, opts)
+local function drop(uid)
     -- recursive delete of user data
     local _vpriv = box.space[box.schema.VPRIV_ID]
     local spaces = box.space[box.schema.VSPACE_ID].index.owner:select{uid}
@@ -2640,7 +2684,7 @@ box.schema.role.drop = function(name, opts)
     return drop(uid)
 end
 
-function role_check_grant_revoke_of_sys_priv(priv)
+local function role_check_grant_revoke_of_sys_priv(priv)
     priv = string.lower(priv)
     if (type(priv) == 'string' and (priv:match("session") or priv:match("usage"))) or
         (type(priv) == "number" and (bit.band(priv, 8) ~= 0 or bit.band(priv, 16) ~= 0)) then
@@ -2671,6 +2715,25 @@ box.schema.role.info = function(role_name)
     end
     return info(rid)
 end
+
+--
+-- Make all DDL operations transactional
+--
+-- Changing format/drop space are not supported for non-empty spaces
+make_transactional(box.schema.space, { format = true, drop = true })
+-- Index creation is not supported for non-empty spaces
+make_transactional(box.schema.index, { create = true })
+make_transactional(box.schema.sequence)
+make_transactional(box.schema.func)
+make_transactional(box.schema.user)
+make_transactional(box.schema.role)
+
+box.schema.space.format =
+    transactional_ddl_wrapper_for_empty_space(box.schema.space.format)
+box.schema.space.drop =
+    transactional_ddl_wrapper_for_empty_space(box.schema.space.drop)
+box.schema.index.create =
+    transactional_ddl_wrapper_for_empty_space(box.schema.index.create)
 
 --
 -- once
