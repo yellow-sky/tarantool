@@ -40,8 +40,16 @@
 #include "third_party/tarantool_eio.h"
 #include <msgpuck.h>
 
+#include "coio_file.h"
+#include "tt_static.h"
+#include "error.h"
+#include "xrow.h"
+#include "iproto_constants.h"
+#include "errinj.h"
+
 #ifdef ENABLE_PMEM_DAX
 #include "libpmemlog.h"
+
 /**
  * Read from buf in pmem to dst, by offset
  */
@@ -58,14 +66,140 @@ xlog_pmem_fill_bundle(const void *buf, size_t log_len, void *bndl)
 	bundle->result = to_read;
 	return 0;
 }
-#endif /* ENABLE_PMEM_DAX */
 
-#include "coio_file.h"
-#include "tt_static.h"
-#include "error.h"
-#include "xrow.h"
-#include "iproto_constants.h"
-#include "errinj.h"
+/** SNAP, XLOG, VYLOG subarrays of opened files */
+struct pmem_file_pool pmem_file_pools[VYLOG + 1];
+
+struct pmem_file *
+xlog_pmem_file_find(enum xdir_type type, int64_t signature)
+{
+	struct pmem_file_pool *pool = &pmem_file_pools[type];
+	if (pool->pmem_files == NULL)
+		return NULL;
+	for (size_t i = 0; i < pool->size + 1; i++) {
+		if (pool->pmem_files[i].plp != NULL
+		    && pool->pmem_files[i].signature == signature)
+			return &pool->pmem_files[i];
+	}
+	return NULL;
+}
+
+void
+xlog_pmem_file_init(struct pmem_file *pmem_file)
+{
+	pmem_file->plp = NULL;
+	pmem_file->signature = -1;
+}
+
+struct pmem_file *
+xlog_pmem_file_add(enum xdir_type type, int64_t signature, PMEMlogpool *plp)
+{
+	struct pmem_file_pool *pool = &pmem_file_pools[type];
+	if (pool->max == 0) {
+		size_t size = sizeof(struct pmem_file) * 2;
+		pool->pmem_files = malloc(size);
+		if (pool->pmem_files == NULL) {
+			diag_set(OutOfMemory,
+				  size, "malloc", "pmem_file_pool array");
+			return NULL;
+		}
+		pool->max = 2;
+		for (size_t i = 0; i < pool->max; i++)
+			xlog_pmem_file_init(&pool->pmem_files[i]);
+	}
+	if (pool->size == pool->max) {
+		/* increase pool capacity */
+		size_t new_max = pool->max * 2;
+		size_t size = sizeof(struct pmem_file) * new_max;
+		pool->pmem_files = realloc(pool, size);
+		if (pool->pmem_files == NULL) {
+			diag_set(OutOfMemory,
+				  size, "realloc", "pmem_file_pool array");
+			return NULL;
+		}
+		pool->max = new_max;
+	}
+	assert(xlog_pmem_file_find(type, signature) == NULL);
+	struct pmem_file *new_file = &pool->pmem_files[pool->size++];
+	new_file->signature = signature;
+	new_file->plp = plp;
+	new_file->refcnt = 1;
+	return new_file;
+}
+
+void
+xlog_pmem_file_destroy(enum xdir_type type)
+{
+	free(&pmem_file_pools[type].pmem_files);
+	pmem_file_pools[type].max = 0;
+	pmem_file_pools[type].size = 0;
+	pmem_file_pools[type].pmem_files = NULL;
+}
+
+int
+xlog_pmem_file_refcnt_dec(enum xdir_type type, int64_t signature)
+{
+	struct pmem_file *pmem_file = xlog_pmem_file_find(type, signature);
+	assert(pmem_file != NULL && pmem_file->refcnt > 0);
+	if (--pmem_file->refcnt == 0) {
+		struct pmem_file_pool *pool = &pmem_file_pools[type];
+		size_t size = sizeof(*pmem_file)
+			* (&pool->pmem_files[pool->size] - pmem_file);
+		memmove(pmem_file, pmem_file + 1, size);
+		--pool->size;
+		return 0;
+	}
+	return pmem_file->refcnt;
+}
+
+int
+xlog_pmem_file_refcnt_inc(enum xdir_type type, int64_t signature)
+{
+	struct pmem_file *pmem_file = xlog_pmem_file_find(type, signature);
+	assert(pmem_file != NULL);
+	return ++pmem_file->refcnt;
+}
+
+static int64_t
+xlog_signature_by_name(const char *name)
+{
+	char *dot;
+	char *filename = strrchr(name, '/');
+	assert(filename != NULL);
+	filename = filename + 1;
+	return (int64_t)strtoll(filename, &dot, 10);
+}
+
+static enum xdir_type
+xlog_filetype2enum(const char *filetype)
+{
+	if (strncmp(filetype, "XLOG", 4) == 0)
+		return XLOG;
+	else if (strncmp(filetype, "SNAP", 4) == 0)
+		return SNAP;
+	else if (strncmp(filetype, "VYLOG", 5) == 0)
+		return VYLOG;
+	else
+		assert(0);
+}
+
+
+static enum xdir_type
+xlog_filename2enum(const char *filename)
+{
+	char *file_ext = strrchr(filename, '.');
+	assert(file_ext != NULL);
+	if (strstr(file_ext, ".xlog") != 0)
+		return XLOG;
+	else if (strstr(file_ext, ".snap") != 0)
+		return SNAP;
+	else if (strstr(file_ext, ".vylog") != 0)
+		return VYLOG;
+	else
+		assert(0);
+}
+
+#endif /* ENABLE_PMEM_DAX */
 
 /*
  * FALLOC_FL_KEEP_SIZE flag has existed since fallocate() was
@@ -466,26 +600,35 @@ xdir_open_cursor(struct xdir *dir, int64_t signature,
 #ifndef ENABLE_PMEM_DAX
 	int fd = open(filename, O_RDONLY);
 	if (fd < 0) {
-#else
-	PMEMlogpool *plp;
-	// int i = 0;
-// again:
-	plp = pmemlog_open(filename);
-	if (plp == NULL) {
-		// if (errno == EAGAIN) { assert(i++<20); goto again;} /* Disaster FIXME */
-#endif
 		diag_set(SystemError, "failed to open '%s' file", filename);
 		return -1;
 	}
-#ifndef ENABLE_PMEM_DAX
 	if (xlog_cursor_activate_fd(cursor, fd, filename) < 0) {
 		close(fd);
-#else
-	if (xlog_cursor_activate_pmem(cursor, plp, filename) < 0) {
-		pmemlog_close(plp);
-#endif
 		return -1;
 	}
+#else
+	PMEMlogpool *plp;
+	struct pmem_file *pmem_file = xlog_pmem_file_find(dir->type, signature);
+	if (pmem_file != NULL) {
+		xlog_pmem_file_refcnt_inc(dir->type, signature);
+		plp = pmem_file->plp;
+	} else {
+		plp = pmemlog_open(filename);
+		if (plp == NULL) {
+			diag_set(SystemError, "failed to open '%s' file", filename);
+			return -1;
+		}
+		if (xlog_pmem_file_add(dir->type, signature, plp) == NULL) {
+			pmemlog_close(plp);
+			return -1;
+		}
+	}
+	if (xlog_cursor_activate_pmem(cursor, plp, filename) < 0) {
+		xlog_pmemlog_close(plp, dir->type, signature);
+		return -1;
+	}
+#endif
 	struct xlog_meta *meta = &cursor->meta;
 	if (strcmp(meta->filetype, dir->filetype) != 0) {
 		xlog_cursor_close(cursor, false);
@@ -870,6 +1013,7 @@ xlog_create(struct xlog *xlog, const char *name, int flags,
 	xlog->is_inprogress = true;
 	snprintf(xlog->filename, PATH_MAX, "%s%s", name, inprogress_suffix);
 
+#ifndef ENABLE_PMEM_DAX
 	flags |= O_RDWR | O_CREAT | O_EXCL;
 
 	/*
@@ -882,17 +1026,23 @@ xlog_create(struct xlog *xlog, const char *name, int flags,
 	 * may think that this is a corrupt file and stop
 	 * replication.
 	 */
-#ifndef ENABLE_PMEM_DAX
 	xlog->fd = open(xlog->filename, flags, 0644);
 	if (xlog->fd < 0) {
 #else
+	(void)flags;
+	int64_t signature;
+	enum xdir_type type;
 	assert(opts->pmemlog_size > 0);
 	/* PMEM DAX must be available to write */
 	xlog->plp = pmemlog_create(xlog->filename, opts->pmemlog_size, 0666);
-	if (xlog->plp == NULL)
-		xlog->plp = pmemlog_open(xlog->filename);
-
-	if (xlog->plp == NULL) {
+	if (xlog->plp != NULL) {
+		signature = vclock_sum(&xlog->meta.vclock);
+		type = xlog_filetype2enum(xlog->meta.filetype);
+		if (xlog_pmem_file_add(type, signature, xlog->plp) == NULL) {
+			pmemlog_close(xlog->plp);
+			goto err_open;
+		}
+	} else {
 #endif
 		say_syserror("open, [%s]", xlog->filename);
 		diag_set(SystemError, "failed to create file '%s'",
@@ -924,7 +1074,7 @@ err_write:
 #ifndef ENABLE_PMEM_DAX
 	close(xlog->fd);
 #else
-	pmemlog_close(xlog->plp);
+	xlog_pmemlog_close(xlog->plp, type, signature);
 #endif
 	unlink(xlog->filename); /* try to remove incomplete file */
 err_open:
@@ -1015,15 +1165,24 @@ no_eof:
 		}
 	}
 #else
-	assert(opts->pmemlog_size > 0);
-	/* PMEM DAX must be available to write */
-	xlog->plp = pmemlog_create(xlog->filename, opts->pmemlog_size, 0666);
-	if (xlog->plp == NULL)
+	/* not open file if we already have it's pointer because it locked */
+	int64_t signature = xlog_signature_by_name(xlog->filename);
+	enum xdir_type type = xlog_filename2enum(xlog->filename);
+	struct pmem_file *pmem_file = xlog_pmem_file_find(type, signature);
+	if (pmem_file != NULL) {
+		xlog_pmem_file_refcnt_inc(type, signature);
+		xlog->plp = pmem_file->plp;
+	} else {
 		xlog->plp = pmemlog_open(xlog->filename);
-	if (xlog->plp == NULL) {
-		say_syserror("open, [%s]", name);
-		diag_set(SystemError, "failed to open file '%s'", name);
-		goto err_open;
+		if (xlog->plp == NULL) {
+			diag_set(SystemError, "failed to open '%s' file",
+				 xlog->filename);
+			goto err_open;
+		}
+		if (xlog_pmem_file_add(type, signature, xlog->plp) == NULL) {
+			pmemlog_close(xlog->plp);
+			goto err_open;
+		}
 	}
 
 	/* Read and parse meta */
@@ -1057,7 +1216,7 @@ err_read:
 #ifndef ENABLE_PMEM_DAX
 	close(xlog->fd);
 #else
-	pmemlog_close(xlog->plp);
+	xlog_pmemlog_close(xlog->plp, type, signature);
 #endif
 err_open:
 	xlog_destroy(xlog);
@@ -1629,8 +1788,11 @@ xlog_close(struct xlog *l, bool reuse_fd)
 			say_syserror("%s: close() failed", l->filename);
 	}
 #else
-	if (!reuse_fd)
-		pmemlog_close(l->plp);
+	if (!reuse_fd) {
+		int64_t signature = vclock_sum(&l->meta.vclock);
+		enum xdir_type type = xlog_filetype2enum(l->meta.filetype);
+		xlog_pmemlog_close(l->plp, type, signature);
+	}
 #endif
 
 	xlog_destroy(l);
@@ -1653,7 +1815,9 @@ xlog_atfork(struct xlog *xlog)
 	close(xlog->fd);
 	xlog->fd = -1;
 #else
-	pmemlog_close(xlog->plp);
+	int64_t signature = vclock_sum(&xlog->meta.vclock);
+	enum xdir_type type = xlog_filetype2enum(xlog->meta.filetype);
+	xlog_pmemlog_close(xlog->plp, type, signature);
 	xlog->plp = NULL;
 #endif
 }
@@ -2185,14 +2349,29 @@ xlog_cursor_activate_pmem(struct xlog_cursor *i, PMEMlogpool *plp,
 static int
 xlog_cursor_open_pmem(struct xlog_cursor *i, const char *name)
 {
-	PMEMlogpool *plp = pmemlog_open(name);
-	if (plp == NULL) {
-		diag_set(SystemError, "failed to open '%s' file", name);
-		return -1;
+	int64_t signature = xlog_signature_by_name(name);
+	enum xdir_type type = xlog_filename2enum(name);
+	PMEMlogpool *plp;
+	struct pmem_file *pmem_file = xlog_pmem_file_find(type, signature);
+	if (pmem_file != NULL) {
+		xlog_pmem_file_refcnt_inc(type, signature);
+		plp = pmem_file->plp;
+	} else {
+		plp = pmemlog_open(name);
+		if (plp == NULL) {
+			diag_set(SystemError, "failed to open '%s' file", name);
+			return -1;
+		}
+		if (xlog_pmem_file_add(type, signature, plp) == NULL) {
+			pmemlog_close(plp);
+			return -1;
+		}
 	}
+	say_error("Errno:[%d] %s\n", errno, strerror(errno));
+
 	int rc = xlog_cursor_activate_pmem(i, plp, name);
 	if (rc < 0) {
-		pmemlog_close(plp);
+		xlog_pmemlog_close(plp, type, signature);
 		return -1;
 	}
 	return 0;
@@ -2277,8 +2456,11 @@ xlog_cursor_close(struct xlog_cursor *i, bool reuse_fd)
 	if (i->fd >= 0 && !reuse_fd)
 		close(i->fd);
 #else
-	if (i->plp != NULL && !reuse_fd)
-		pmemlog_close(i->plp);
+	if (i->plp != NULL && !reuse_fd) {
+		int64_t signature = vclock_sum(&i->meta.vclock);
+		enum xdir_type type = xlog_filetype2enum(i->meta.filetype);
+		xlog_pmemlog_close(i->plp, type, signature);
+	}
 #endif
 	assert(i->rbuf.slabc == &cord()->slabc);
 	ibuf_destroy(&i->rbuf);

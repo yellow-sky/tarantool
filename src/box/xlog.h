@@ -45,6 +45,18 @@
 #ifdef ENABLE_PMEM_DAX
 #include "libpmemlog.h"
 
+struct pmem_file {
+	int64_t signature;
+	int refcnt;
+	PMEMlogpool *plp;
+};
+
+struct pmem_file_pool {
+	struct pmem_file *pmem_files;
+	size_t size;
+	size_t max;
+};
+
 struct pmemlog_bundle {
 	size_t len;
 	size_t offset;
@@ -52,13 +64,7 @@ struct pmemlog_bundle {
 	void *dst;
 };
 
-/**
- * Read from buf in pmem to dst, by offset
- */
-int
-xlog_pmem_fill_bundle(const void *buf, size_t log_len, void *bndl);
-
-#endif /* ENABLE_PMEM_DAX */
+#endif
 
 struct iovec;
 struct xrow_header;
@@ -861,6 +867,34 @@ xdir_open_cursor(struct xdir *dir, int64_t signature,
 		 struct xlog_cursor *cursor);
 
 /** }}} */
+
+#ifdef ENABLE_PMEM_DAX
+
+/**
+ * Read from buf in pmem to dst, by offset
+ */
+int
+xlog_pmem_fill_bundle(const void *buf, size_t log_len, void *bndl);
+
+struct pmem_file *
+xlog_pmem_file_find(enum xdir_type type, int64_t signature);
+
+struct pmem_file *
+xlog_pmem_file_add(enum xdir_type type, int64_t signature, PMEMlogpool *plp);
+
+int
+xlog_pmem_file_refcnt_dec(enum xdir_type type, int64_t signature);
+
+int
+xlog_pmem_file_refcnt_inc(enum xdir_type type, int64_t signature);
+
+static inline void
+xlog_pmemlog_close(PMEMlogpool *plp, enum xdir_type type, int64_t signature)
+{
+	if (xlog_pmem_file_refcnt_dec(type, signature) == 0)
+		pmemlog_close(plp);
+}
+#endif /* ENABLE_PMEM_DAX */
 
 #if defined(__cplusplus)
 } /* extern C */

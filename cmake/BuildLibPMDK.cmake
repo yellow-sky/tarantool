@@ -14,7 +14,7 @@ macro(pmdk_build)
         set (pmdk_src_dir debug)
     else ()
         set (pmdk_ccopt -O2)
-        set (pmdk_src_dir nodebug)
+        set (pmdk_src_dir nondebug)
     endif()
 
     set(pmdk_buildoptions

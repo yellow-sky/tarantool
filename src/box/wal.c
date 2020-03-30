@@ -66,6 +66,11 @@ wal_write(struct journal *, struct journal_entry *);
 static int64_t
 wal_write_in_wal_mode_none(struct journal *, struct journal_entry *);
 
+#ifdef ENABLE_PMEM_DAX
+static int64_t
+wal_direct_write(struct journal *, struct journal_entry *);
+#endif
+
 /*
  * WAL writer - maintain a Write Ahead Log for every change
  * in the data state.
@@ -347,10 +352,16 @@ wal_writer_create(struct wal_writer *writer, enum wal_mode wal_mode,
 		  wal_on_garbage_collection_f on_garbage_collection,
 		  wal_on_checkpoint_threshold_f on_checkpoint_threshold)
 {
+#ifndef ENABLE_PMEM_DAX
 	writer->wal_mode = wal_mode;
 	writer->wal_max_size = wal_max_size;
 	journal_create(&writer->base, wal_mode == WAL_NONE ?
 		       wal_write_in_wal_mode_none : wal_write, NULL);
+#else
+	writer->wal_mode = WAL_NONE;
+	writer->wal_max_size = wal_max_size;
+	journal_create(&writer->base, wal_direct_write, NULL);
+#endif
 
 	struct xlog_opts opts = xlog_opts_default;
 	opts.sync_is_async = true;
@@ -1231,6 +1242,210 @@ wal_write_in_wal_mode_none(struct journal *journal,
 	journal_entry_complete(entry);
 	return 0;
 }
+
+
+#ifdef ENABLE_PMEM_DAX
+
+#include <time.h>
+#define BILLION (1000000000L)
+#define MEASURE(name, code) do{ \
+	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &begin); \
+	do {code} while(0); \
+	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end); \
+	uint64_t time_spent = BILLION * (end.tv_sec - begin.tv_sec) + end.tv_nsec - begin.tv_nsec; \
+	fprintf(stderr, name " with time_spent: %lu\n", time_spent); \
+} while (0)
+
+static int64_t
+wal_direct_write(struct journal *journal,
+			   struct journal_entry *entry)
+{
+	struct timespec begin, end;
+	struct wal_writer *writer = (struct wal_writer *) journal;
+	struct wal_msg *batch;
+	// MEASURE("init to error", {
+	if (!stailq_empty(&writer->wal_pipe.input) &&
+	    (batch = wal_msg(stailq_first_entry(&writer->wal_pipe.input,
+						struct cmsg, fifo)))) {
+
+		stailq_add_tail_entry(&batch->commit, entry, fifo);
+	} else {
+		batch = (struct wal_msg *)mempool_alloc(&writer->msg_pool);
+		if (batch == NULL) {
+			diag_set(OutOfMemory, sizeof(struct wal_msg),
+				 "region", "struct wal_msg");
+			goto fail;
+		}
+		wal_msg_create(batch);
+		stailq_add_tail_entry(&batch->commit, entry, fifo);
+	}
+	batch->approx_len += entry->approx_len;
+	// });
+	struct error *error;
+	struct vclock vclock_diff;
+	// MEASURE("all checks: ", {
+
+	/*
+	 * Track all vclock changes made by this batch into
+	 * vclock_diff variable and then apply it into writers'
+	 * vclock after each xlog flush.
+	 */
+	vclock_create(&vclock_diff);
+
+	ERROR_INJECT_SLEEP(ERRINJ_WAL_DELAY);
+
+	if (writer->in_rollback.route != NULL) {
+		/* We're rolling back a failed write. */
+		stailq_concat(&batch->rollback, &batch->commit);
+		vclock_copy(&batch->vclock, &writer->vclock);
+		return -1;
+	}
+
+	/* Xlog is only rotated between queue processing  */
+	if (wal_opt_rotate(writer) != 0) {
+		fprintf(stderr, "wal_opt_rotate failed\n");
+		stailq_concat(&batch->rollback, &batch->commit);
+		vclock_copy(&batch->vclock, &writer->vclock);
+		wal_writer_begin_rollback(writer);
+		return -1;
+	}
+
+	/* Ensure there's enough disk space before writing anything. */
+	if (wal_fallocate(writer, batch->approx_len) != 0) {
+		stailq_concat(&batch->rollback, &batch->commit);
+		vclock_copy(&batch->vclock, &writer->vclock);
+		wal_writer_begin_rollback(writer);
+		return -1;
+	}
+
+	/*
+	 * This code tries to write queued requests (=transactions) using as
+	 * few I/O syscalls and memory copies as possible. For this reason
+	 * writev(2) and `struct iovec[]` are used (see `struct fio_batch`).
+	 *
+	 * For each request (=transaction) each request row (=statement) is
+	 * added to iov `batch`. A row can contain up to XLOG_IOVMAX iovecs.
+	 * A request can have an **unlimited** number of rows. Since OS has
+	 * a hard coded limit up to `sysconf(_SC_IOV_MAX)` iovecs (usually
+	 * 1024), a huge transaction may not fit into a single batch.
+	 * Therefore, it is not possible to "atomically" write an entire
+	 * transaction using a single writev(2) call.
+	 *
+	 * Request boundaries and batch boundaries are not connected at all
+	 * in this code. Batches flushed to disk as soon as they are full.
+	 * In order to guarantee that a transaction is either fully written
+	 * to file or isn't written at all, ftruncate(2) is used to shrink
+	 * the file to the last fully written request. The absolute position
+	 * of request in xlog file is stored inside `struct journal_entry`.
+	 */
+	// }); /*MEASURE FINISING */
+
+	struct xlog *l = &writer->current_wal;
+	int rc;
+	struct stailq_entry *last_committed = NULL;
+
+	/*
+	 * Iterate over requests (transactions)
+	 */
+	stailq_foreach_entry(entry, &batch->commit, fifo) {
+		// MEASURE( "inside FOreach to write:", {
+		wal_assign_lsn(&vclock_diff, &writer->vclock,
+			       entry->rows, entry->rows + entry->n_rows);
+		entry->res = vclock_sum(&vclock_diff) +
+			     vclock_sum(&writer->vclock);
+		rc = xlog_write_entry(l, entry);
+		// }); /*MEASURE FINISING */
+		
+		// MEASURE("inside FOreach after write:", {
+		if (rc < 0)
+			goto done;
+		if (rc > 0) {
+			// fprintf(stderr,", write entry > 0 \n");
+			writer->checkpoint_wal_size += rc;
+			last_committed = &entry->fifo;
+			vclock_merge(&writer->vclock, &vclock_diff);
+		}
+		// }); /*MEASURE FINISING */
+		/* rc == 0: the write is buffered in xlog_tx */
+	}
+	// MEASURE("flush", {
+	rc = xlog_flush(l);
+	if (rc < 0)
+		goto done;
+	// }); /*MEASURE FINISING */
+
+	// MEASURE("merge", {
+	writer->checkpoint_wal_size += rc;
+	last_committed = stailq_last(&batch->commit);
+	vclock_merge(&writer->vclock, &vclock_diff);
+	// }); /*MEASURE FINISING */
+
+	// MEASURE("FINISHING: ", {
+	/*
+	 * Notify TX if the checkpoint threshold has been exceeded.
+	 * Use malloc() for allocating the notification message and
+	 * don't panic on error, because if we fail to send the
+	 * message now, we will retry next time we process a request.
+	 */
+	if (!writer->checkpoint_triggered &&
+	    writer->checkpoint_wal_size > writer->checkpoint_threshold) {
+	// 	static struct cmsg_hop route[] = {
+	// 		{ tx_notify_checkpoint, NULL },
+	// 	};
+	// 	struct cmsg *msg = malloc(sizeof(*msg));
+	// 	if (msg != NULL) {
+	// 		cmsg_init(msg, route);
+	// 		cpipe_push(&writer->tx_prio_pipe, msg);
+	// 		writer->checkpoint_triggered = true;
+	// 	} else {
+	// 		say_warn("failed to allocate checkpoint "
+	// 			 "notification message");
+	// 	}
+	}
+
+done:
+	error = diag_last_error(diag_get());
+	if (error) {
+		/* Until we can pass the error to tx, log it and clear. */
+		error_log(error);
+		diag_clear(diag_get());
+	}
+	/*
+	 * Remember the vclock of the last successfully written row so
+	 * that we can update replicaset.vclock once this message gets
+	 * back to tx.
+	 */
+	vclock_copy(&batch->vclock, &writer->vclock);
+	/*
+	 * We need to start rollback from the first request
+	 * following the last committed request. If
+	 * last_commit_req is NULL, it means we have committed
+	 * nothing, and need to start rollback from the first
+	 * request. Otherwise we rollback from the first request.
+	 */
+	struct stailq rollback;
+	stailq_cut_tail(&batch->commit, last_committed, &rollback);
+
+	if (!stailq_empty(&rollback)) {
+		/* Update status of the successfully committed requests. */
+		stailq_foreach_entry(entry, &rollback, fifo)
+			entry->res = -1;
+		/* Rollback unprocessed requests */
+		stailq_concat(&batch->rollback, &rollback);
+		wal_writer_begin_rollback(writer);
+	}
+	fiber_gc();
+	wal_notify_watchers(writer, WAL_EVENT_WRITE);
+	// }); /*MEASURE FINISING */
+	tx_schedule_queue(&batch->commit);
+	mempool_free(&writer->msg_pool, batch);
+	return 0;
+fail:
+	entry->res = -1;
+	journal_entry_complete(entry);
+	return -1;
+}
+#endif /* ENABLE_PMEM_DAX */
 
 void
 wal_init_vy_log()

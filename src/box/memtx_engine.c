@@ -499,6 +499,10 @@ checkpoint_new(const char *snap_dirname, uint64_t snap_io_rate_limit)
 	opts.rate_limit = snap_io_rate_limit;
 	opts.sync_interval = SNAP_SYNC_INTERVAL;
 	opts.free_cache = true;
+#ifdef ENABLE_PMEM_DAX
+	/* FIXME - necessary for work with huge memtx memory */
+	opts.pmemlog_size = (((uint64_t)1) << 34);
+#endif
 	xdir_create(&ckpt->dir, snap_dirname, SNAP, &INSTANCE_UUID, &opts);
 	vclock_create(&ckpt->vclock);
 	ckpt->touch = false;

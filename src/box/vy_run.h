@@ -124,6 +124,7 @@ struct vy_run {
 	/** Run data file. */
 	int fd;
 #ifdef ENABLE_PMEM_DAX
+	/** associated pmemlog */
 	PMEMlogpool *plp;
 #endif
 	/** Unique ID of this run. */
