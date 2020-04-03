@@ -371,7 +371,7 @@ end
 --
 local function swim_member_payload_str(m)
     local ptr = swim_check_member(m, 'member:payload_str()')
-    local cdata, size = swim_member_payload_raw(ptr)
+    local _, size = swim_member_payload_raw(ptr)
     if size > 0 then
         return ffi.string(swim_member_payload_raw(ptr))
     end
@@ -462,7 +462,7 @@ local swim_member_mt = {
         is_dropped = swim_member_is_dropped,
     },
     __serialize = swim_member_serialize,
-    __newindex = function(m)
+    __newindex = function()
         return error('swim_member is a read-only object')
     end
 }
@@ -782,20 +782,20 @@ local swim_member_event_mt = {
 --
 -- Create a closure function for preprocessing raw SWIM member
 -- event trigger parameters.
--- @param s SWIM instance.
+-- @param instance SWIM instance.
 -- @param callback User functions to call.
 -- @param ctx An optional parameter for @a callback passed as is.
 -- @return A function to set as a trigger.
 --
-local function swim_on_member_event_new(s, callback, ctx)
+local function swim_on_member_event_new(instance, callback, ctx)
     -- Do not keep a hard reference to a SWIM instance. Otherwise
     -- it is a cyclic reference, and both the instance and the
     -- trigger will never be GC-ed.
-    s = setmetatable({s}, {__mode = 'v'})
+    instance = setmetatable({instance}, {__mode = 'v'})
     return function(member_ptr, event_mask)
-        local s = s[1]
-        if s then
-            local m = swim_wrap_member(s, member_ptr)
+        local i = instance[1]
+        if i then
+            local m = swim_wrap_member(i, member_ptr)
             local event = setmetatable({event_mask}, swim_member_event_mt)
             return callback(m, event, ctx)
         end
