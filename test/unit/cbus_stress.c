@@ -147,11 +147,7 @@ thread_start_test_cb(struct cmsg *cmsg)
 static void
 thread_start_test(struct thread *t)
 {
-	static struct cmsg_hop start_route[] = {
-		{ thread_start_test_cb, NULL }
-	};
-	cmsg_init(&t->cmsg, start_route);
-	cpipe_push(&t->thread_pipe, &t->cmsg);
+	cpipe_push(&t->thread_pipe, thread_start_test_cb, &t->cmsg);
 }
 
 /* Join a test thread. */
@@ -238,16 +234,12 @@ thread_msg_received_cb(struct cmsg *cmsg)
 static void
 thread_send(struct thread *t, int dest_id)
 {
-	static struct cmsg_hop route[] = {
-		{ thread_msg_received_cb, NULL }
-	};
 	struct conn *c = &t->connections[dest_id];
 	assert(c->active);
 	struct thread_msg *msg = malloc(sizeof(*msg));
 	assert(msg != NULL);
-	cmsg_init(&msg->cmsg, route);
 	msg->dest_id = dest_id;
-	cpipe_push(&c->to, &msg->cmsg);
+	cpipe_push(&c->to, thread_msg_received_cb, &msg->cmsg);
 	t->sent++;
 }
 
@@ -299,11 +291,7 @@ test_func(va_list ap)
 			thread_disconnect(t, i);
 	}
 	/* Notify the main thread that we are done. */
-	static struct cmsg_hop complete_route[] = {
-		{ test_complete_cb, NULL }
-	};
-	cmsg_init(&t->cmsg, complete_route);
-	cpipe_push(&t->main_pipe, &t->cmsg);
+	cpipe_push(&t->main_pipe, test_complete_cb, &t->cmsg);
 	return 0;
 }
 

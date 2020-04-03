@@ -134,14 +134,11 @@ cpipe_destroy(struct cpipe *pipe)
 {
 	ev_async_stop(pipe->producer, &pipe->flush_input);
 
-	static const struct cmsg_hop route[1] = {
-		{cbus_endpoint_poison_f, NULL}
-	};
 	trigger_destroy(&pipe->on_flush);
 
 	struct cbus_endpoint *endpoint = pipe->endpoint;
 	struct cmsg_poison *poison = malloc(sizeof(struct cmsg_poison));
-	cmsg_init(&poison->msg, route);
+	poison->msg.f = cbus_endpoint_poison_f;
 	poison->endpoint = pipe->endpoint;
 	/*
 	 * Avoid the general purpose cpipe_push_input() since
@@ -311,64 +308,6 @@ cbus_free()
 	cbus_destroy(&cbus);
 }
 
-/* {{{ cmsg */
-
-/**
- * Dispatch the message to the next hop.
- */
-static inline void
-cmsg_dispatch(struct cpipe *pipe, struct cmsg *msg)
-{
-	/**
-	 * 'pipe' pointer saved in class constructor works as
-	 * a guard that the message is alive. If a message route
-	 * has the next pipe, then the message mustn't have been
-	 * destroyed on this hop. Otherwise msg->hop->pipe could
-	 * be already pointing to garbage.
-	 */
-	if (pipe) {
-		/*
-		 * Once we pushed the message to the bus,
-		 * we relinquished all write access to it,
-		 * so we must increase the current hop *before*
-		 * push.
-		 */
-		msg->hop++;
-		cpipe_push(pipe, msg);
-	}
-}
-
-/**
- * Deliver the message and dispatch it to the next hop.
- */
-void
-cmsg_deliver(struct cmsg *msg)
-{
-	/*
-	 * Save the pointer to the last pipe,
-	 * the memory where it is stored may be destroyed
-	 * on the last hop.
-	 */
-	struct cpipe *pipe = msg->hop->pipe;
-	msg->hop->f(msg);
-	cmsg_dispatch(pipe, msg);
-}
-
-/* }}} cmsg */
-
-/**
- * Call the target function and store the results (diag, rc) in
- * struct cbus_call_msg.
- */
-void
-cbus_call_perform(struct cmsg *m)
-{
-	struct cbus_call_msg *msg = (struct cbus_call_msg *)m;
-	msg->rc = msg->func(msg);
-	if (msg->rc)
-		diag_move(&fiber()->diag, &msg->diag);
-}
-
 /**
  * Wake up the caller fiber to reap call results.
  * If the fiber is gone, e.g. in case of call timeout
@@ -388,6 +327,20 @@ cbus_call_done(struct cmsg *m)
 }
 
 /**
+ * Call the target function and store the results (diag, rc) in
+ * struct cbus_call_msg.
+ */
+void
+cbus_call_perform(struct cmsg *m)
+{
+	struct cbus_call_msg *msg = (struct cbus_call_msg *)m;
+	msg->rc = msg->func(msg);
+	if (msg->rc)
+		diag_move(&fiber()->diag, &msg->diag);
+	cpipe_push(msg->caller_pipe, cbus_call_done, m);
+}
+
+/**
  * Execute a synchronous call over cbus.
  */
 int
@@ -399,17 +352,13 @@ cbus_call(struct cpipe *callee, struct cpipe *caller, struct cbus_call_msg *msg,
 	diag_create(&msg->diag);
 	msg->caller = fiber();
 	msg->complete = false;
-	msg->route[0].f = cbus_call_perform;
-	msg->route[0].pipe = caller;
-	msg->route[1].f = cbus_call_done;
-	msg->route[1].pipe = NULL;
-	cmsg_init(cmsg(msg), msg->route);
+	msg->caller_pipe = caller;
 
 	msg->func = func;
 	msg->free_cb = free_cb;
 	msg->rc = 0;
 
-	cpipe_push(callee, cmsg(msg));
+	cpipe_push(callee, cbus_call_perform, cmsg(msg));
 
 	fiber_yield_timeout(timeout);
 	if (msg->complete == false) {           /* timed out or cancelled */
@@ -427,15 +376,10 @@ cbus_call(struct cpipe *callee, struct cpipe *caller, struct cbus_call_msg *msg,
 
 struct cbus_flush_msg {
 	struct cmsg cmsg;
+	struct cpipe *caller_pipe;
 	bool complete;
 	struct fiber_cond cond;
 };
-
-static void
-cbus_flush_perform(struct cmsg *cmsg)
-{
-	(void)cmsg;
-}
 
 static void
 cbus_flush_complete(struct cmsg *cmsg)
@@ -446,21 +390,24 @@ cbus_flush_complete(struct cmsg *cmsg)
 	fiber_cond_signal(&msg->cond);
 }
 
+static void
+cbus_flush_perform(struct cmsg *cmsg)
+{
+	struct cbus_flush_msg *msg = container_of(cmsg, struct cbus_flush_msg,
+						  cmsg);
+	cpipe_push(msg->caller_pipe, cbus_flush_complete, cmsg);
+}
+
 void
 cbus_flush(struct cpipe *callee, struct cpipe *caller,
 	   void (*process_cb)(struct cbus_endpoint *endpoint))
 {
-	struct cmsg_hop route[] = {
-		{cbus_flush_perform, caller},
-		{cbus_flush_complete, NULL},
-	};
 	struct cbus_flush_msg msg;
-
-	cmsg_init(&msg.cmsg, route);
+	msg.caller_pipe = caller;
 	msg.complete = false;
 	fiber_cond_create(&msg.cond);
 
-	cpipe_push(callee, &msg.cmsg);
+	cpipe_push(callee, cbus_flush_perform, &msg.cmsg);
 
 	while (true) {
 		if (process_cb != NULL)
@@ -489,14 +436,10 @@ cbus_pair_perform(struct cmsg *cmsg)
 {
 	struct cbus_pair_msg *msg = container_of(cmsg,
 			struct cbus_pair_msg, cmsg);
-	static struct cmsg_hop route[] = {
-		{cbus_pair_complete, NULL},
-	};
-	cmsg_init(cmsg, route);
 	cpipe_create(msg->src_pipe, msg->src_name);
 	if (msg->pair_cb != NULL)
 		msg->pair_cb(msg->pair_arg);
-	cpipe_push(msg->src_pipe, cmsg);
+	cpipe_push(msg->src_pipe, cbus_pair_complete, cmsg);
 }
 
 static void
@@ -514,12 +457,8 @@ cbus_pair(const char *dest_name, const char *src_name,
 	  void (*pair_cb)(void *), void *pair_arg,
 	  void (*process_cb)(struct cbus_endpoint *))
 {
-	static struct cmsg_hop route[] = {
-		{cbus_pair_perform, NULL},
-	};
 	struct cbus_pair_msg msg;
 
-	cmsg_init(&msg.cmsg, route);
 	msg.pair_cb = pair_cb;
 	msg.pair_arg = pair_arg;
 	msg.complete = false;
@@ -531,7 +470,7 @@ cbus_pair(const char *dest_name, const char *src_name,
 	assert(endpoint != NULL);
 
 	cpipe_create(dest_pipe, dest_name);
-	cpipe_push(dest_pipe, &msg.cmsg);
+	cpipe_push(dest_pipe, cbus_pair_perform, &msg.cmsg);
 
 	while (true) {
 		if (process_cb != NULL)
@@ -547,9 +486,16 @@ struct cbus_unpair_msg {
 	void (*unpair_cb)(void *);
 	void *unpair_arg;
 	struct cpipe *src_pipe;
+	struct cpipe *dest_pipe;
 	bool complete;
 	struct fiber_cond cond;
 };
+
+static void
+cbus_unpair_perform(struct cmsg *cmsg);
+
+static void
+cbus_unpair_flush(struct cmsg *cmsg);
 
 static void
 cbus_unpair_prepare(struct cmsg *cmsg)
@@ -558,12 +504,15 @@ cbus_unpair_prepare(struct cmsg *cmsg)
 			struct cbus_unpair_msg, cmsg);
 	if (msg->unpair_cb != NULL)
 		msg->unpair_cb(msg->unpair_arg);
+	cpipe_push(msg->src_pipe, cbus_unpair_flush, cmsg);
 }
 
 static void
 cbus_unpair_flush(struct cmsg *cmsg)
 {
-	(void)cmsg;
+	struct cbus_unpair_msg *msg = container_of(cmsg,
+			struct cbus_unpair_msg, cmsg);
+	cpipe_push(msg->dest_pipe, cbus_unpair_perform, cmsg);
 }
 
 static void
@@ -574,11 +523,7 @@ cbus_unpair_perform(struct cmsg *cmsg)
 {
 	struct cbus_unpair_msg *msg = container_of(cmsg,
 			struct cbus_unpair_msg, cmsg);
-	static struct cmsg_hop route[] = {
-		{cbus_unpair_complete, NULL},
-	};
-	cmsg_init(cmsg, route);
-	cpipe_push(msg->src_pipe, cmsg);
+	cpipe_push(msg->src_pipe, cbus_unpair_complete, cmsg);
 	cpipe_destroy(msg->src_pipe);
 }
 
@@ -596,21 +541,16 @@ cbus_unpair(struct cpipe *dest_pipe, struct cpipe *src_pipe,
 	    void (*unpair_cb)(void *), void *unpair_arg,
 	    void (*process_cb)(struct cbus_endpoint *))
 {
-	struct cmsg_hop route[] = {
-		{cbus_unpair_prepare, src_pipe},
-		{cbus_unpair_flush, dest_pipe},
-		{cbus_unpair_perform, NULL},
-	};
 	struct cbus_unpair_msg msg;
 
-	cmsg_init(&msg.cmsg, route);
 	msg.unpair_cb = unpair_cb;
 	msg.unpair_arg = unpair_arg;
 	msg.src_pipe = src_pipe;
+	msg.dest_pipe = dest_pipe;
 	msg.complete = false;
 	fiber_cond_create(&msg.cond);
 
-	cpipe_push(dest_pipe, &msg.cmsg);
+	cpipe_push(dest_pipe, cbus_unpair_prepare, &msg.cmsg);
 
 	struct cbus_endpoint *endpoint = src_pipe->endpoint;
 	while (true) {
@@ -656,18 +596,9 @@ cbus_stop_loop_f(struct cmsg *msg)
 void
 cbus_stop_loop(struct cpipe *pipe)
 {
-	/*
-	 * Hack: static message only works because cmsg_deliver()
-	 * is a no-op on the second hop.
-	 */
-	static const struct cmsg_hop route[1] = {
-		{cbus_stop_loop_f, NULL}
-	};
 	struct cmsg *cancel = malloc(sizeof(struct cmsg));
 
-	cmsg_init(cancel, route);
-
-	cpipe_push(pipe, cancel);
+	cpipe_push(pipe, cbus_stop_loop_f, cancel);
 	ev_invoke(pipe->producer, &pipe->flush_input, EV_CUSTOM);
 }
 

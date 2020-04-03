@@ -381,7 +381,7 @@ relay_final_join(int fd, uint64_t sync, struct vclock *start_vclock,
 static void
 relay_status_update(struct cmsg *msg)
 {
-	msg->route = NULL;
+	msg->f = NULL;
 }
 
 /**
@@ -392,11 +392,7 @@ tx_status_update(struct cmsg *msg)
 {
 	struct relay_status_msg *status = (struct relay_status_msg *)msg;
 	vclock_copy(&status->relay->tx.vclock, &status->vclock);
-	static const struct cmsg_hop route[] = {
-		{relay_status_update, NULL}
-	};
-	cmsg_init(msg, route);
-	cpipe_push(&status->relay->relay_pipe, msg);
+	cpipe_push(&status->relay->relay_pipe, relay_status_update, msg);
 }
 
 /**
@@ -413,16 +409,12 @@ tx_gc_advance(struct cmsg *msg)
 static int
 relay_on_close_log_f(struct trigger *trigger, void * /* event */)
 {
-	static const struct cmsg_hop route[] = {
-		{tx_gc_advance, NULL}
-	};
 	struct relay *relay = (struct relay *)trigger->data;
 	struct relay_gc_msg *m = (struct relay_gc_msg *)malloc(sizeof(*m));
 	if (m == NULL) {
 		say_warn("failed to allocate relay gc message");
 		return 0;
 	}
-	cmsg_init(&m->msg, route);
 	m->relay = relay;
 	vclock_copy(&m->vclock, &relay->r->vclock);
 	/*
@@ -464,7 +456,7 @@ relay_schedule_pending_gc(struct relay *relay, const struct vclock *vclock)
 		gc_msg = curr;
 	}
 	if (gc_msg != NULL)
-		cpipe_push(&relay->tx_pipe, &gc_msg->msg);
+		cpipe_push(&relay->tx_pipe, tx_gc_advance, &gc_msg->msg);
 }
 
 static void
@@ -625,7 +617,7 @@ relay_subscribe_f(va_list ap)
 		 * Check that the vclock has been updated and the previous
 		 * status message is delivered
 		 */
-		if (relay->status_msg.msg.route != NULL)
+		if (relay->status_msg.msg.f != NULL)
 			continue;
 		struct vclock *send_vclock;
 		if (relay->version_id < version_id(1, 7, 4))
@@ -635,13 +627,10 @@ relay_subscribe_f(va_list ap)
 		if (vclock_sum(&relay->status_msg.vclock) ==
 		    vclock_sum(send_vclock))
 			continue;
-		static const struct cmsg_hop route[] = {
-			{tx_status_update, NULL}
-		};
-		cmsg_init(&relay->status_msg.msg, route);
 		vclock_copy(&relay->status_msg.vclock, send_vclock);
 		relay->status_msg.relay = relay;
-		cpipe_push(&relay->tx_pipe, &relay->status_msg.msg);
+		cpipe_push(&relay->tx_pipe, tx_status_update,
+			   &relay->status_msg.msg);
 		/* Collect xlog files received by the replica. */
 		relay_schedule_pending_gc(relay, send_vclock);
 	}
