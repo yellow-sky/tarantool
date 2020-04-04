@@ -17,6 +17,12 @@ ffi.cdef[[
     };
 ]]
 
+local filenos = {
+    STDIN = 0,
+    STDOUT = 1,
+    STDERR = 2,
+}
+
 local const_char_ptr_t = ffi.typeof('const char *')
 
 local internal = fio.internal
@@ -521,6 +527,10 @@ fio.utime = function(path, atime, mtime)
 
     return internal.utime(path, atime, mtime)
 end
+
+fio.stdin = ffi.new('struct fio_handle', filenos.STDIN)
+fio.stdout = ffi.new('struct fio_handle', filenos.STDOUT)
+fio.stderr = ffi.new('struct fio_handle', filenos.STDERR)
 
 fio.path = {}
 fio.path.is_file = function(filename)

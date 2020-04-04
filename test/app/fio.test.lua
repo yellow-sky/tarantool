@@ -502,3 +502,14 @@ fio.tempdir()
 tmpdir = nil
 
 os.setenv('TMPDIR', old_tmpdir)
+
+--
+-- gh-1338: provide access to stdin/stdout/stderr
+--
+fio.stdin.fh == 0
+fio.stdout.fh == 1
+fio.stderr.fh == 2
+
+fio.stdin:read(0)
+fio.stdout:write('\0')
+fio.stderr:write('\0')
