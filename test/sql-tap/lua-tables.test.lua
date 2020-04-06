@@ -5,7 +5,7 @@ test:plan(14)
 test:do_test(
     "lua-tables-prepare-1",
     function()
-        format = {}
+        local format = {}
         format[1] = { name = 'id', type = 'scalar'}
         format[2] = { name = 'f2', type = 'scalar'}
         s = box.schema.create_space('t', {format = format})

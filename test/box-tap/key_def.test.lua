@@ -179,9 +179,9 @@ local key_def_new_cases = {
     }
 }
 
-local test = tap.test('key_def')
+local suite = tap.test('key_def')
 
-test:plan(#key_def_new_cases - 1 + 7)
+suite:plan(#key_def_new_cases - 1 + 7)
 for _, case in ipairs(key_def_new_cases) do
     if type(case) == 'function' then
         case()
@@ -195,10 +195,10 @@ for _, case in ipairs(key_def_new_cases) do
         if case.exp_err == nil then
             ok = ok and type(res) == 'cdata' and
                 ffi.istype('struct key_def', res)
-            test:ok(ok, case[1])
+            suite:ok(ok, case[1])
         else
             local err = tostring(res) -- cdata -> string
-            test:is_deeply({ok, err}, {false, case.exp_err}, case[1])
+            suite:is_deeply({ok, err}, {false, case.exp_err}, case[1])
         end
     end
 end
@@ -206,7 +206,7 @@ end
 -- Prepare source data for test cases.
 
 -- Case: extract_key().
-test:test('extract_key()', function(test)
+suite:test('extract_key()', function(test)
     test:plan(13)
 
     local key_def_a = key_def_lib.new({
@@ -232,7 +232,7 @@ test:test('extract_key()', function(test)
     }):extract_key(box.tuple.new({{a = {b = 'foo'}}})):totable()
     test:is_deeply(res, {'foo'}, 'JSON path (tuple argument)')
 
-    local res = key_def_lib.new({
+    res = key_def_lib.new({
         {type = 'string', fieldno = 1, path = 'a.b'},
     }):extract_key({{a = {b = 'foo'}}}):totable()
     test:is_deeply(res, {'foo'}, 'JSON path (table argument)')
@@ -265,13 +265,13 @@ test:test('extract_key()', function(test)
         'short tuple with a non-nullable part (case 1)')
 
     -- Same as before, but a max fieldno is over tuple:len() + 1.
-    local exp_err = 'Tuple field [2] required by space format is missing'
-    local key_def = key_def_lib.new({
+    exp_err = 'Tuple field [2] required by space format is missing'
+    key_def = key_def_lib.new({
         {type = 'string', fieldno = 1},
         {type = 'string', fieldno = 2},
         {type = 'string', fieldno = 3},
     })
-    local ok, err = pcall(key_def.extract_key, key_def,
+    ok, err = pcall(key_def.extract_key, key_def,
         box.tuple.new({'foo'}))
     test:is_deeply({ok, tostring(err)}, {false, exp_err},
         'short tuple with a non-nullable part (case 2)')
@@ -280,36 +280,36 @@ test:test('extract_key()', function(test)
     --
     -- * is_nullable = true;
     -- * has_optional_parts = false.
-    local exp_err = 'Tuple field [2] required by space format is missing'
-    local key_def = key_def_lib.new({
+    exp_err = 'Tuple field [2] required by space format is missing'
+    key_def = key_def_lib.new({
         {type = 'string', fieldno = 1, is_nullable = true},
         {type = 'string', fieldno = 2},
     })
-    local ok, err = pcall(key_def.extract_key, key_def,
+    ok, err = pcall(key_def.extract_key, key_def,
         box.tuple.new({'foo'}))
     test:is_deeply({ok, tostring(err)}, {false, exp_err},
         'short tuple with a non-nullable part (case 3)')
 
     -- A tuple has a field that does not match corresponding key
     -- part type.
-    local exp_err = 'Supplied key type of part 2 does not match index ' ..
+    exp_err = 'Supplied key type of part 2 does not match index ' ..
                     'part type: expected string'
-    local key_def = key_def_lib.new({
+    key_def = key_def_lib.new({
         {type = 'string', fieldno = 1},
         {type = 'string', fieldno = 2},
         {type = 'string', fieldno = 3},
     })
-    local ok, err = pcall(key_def.extract_key, key_def, {'one', 'two', 3})
+    ok, err = pcall(key_def.extract_key, key_def, {'one', 'two', 3})
     test:is_deeply({ok, tostring(err)}, {false, exp_err},
         'wrong field type')
 
-    local key_def = key_def_lib.new({
+    key_def = key_def_lib.new({
         {type = 'number', fieldno = 1, path='a'},
         {type = 'number', fieldno = 1, path='b'},
         {type = 'number', fieldno = 1, path='c', is_nullable=true},
         {type = 'number', fieldno = 3, is_nullable=true},
     })
-    local ok, err = pcall(key_def.extract_key, key_def,
+    ok, err = pcall(key_def.extract_key, key_def,
                           box.tuple.new({1, 1, 22}))
     test:is_deeply({ok, tostring(err)},
                 {false, 'Tuple field [1]a required by space format is missing'},
@@ -326,7 +326,7 @@ test:test('extract_key()', function(test)
 end)
 
 -- Case: compare().
-test:test('compare()', function(test)
+suite:test('compare()', function(test)
     test:plan(8)
 
     local key_def_a = key_def_lib.new({
@@ -360,7 +360,7 @@ test:test('compare()', function(test)
 end)
 
 -- Case: compare_with_key().
-test:test('compare_with_key()', function(test)
+suite:test('compare_with_key()', function(test)
     test:plan(2)
 
     local key_def_b = key_def_lib.new({
@@ -372,12 +372,12 @@ test:test('compare_with_key()', function(test)
     local key = {1, 22}
     test:is(key_def_b:compare_with_key(tuple_a:totable(), key), 0, 'table')
 
-    local key = box.tuple.new({1, 22})
+    key = box.tuple.new({1, 22})
     test:is(key_def_b:compare_with_key(tuple_a, key), 0, 'tuple')
 end)
 
 -- Case: totable().
-test:test('totable()', function(test)
+suite:test('totable()', function(test)
     test:plan(2)
 
     local parts_a = {
@@ -393,12 +393,12 @@ test:test('totable()', function(test)
     local exp = set_key_part_defaults(parts_a)
     test:is_deeply(key_def_a:totable(), exp, 'case 1')
 
-    local exp = set_key_part_defaults(parts_b)
+    exp = set_key_part_defaults(parts_b)
     test:is_deeply(key_def_b:totable(), exp, 'case 2')
 end)
 
 -- Case: __serialize().
-test:test('__serialize()', function(test)
+suite:test('__serialize()', function(test)
     test:plan(2)
 
     local parts_a = {
@@ -414,12 +414,12 @@ test:test('__serialize()', function(test)
     local exp = set_key_part_defaults(parts_a)
     test:is(json.encode(key_def_a), json.encode(exp), 'case 1')
 
-    local exp = set_key_part_defaults(parts_b)
+    exp = set_key_part_defaults(parts_b)
     test:is(json.encode(key_def_b), json.encode(exp), 'case 2')
 end)
 
 -- Case: tostring().
-test:test('tostring()', function(test)
+suite:test('tostring()', function(test)
     test:plan(2)
 
     local parts_a = {
@@ -438,7 +438,7 @@ test:test('tostring()', function(test)
 end)
 
 -- Case: merge().
-test:test('merge()', function(test)
+suite:test('merge()', function(test)
     test:plan(6)
 
     local key_def_a = key_def_lib.new({
@@ -464,7 +464,7 @@ test:test('merge()', function(test)
         'case 1: verify with :extract_key()')
 
     local key_def_ba = key_def_b:merge(key_def_a)
-    local exp_parts = fun.iter(key_def_b:totable())
+    exp_parts = fun.iter(key_def_b:totable())
         :chain(fun.iter(key_def_a:totable())):totable()
     test:is_deeply(key_def_ba:totable(), exp_parts,
         'case 2: verify with :totable()')
@@ -473,7 +473,7 @@ test:test('merge()', function(test)
 
     -- Intersecting parts + NULL parts.
     local key_def_cb = key_def_c:merge(key_def_b)
-    local exp_parts = key_def_c:totable()
+    exp_parts = key_def_c:totable()
     exp_parts[#exp_parts + 1] = {type = 'number', fieldno = 3,
         is_nullable = false}
     test:is_deeply(key_def_cb:totable(), exp_parts,
@@ -482,4 +482,4 @@ test:test('merge()', function(test)
         {1, 1, box.NULL, 22}, 'case 3: verify with :extract_key()')
 end)
 
-os.exit(test:check() and 0 or 1)
+os.exit(suite:check() and 0 or 1)

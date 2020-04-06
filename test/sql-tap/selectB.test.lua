@@ -26,11 +26,11 @@ local function test_transform(testname, sql1, sql2, results)
     local vdbe1 = {  }
     local vdbe2 = {  }
     local data = box.execute("explain "..sql1)
-    for i, line in ipairs(data) do
+    for _, line in ipairs(data) do
         table.insert(vdbe1, line[2])
     end
     data = box.execute("explain "..sql2)
-    for i, line in ipairs(data) do
+    for _, line in ipairs(data) do
         table.insert(vdbe2, line[2])
     end
     test:do_test(
@@ -211,10 +211,7 @@ test:do_execsql_test(
     })
 
 for ii = 3, 6, 1 do
-    if ii == 4 then
-        -- TODO
-        --X(2, "X!cmd", [=[["optimization_control","db","query-flattener","off"]]=])
-    elseif ii == 5 then
+    if ii == 5 then
         --X(2, "X!cmd", [=[["optimization_control","db","query-flattener","on"]]=])
         test:do_execsql_test(
             "selectB-5.0",
@@ -231,7 +228,10 @@ for ii = 3, 6, 1 do
                 -- </selectB-5.0>
             })
 
-    elseif ii == 6 then
+    --elseif ii == 4 then
+        -- TODO
+        --X(2, "X!cmd", [=[["optimization_control","db","query-flattener","off"]]=])
+    --elseif ii == 6 then
         --X(2, "X!cmd", [=[["optimization_control","db","query-flattener","off"]]=])
     end
     test:do_execsql_test(

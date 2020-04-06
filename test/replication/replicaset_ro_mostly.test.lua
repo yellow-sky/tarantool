@@ -16,7 +16,7 @@ create_cluster_cmd2 = 'start server %s with args="%s", wait_load=False, wait=Fal
 
 test_run:cmd("setopt delimiter ';'")
 function create_cluster_uuid(servers, uuids)
-    for i, name in ipairs(servers) do
+    for _, name in ipairs(servers) do
         test_run:cmd(create_cluster_cmd1:format(name, name))
     end
     for i, name in ipairs(servers) do

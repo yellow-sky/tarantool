@@ -106,7 +106,6 @@ test:do_test(
 test:do_test(
     "index-2.2",
     function()
-        local msg
         local v , msg= pcall(function()
             test:execsql("CREATE INDEX index1 ON test1(f1, f2, f4, f3)")
             end)
@@ -1019,7 +1018,7 @@ end
 test:do_test(
     "index-22.1.0",
     function()
-        format = {}
+        local format = {}
         format[1] = { name = 'id', type = 'scalar'}
         format[2] = { name = 'f2', type = 'scalar'}
         s = box.schema.create_space('T', {format = format})

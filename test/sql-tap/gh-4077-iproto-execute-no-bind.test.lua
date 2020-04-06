@@ -41,10 +41,11 @@ local size = msgpack.encode(header:len() + body:len())
 sock:write(size .. header .. body)
 
 -- Read response.
-local size = msgpack.decode(sock:read(5))
+size = msgpack.decode(sock:read(5))
 local header_body = sock:read(size)
-local header, header_len = msgpack.decode(header_body)
-local body = msgpack.decode(header_body:sub(header_len))
+local header_len
+header, header_len = msgpack.decode(header_body)
+body = msgpack.decode(header_body:sub(header_len))
 sock:close()
 
 -- Verify response.

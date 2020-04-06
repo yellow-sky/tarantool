@@ -761,7 +761,7 @@ test:do_execsql_test(
 --
 -- MUST_WORK_TEST? special sql functions (sql_soft_heap_limit, sql_test_control...)
 if (0 > 0) then
-local function cksum(x)
+local function cksum()
     local i1 = 1
     local i2 = 2
     X(503, "X!cmd", [=[["binary","scan",["x"],"c*","L"]]=])

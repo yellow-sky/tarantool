@@ -27,7 +27,6 @@ test:execsql [[
     CREATE TABLE t1(x int primary key, y int);
     START TRANSACTION;
 ]]
-local i, j
 for i = 1, 31, 1 do
     j = 0
     while math.pow(2, j) < i do

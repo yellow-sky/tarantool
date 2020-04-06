@@ -163,7 +163,7 @@ for i = 1, 0 do
    for j = 1, dimension do
       table.insert(rect, 180*math.random())
    end
-   for k,v in pairs(s.index.spatial:select(rect, {limit = n_neighbors, iterator = 'NEIGHBOR'})) do
+   for _,_ in pairs(s.index.spatial:select(rect, {limit = n_neighbors, iterator = 'NEIGHBOR'})) do
       n = n + 1
    end
 end;

@@ -38,7 +38,7 @@ local function http_handle(s)
         buf = s:read('\n')
     end
     buf = s:read(length)
-    local ok, data = pcall(json.decode, buf)
+    local ok, _ = pcall(json.decode, buf)
     if ok then
         feedback = buf
         feedback_count = feedback_count + 1
@@ -111,7 +111,7 @@ fio.unlink("feedback.json")
 
 server:close()
 -- check it does not fail without server
-local daemon = box.internal.feedback_daemon
+daemon = box.internal.feedback_daemon
 daemon.start()
 daemon.send_test()
 daemon.stop()

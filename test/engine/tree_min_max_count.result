@@ -1189,7 +1189,7 @@ space6:drop()
 ---
 ...
 -- min max count after many inserts
-string = require('string')
+local string = require('string')
 ---
 ...
 space7 = box.schema.space.create('space7', { engine = engine })

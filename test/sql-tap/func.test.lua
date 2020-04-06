@@ -1472,7 +1472,7 @@ test:do_test(
 test:do_test(
     "func-17.1",
     function()
-        local function testfunc1(args)
+        local function testfunc1()
             X(768, "X!cmd", [=[["error","Error %d with %s percents %p"]]=])
         end
 

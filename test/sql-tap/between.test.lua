@@ -60,11 +60,11 @@ local function queryplan(sql)
     table.insert(data,x)
     local eqp = box.execute("EXPLAIN QUERY PLAN "..sql.."").rows
     -- puts eqp=$eqp
-    for i, val in ipairs(eqp) do
+    for _, val in ipairs(eqp) do
         --local a = val[1]
         --local b = val[2]
         --local c = val[3]
-        local x = val[4]
+        x = val[4]
         local tab, idx = string.match(x, "TABLE (%w+) USING.* INDEX (%w+)")
 
         if tab then

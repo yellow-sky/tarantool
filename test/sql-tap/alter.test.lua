@@ -90,7 +90,7 @@ test:do_catchsql_test(
 test:do_test(
     "alter-2.3.prepare",
     function()
-        format = {}
+        local format = {}
         format[1] = { name = 'id', type = 'integer'}
         format[2] = { name = 'f2', type = 'number'}
         s = box.schema.create_space('t', {format = format})
@@ -520,7 +520,7 @@ test:do_catchsql_test(
 test:do_test(
     "alter-8.1.0",
     function()
-        format = {}
+        local format = {}
         format[1] = { name = 'id', type = 'scalar'}
         format[2] = { name = 'f2', type = 'scalar'}
         s = box.schema.create_space('T', {format = format})

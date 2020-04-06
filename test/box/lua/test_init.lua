@@ -1,15 +1,15 @@
 #!/usr/bin/env tarantool
 box.load_cfg()
 -- testing start-up script
-floor = require("math").floor
+require("math").floor
 
 --
 -- Access to box.cfg from start-up script
 --
 
-box_cfg = box.cfg()
+local box_cfg = box.cfg()
 
-function print_config()
+local function print_config()
 	return box_cfg
 end
 
@@ -24,10 +24,10 @@ local function do_insert()
     box.space[0]:insert{1, 2, 4, 8}
 end
 
-space = box.schema.create_space('tweedledum', { id = 0 })
+local space = box.schema.create_space('tweedledum', { id = 0 })
 space:create_index('primary', { type = 'hash' })
 
-fiber = box.fiber.create(do_insert)
+local fiber = box.fiber.create(do_insert)
 box.fiber.resume(fiber)
 
 --

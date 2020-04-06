@@ -36,14 +36,14 @@ local function do_qexpr_test(tn, expr, value)
         {value })
 end
 
-local function matchfunc(a, b)
+local function matchfunc1(a, b)
     return (a == b)
 end
 
 local function regexfunc(a, b)
     return (a == b)
 end
-box.internal.sql_create_function("MATCH", "INT", matchfunc)
+box.internal.sql_create_function("MATCH", "INT", matchfunc1)
 box.internal.sql_create_function("REGEXP", "INT", regexfunc)
 
 -- Set up three global variables:
@@ -1077,7 +1077,7 @@ test:do_execsql_test(
 --
 -- MUST_WORK_TEST prepared statements
 if (0>0) then
-    local function parameter_test(tn, sql, params, result)
+    local function parameter_test(sql)
         stmt = sql_prepare_v2("db", sql, -1)
         for _ in X(0, "X!foreach", [=[["number name",["params"]]]=]) do
             nm = sql_bind_parameter_name(stmt, number)
@@ -1264,7 +1264,7 @@ test:do_execsql_test(
 test:execsql [[
     CREATE TABLE tblname(cname INT PRIMARY KEY);
 ]]
-local function glob(args)
+local function glob()
     return 1
 end
 
@@ -2121,7 +2121,7 @@ test:do_execsql_test(
 local likeargs = {}
 function likefunc(...)
     local args = {...}
-    for i, v in ipairs(args) do
+    for _, v in ipairs(args) do
         table.insert(likeargs, v)
     end
     return 1
@@ -2356,7 +2356,7 @@ end
 local regexpargs = {}
 local function regexpfunc(...)
     local args = {...}
-    for i, v in ipairs(args) do
+    for _, v in ipairs(args) do
         table.insert(regexpargs, v)
     end
     return 1
@@ -2413,14 +2413,14 @@ test:do_test(
 --
 
 local matchargs = {  }
-local function matchfunc(...)
+local function matchfunc2(...)
     local args = {...}
-    for i, v in ipairs(args) do
+    for _, v in ipairs(args) do
         table.insert(matchargs, v)
     end
     return 1
 end
-box.internal.sql_create_function("MATCH", "INT", matchfunc, 2)
+box.internal.sql_create_function("MATCH", "INT", matchfunc2, 2)
 
 test:do_execsql_test(
     "e_expr-19.2.1",
@@ -2905,9 +2905,9 @@ test:do_test(
 -- x=w1 THEN r1 WHEN x=w2 THEN r2 ELSE r3 END
 --
 local evalcount = 0
-local function ceval(x)
+local function ceval(t)
     evalcount = evalcount + 1
-    return x
+    return t
 end
 box.internal.sql_create_function("CEVAL", "BLOB", ceval)
 evalcount = 0

@@ -16,7 +16,7 @@ test_run:cmd("setopt delimiter ';'")
 ...
 function read_xlog(file)
     local val = {}
-    for k, v in xlog(file) do
+    for _, v in xlog(file) do
         table.insert(val, setmetatable(v, { __serialize = "map"}))
     end
     return val

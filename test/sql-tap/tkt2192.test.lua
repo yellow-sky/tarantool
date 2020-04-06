@@ -2,6 +2,7 @@
 test = require("sqltester")
 -- test:plan(6)
 test:plan(4)
+local enable_broken_tests = false
 
 --!./tcltestrunner.lua
 -- 2007 January 26
@@ -26,7 +27,7 @@ test:plan(4)
 
 --  Disabled until #3694 is resolved.
 --
-if false then
+if enable_broken_tests then
 test:do_execsql_test(
     "tkt2192-1.1",
     [[

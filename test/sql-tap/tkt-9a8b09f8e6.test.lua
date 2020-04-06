@@ -22,9 +22,6 @@ test:plan(49)
 -- ["source",[["testdir"],"\/tester.tcl"]]
 testprefix = "tkt-9a8b09f8e6"
 -- MUST_WORK_TEST
-if (0 > 0)
- then
-end
 test:do_execsql_test(
     1.1,
     [[

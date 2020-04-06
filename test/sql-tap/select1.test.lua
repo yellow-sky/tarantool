@@ -1,6 +1,7 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
 test:plan(173)
+local enable_broken_tests = false
 
 function set_full_column_names(value)
     box.space._session_settings:update('sql_full_column_names', {
@@ -1178,7 +1179,7 @@ test:do_execsql2_test(
 test:do_test(
     "select1-6.9.7",
     function()
-        x = test:execsql2 [[
+        local x = test:execsql2 [[
             SELECT * FROM test1 a, (select 5, 6) LIMIT 1
         ]]
         for i, tmp in ipairs(x) do
@@ -1196,7 +1197,7 @@ test:do_test(
 test:do_test(
     "select1-6.9.8",
     function()
-        x = test:execsql2 [[
+        local x = test:execsql2 [[
             SELECT * FROM test1 a, (select 5 AS x, 6 AS y) AS b LIMIT 1
         ]]
         for i, tmp in ipairs(x) do
@@ -1512,8 +1513,7 @@ test:do_execsql_test(
 -- TODO: This test is failing because f1 is now being loaded off the
 -- disk as a vdbe integer, not a string. Hence the value of f1/(f1-11)
 -- changes because of rounding. Disable the test for now.
-if false
- then
+if enable_broken_tests then
     test:do_execsql_test(
         "select1-8.4",
         [[
@@ -1969,7 +1969,7 @@ test:do_test(
             START TRANSACTION;
             INSERT INTO abc VALUES(1, 1, 1);
         ]]
-        for i = 0,9,1 do
+        for _ = 0,9,1 do
             test:execsql [[
                 INSERT INTO abc SELECT a+(select max(a) FROM abc), b+(select max(a) FROM abc), c+(select max(a) FROM abc) FROM abc;
             ]]

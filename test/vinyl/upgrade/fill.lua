@@ -2,11 +2,11 @@
 -- This script generates a vinyl metadata log
 -- containing all possible record types.
 --
-fiber = require 'fiber'
+local fiber = require 'fiber'
 
 box.cfg{vinyl_memory = 1024 * 1024, vinyl_timeout = 1e-9, checkpoint_count = 1}
 
-dump_trigger = box.schema.space.create('dump_trigger', {engine = 'vinyl'})
+local dump_trigger = box.schema.space.create('dump_trigger', {engine = 'vinyl'})
 dump_trigger:create_index('pk', {run_count_per_level = 1})
 
 -- Trigger dump of all indexes and wait for it to finish.
@@ -15,7 +15,7 @@ dump_trigger:create_index('pk', {run_count_per_level = 1})
 -- to trigger system-wide memory dump, it is enough to insert a
 -- huge tuple into one space.
 --
-function dump()
+local function dump()
     local pad = string.rep('x', box.cfg.vinyl_memory / 2)
     dump_trigger:replace{1, pad}
     -- Must fail due to quota timeout, but still trigger dump.
@@ -38,7 +38,7 @@ end
 --   VY_LOG_CREATE_INDEX
 --   VY_LOG_INSERT_RANGE
 --
-s = box.schema.space.create('test', {engine = 'vinyl'})
+local s = box.schema.space.create('test', {engine = 'vinyl'})
 s:create_index('i1', {parts = {1, 'unsigned'}, run_count_per_level = 1})
 s:create_index('i2', {parts = {2, 'string'},   run_count_per_level = 2})
 

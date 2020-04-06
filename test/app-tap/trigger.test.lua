@@ -7,14 +7,14 @@ box.cfg{
 }
 
 local trigger = require('internal.trigger')
-local test = require('tap').test('trigger')
+local suite = require('tap').test('trigger')
 
-test:plan(3)
+suite:plan(3)
 
 local trigger_list = trigger.new("sweet trigger")
-test:ok(trigger_list ~= nil, "test that trigger list is created")
+suite:ok(trigger_list ~= nil, "test that trigger list is created")
 
-test:test("simple trigger test", function(test)
+suite:test("simple trigger test", function(test)
     test:plan(10)
 
     local cnt = 0
@@ -45,12 +45,12 @@ test:test("simple trigger test", function(test)
 
 
     -- Check that we've failed to delete trigger
-    local stat, err = pcall(getmetatable(trigger_list).__call, trigger_list,
+    local _, err = pcall(getmetatable(trigger_list).__call, trigger_list,
                             nil, trigger_cnt)
     test:ok(string.find(err, "is not found"), "check error")
 end)
 
-test:test("errored trigger test", function(test)
+suite:test("errored trigger test", function(test)
     test:plan(6)
 
     --
@@ -69,19 +69,19 @@ test:test("errored trigger test", function(test)
     test:is(cnt, 1, "check simple trigger")
     -- Append errored trigger
     trigger_list(trigger_errored)
-    local status = pcall(function() trigger_list:run() end)
+    pcall(function() trigger_list:run() end)
     test:is(cnt, 2, "check simple+error trigger")
     -- Flush triggers
     table_clear(trigger_list)
     test:is(#trigger_list(), 0, "successfull flush")
     -- Append first trigger
     trigger_list(trigger_errored)
-    local status = pcall(function() trigger_list:run() end)
+    pcall(function() trigger_list:run() end)
     test:is(cnt, 2, "check error trigger")
     -- Append errored trigger
     trigger_list(trigger_cnt)
-    local status = pcall(function() trigger_list:run() end)
+    pcall(function() trigger_list:run() end)
     test:is(cnt, 2, "check error+simple trigger")
 end)
 
-os.exit(test:check() == true and 0 or -1)
+os.exit(suite:check() == true and 0 or -1)

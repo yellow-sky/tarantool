@@ -3,10 +3,10 @@
 local tap = require('tap')
 local errno = require('errno')
 
-local test = tap.test("errno")
+local suite = tap.test("errno")
 
-test:plan(1)
-test:test("primary", function(test)
+suite:plan(1)
+suite:test("primary", function(test)
     test:plan(10)
     test:is(type(errno), "table", "type of table")
     test:ok(errno.EINVAL ~= nil, "errno.EINVAL is available")
