@@ -11,7 +11,7 @@ box.snapshot()
 s0:insert{2, 'tuple 2'}
 box.snapshot()
 
-i0:bsize() > bsize
+assert(i0:bsize() > bsize)
 
 s0:insert{3, 'tuple 3'}
 s0.index['primary']:get{1}
@@ -58,8 +58,8 @@ test_run = env.new()
 test_run:cmd("setopt delimiter ';'")
 function crossjoin(space0, space1, limit)
     local result = {}
-    for state, v0 in space0:pairs() do
-        for state, v1 in space1:pairs() do
+    for _, v0 in space0:pairs() do
+        for _, v1 in space1:pairs() do
             if limit <= 0 then
                 return result
             end

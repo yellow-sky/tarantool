@@ -212,10 +212,9 @@ function create_iterator(obj, key, opts)
         return tp
     end
     res.iterate_over = function()
-        local tp = nil
         local ret = {}
         local i = 0
-        tp = res.next()
+        local tp = res.next()
         while tp do
             ret[i] = tp
             i = i + 1

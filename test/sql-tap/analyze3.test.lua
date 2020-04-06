@@ -23,15 +23,15 @@ testprefix = "analyze3"
 ------------------------------------------------------------------------
 -- Test Organization:
 --
--- analyze3-1.*: Test that the values of bound parameters are considered 
+-- analyze3-1.*: Test that the values of bound parameters are considered
 --               in the same way as constants when planning queries that
 --               use range constraints.
 --
--- analyze3-2.*: Test that the values of bound parameters are considered 
+-- analyze3-2.*: Test that the values of bound parameters are considered
 --               in the same way as constants when planning queries that
 --               use LIKE expressions in the WHERE clause.
 --
--- analyze3-3.*: Test that binding to a variable does not invalidate the 
+-- analyze3-3.*: Test that binding to a variable does not invalidate the
 --               query plan when there is no way in which replanning the
 --               query may produce a superior outcome.
 --

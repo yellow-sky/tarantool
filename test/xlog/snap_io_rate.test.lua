@@ -9,6 +9,6 @@ for i = 0, 127 do box.space.snap:replace({i, digest.urandom(512 * 1024)}) end
 t1 = fiber.time()
 box.snapshot()
 t2 = fiber.time()
-t2 - t1 > 64 / box.cfg.snap_io_rate_limit * 0.95
+assert(t2 - t1 > 64 / box.cfg.snap_io_rate_limit * 0.95)
 
 box.space.snap:drop()

@@ -15,7 +15,7 @@ box.cfg {
     vinyl_max_tuple_size = 1024 * 1024 * 6,
 }
 
-function box_info_sort(data)
+local function box_info_sort(data)
     if type(data)~='table' then
         return data
     end

@@ -337,7 +337,7 @@ space6:drop()
 
 -- min max count after many inserts
 
-string = require('string')
+local string = require('string')
 
 space7 = box.schema.space.create('space7', { engine = engine })
 index7 = space7:create_index('primary', { type = 'tree', parts = {1, 'scalar'} })

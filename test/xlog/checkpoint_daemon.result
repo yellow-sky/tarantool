@@ -118,11 +118,11 @@ wait_snapshot_gc(WAIT_COND_TIMEOUT)
 ---
 - true
 ...
-#snaps == 2 or snaps
+assert(#snaps == 2 or snaps)
 ---
 - true
 ...
-#xlogs > 0
+assert(#xlogs > 0)
 ---
 - true
 ...

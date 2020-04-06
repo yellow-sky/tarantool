@@ -70,8 +70,8 @@ for i = 1, row_count_per_wal + 10 do space:insert { no } no = no + 1 end
 wait_snapshot(WAIT_COND_TIMEOUT)
 wait_snapshot_gc(WAIT_COND_TIMEOUT)
 
-#snaps == 2 or snaps
-#xlogs > 0
+assert(#snaps == 2 or snaps)
+assert(#xlogs > 0)
 
 -- gh-2780: check that a last snapshot mtime will be changed at
 -- least two times.

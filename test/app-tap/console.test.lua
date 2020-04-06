@@ -5,7 +5,6 @@ local console = require('console')
 local socket = require('socket')
 local yaml = require('yaml')
 local fiber = require('fiber')
-local ffi = require('ffi')
 local log = require('log')
 local fio = require('fio')
 
@@ -59,12 +58,9 @@ test:is(#client:read(EOL) > 0, true, "_G")
 client:write("require('fiber').id()\n")
 local fid1 = yaml.decode(client:read(EOL))[1]
 local state = fiber.find(fid1).storage.console
-local server_info = state.client:peer()
 local client_info = state.client:name()
 test:is(client_info.host, client_info.host, "state.socker:peer().host")
 test:is(client_info.port, client_info.port, "state.socker:peer().port")
-server_info = nil
-client_info = nil
 
 -- Check console.delimiter()
 client:write("require('console').delimiter(';')\n")

@@ -6,7 +6,7 @@ test_run = env.new()
 test_run:cmd("setopt delimiter ';'")
 function read_xlog(file)
     local val = {}
-    for k, v in xlog(file) do
+    for _, v in xlog(file) do
         table.insert(val, setmetatable(v, { __serialize = "map"}))
     end
     return val
@@ -33,14 +33,14 @@ box.snapshot()
 lsn_str = tostring(lsn)
 data = read_xlog(fio.pathjoin(box.cfg.wal_dir, string.rep('0', 20 - #lsn_str) .. tostring(lsn_str) .. '.xlog'))
 -- check nothing changed for single row transactions
-data[1].HEADER.tsn == nil and data[1].HEADER.commit == nil
-data[2].HEADER.tsn == nil and data[2].HEADER.commit == nil
+assert(data[1].HEADER.tsn == nil and data[1].HEADER.commit == nil)
+assert(data[2].HEADER.tsn == nil and data[2].HEADER.commit == nil)
 -- check two row transaction
-data[3].HEADER.tsn == data[3].HEADER.lsn and data[3].HEADER.commit == nil
-data[4].HEADER.tsn == data[3].HEADER.tsn and data[4].HEADER.commit == true
+assert(data[3].HEADER.tsn == data[3].HEADER.lsn and data[3].HEADER.commit == nil)
+assert(data[4].HEADER.tsn == data[3].HEADER.tsn and data[4].HEADER.commit == true)
 -- check four row transaction
-data[5].HEADER.tsn == data[5].HEADER.lsn and data[5].HEADER.commit == nil
-data[6].HEADER.tsn == data[5].HEADER.tsn and data[6].HEADER.commit == nil
-data[7].HEADER.tsn == data[5].HEADER.tsn and data[7].HEADER.commit == nil
-data[8].HEADER.tsn == data[5].HEADER.tsn and data[8].HEADER.commit == true
+assert(data[5].HEADER.tsn == data[5].HEADER.lsn and data[5].HEADER.commit == nil)
+assert(data[6].HEADER.tsn == data[5].HEADER.tsn and data[6].HEADER.commit == nil)
+assert(data[7].HEADER.tsn == data[5].HEADER.tsn and data[7].HEADER.commit == nil)
+assert(data[8].HEADER.tsn == data[5].HEADER.tsn and data[8].HEADER.commit == true)
 box.space.test:drop()

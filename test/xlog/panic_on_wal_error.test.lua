@@ -10,7 +10,7 @@ _ = box.space.test:create_index('pk')
 -- reopen xlog
 --
 test_run:cmd("restart server default")
-box.space.test ~= nil
+assert(box.space.test ~= nil)
 -- insert some stuff
 -- 
 box.space.test:auto_increment{'before snapshot'}

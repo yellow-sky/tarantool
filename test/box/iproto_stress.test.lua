@@ -42,8 +42,8 @@ fiber.sleep(0.1)
 box.error.injection.set("ERRINJ_WAL_DELAY", false)
 
 test_run:wait_cond(function() return n_workers == 0 end, 60)
-n_workers -- 0
-n_errors -- 0
+assert(n_workers == 0)
+assert(n_errors == 0)
 
 box.schema.user.revoke('guest', 'read,write,execute', 'universe')
 s:drop()
