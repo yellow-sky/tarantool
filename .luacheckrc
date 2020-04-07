@@ -24,3 +24,5 @@ exclude_files = {
     ".rocks/**/*.lua",
     ".git/**/*.lua",
 }
+
+files["extra/dist/tarantoolctl.in"] = {ignore = {"212/self", "122", "431"}}
