@@ -173,7 +173,7 @@ local function initial_1_7_5()
     format[5] = {name='field_count', type='unsigned'}
     format[6] = {name='flags', type='map'}
     format[7] = {name='format', type='array'}
-    local def = _space:insert{_space.id, ADMIN, '_space', 'memtx', 0, MAP, format}
+    _space:insert{_space.id, ADMIN, '_space', 'memtx', 0, MAP, format}
     -- space name is unique
     log.info("create index primary on _space")
     _index:insert{_space.id, 0, 'primary', 'tree', { unique = true }, {{0, 'unsigned'}}}
@@ -194,7 +194,7 @@ local function initial_1_7_5()
     format[4] = {name = 'type', type = 'string'}
     format[5] = {name = 'opts', type = 'map'}
     format[6] = {name = 'parts', type = 'array'}
-    def = _space:insert{_index.id, ADMIN, '_index', 'memtx', 0, MAP, format}
+    _space:insert{_index.id, ADMIN, '_index', 'memtx', 0, MAP, format}
     -- index name is unique within a space
     log.info("create index primary on _index")
     _index:insert{_index.id, 0, 'primary', 'tree', {unique = true}, {{0, 'unsigned'}, {1, 'unsigned'}}}
@@ -211,7 +211,7 @@ local function initial_1_7_5()
     format[2] = {name='owner', type='unsigned'}
     format[3] = {name='name', type='string'}
     format[4] = {name='setuid', type='unsigned'}
-    def = _space:insert{_func.id, ADMIN, '_func', 'memtx', 0, MAP, format}
+    _space:insert{_func.id, ADMIN, '_func', 'memtx', 0, MAP, format}
     -- function name and id are unique
     log.info("create index _func:primary")
     _index:insert{_func.id, 0, 'primary', 'tree', {unique = true}, {{0, 'unsigned'}}}
@@ -231,7 +231,7 @@ local function initial_1_7_5()
     format[3] = {name='name', type='string'}
     format[4] = {name='type', type='string'}
     format[5] = {name='auth', type='map'}
-    def = _space:insert{_user.id, ADMIN, '_user', 'memtx', 0, MAP, format}
+    _space:insert{_user.id, ADMIN, '_user', 'memtx', 0, MAP, format}
     -- user name and id are unique
     log.info("create index _func:primary")
     _index:insert{_user.id, 0, 'primary', 'tree', {unique = true}, {{0, 'unsigned'}}}
@@ -251,7 +251,7 @@ local function initial_1_7_5()
     format[3] = {name='object_type', type='string'}
     format[4] = {name='object_id', type='unsigned'}
     format[5] = {name='privilege', type='unsigned'}
-    def = _space:insert{_priv.id, ADMIN, '_priv', 'memtx', 0, MAP, format}
+    _space:insert{_priv.id, ADMIN, '_priv', 'memtx', 0, MAP, format}
     -- user id, object type and object id are unique
     log.info("create index primary on _priv")
     _index:insert{_priv.id, 0, 'primary', 'tree', {unique = true}, {{1, 'unsigned'}, {2, 'string'}, {3, 'unsigned'}}}
@@ -580,7 +580,7 @@ local function upgrade_to_2_1_0()
     -- Now, abscent field means NULL, so we can safely set second
     -- field in format, marking it nullable.
     log.info("Add nullable value field to space _schema")
-    local format = {}
+    format = {}
     format[1] = {type='string', name='key'}
     format[2] = {type='any', name='value', is_nullable=true}
     box.space._schema:format(format)
