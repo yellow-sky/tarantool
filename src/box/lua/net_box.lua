@@ -38,10 +38,6 @@ local IPROTO_STATUS_KEY    = 0x00
 local IPROTO_ERRNO_MASK    = 0x7FFF
 local IPROTO_SYNC_KEY      = 0x01
 local IPROTO_SCHEMA_VERSION_KEY = 0x05
-local IPROTO_METADATA_KEY = 0x32
-local IPROTO_SQL_INFO_KEY = 0x42
-local SQL_INFO_ROW_COUNT_KEY = 0
-local IPROTO_FIELD_NAME_KEY = 0
 local IPROTO_DATA_KEY      = 0x30
 local IPROTO_ERROR_KEY     = 0x31
 local IPROTO_ERROR_STACK   = 0x52
@@ -155,7 +151,7 @@ local function next_id(id) return band(id + 1, 0x7FFFFFFF) end
 -- @retval two non-nils A connected socket and a decoded greeting.
 --
 local function establish_connection(host, port, timeout)
-    local timeout = timeout or DEFAULT_CONNECT_TIMEOUT
+    timeout = timeout or DEFAULT_CONNECT_TIMEOUT
     local begin = fiber.clock()
     local s = socket.tcp_connect(host, port, timeout)
     if not s then
@@ -425,7 +421,7 @@ local function create_transport(host, port, user, password, callback,
         state = new_state
         last_errno = new_errno
         last_error = new_error
-        callback('state_changed', new_state, new_errno, new_error)
+        callback('state_changed', new_state, new_error)
         state_cond:broadcast()
         if state == 'error' or state == 'error_reconnect' or
            state == 'closed' then
@@ -647,7 +643,7 @@ local function create_transport(host, port, user, password, callback,
 
     local function send_and_recv_iproto(timeout)
         local data_len = recv_buf.wpos - recv_buf.rpos
-        local required = 0
+        local required
         if data_len < 5 then
             required = 5
         else
@@ -711,7 +707,8 @@ local function create_transport(host, port, user, password, callback,
                      "please use require('console').connect() instead")
             local setup_delimiter = 'require("console").delimiter("$EOF$")\n'
             method_encoder.inject(send_buf, nil, setup_delimiter)
-            local err, response = send_and_recv_console()
+            local response
+            err, response = send_and_recv_console()
             if err then
                 return error_sm(err, response)
             elseif response ~= '---\n...\n' then
@@ -729,7 +726,6 @@ local function create_transport(host, port, user, password, callback,
     end
 
     console_sm = function(rid)
-        local delim = '\n...\n'
         local err, response = send_and_recv_console()
         if err then
             return error_sm(err, response)
@@ -803,8 +799,7 @@ local function create_transport(host, port, user, password, callback,
                 local status = hdr[IPROTO_STATUS_KEY]
                 local response_schema_version = hdr[IPROTO_SCHEMA_VERSION_KEY]
                 if status ~= 0 then
-                    local body
-                    body, body_end = decode(body_rpos)
+                    local body = decode(body_rpos)
                     return error_sm(E_NO_CONNECTION, body[IPROTO_ERROR_KEY])
                 end
                 if schema_version == nil then
@@ -813,8 +808,7 @@ local function create_transport(host, port, user, password, callback,
                     -- schema changed while fetching schema; restart loader
                     return iproto_schema_sm()
                 end
-                local body
-                body, body_end = decode(body_rpos)
+                local body = decode(body_rpos)
                 response[id] = body[IPROTO_DATA_KEY]
             end
         until response[select1_id] and response[select2_id] and
@@ -830,14 +824,11 @@ local function create_transport(host, port, user, password, callback,
         local err, hdr, body_rpos, body_end = send_and_recv_iproto()
         if err then return error_sm(err, hdr) end
         dispatch_response_iproto(hdr, body_rpos, body_end)
-        local status = hdr[IPROTO_STATUS_KEY]
         local response_schema_version = hdr[IPROTO_SCHEMA_VERSION_KEY]
         if response_schema_version > 0 and
            response_schema_version ~= schema_version then
             -- schema_version has been changed - start to load a new version.
             -- Sic: self.schema_version will be updated only after reload.
-            local body
-            body, body_end = decode(body_rpos)
             set_state('fetch_schema')
             return iproto_schema_sm(schema_version)
         end
@@ -954,7 +945,7 @@ local function new_sm(host, port, opts, connection, greeting)
     local remote = {host = host, port = port, opts = opts, state = 'initial'}
     local function callback(what, ...)
         if what == 'state_changed' then
-            local state, errno, err = ...
+            local state, err = ...
             local was_connected = remote._is_connected
             if state == 'active' then
                 if not was_connected then
@@ -1601,7 +1592,6 @@ this_module.self = {
             rollback()
             return box.error() -- re-throw
         end
-        local result
         if obj ~= nil then
             return handle_eval_result(pcall(proc, obj, unpack(args)))
         else

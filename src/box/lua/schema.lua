@@ -2,7 +2,6 @@
 --
 local ffi = require('ffi')
 local msgpack = require('msgpack')
-local msgpackffi = require('msgpackffi')
 local fun = require('fun')
 local log = require('log')
 local fio = require('fio')
@@ -210,7 +209,7 @@ local function revoke_object_privs(object_type, object_id)
     local _vpriv = box.space[box.schema.VPRIV_ID]
     local _priv = box.space[box.schema.PRIV_ID]
     local privs = _vpriv.index.object:select{object_type, object_id}
-    for k, tuple in pairs(privs) do
+    for _, tuple in pairs(privs) do
         local uid = tuple.grantee
         _priv:delete{uid, object_type, object_id}
     end
@@ -274,7 +273,6 @@ local function check_param_table(table, template)
             local haystack = ',' .. good_types .. ','
             local needle = ',' .. param_type(v) .. ','
             if (string.find(haystack, needle) == nil) then
-                good_types = string.gsub(good_types, ',', ', ')
                 box.error(box.error.ILLEGAL_PARAMS,
                           "options parameter '" .. k ..
                           "' should be one of types: " .. template[k])
@@ -582,9 +580,9 @@ end
 --
 local function format_field_resolve(format, path, what)
     assert(type(path) == 'number' or type(path) == 'string')
-    local idx = nil
+    local idx
     local relative_path = nil
-    local field_name = nil
+    local field_name
     -- Path doesn't require resolve.
     if type(path) == 'number' then
         idx = path
@@ -844,7 +842,7 @@ local function space_sequence_alter_prepare(format, parts, options,
             if id == nil then
                 box.error(box.error.NO_SUCH_SEQUENCE, new_sequence.id)
             end
-            local tuple = _space_sequence.index.sequence:select(id)[1]
+            tuple = _space_sequence.index.sequence:select(id)[1]
             if tuple ~= nil and tuple.is_generated then
                 box.error(box.error.ALTER_SPACE, space_name,
                           "can not attach generated sequence")
@@ -1144,7 +1142,7 @@ box.schema.index.alter = function(space_id, index_id, options)
         local can_update_field = {id = true, name = true, type = true }
         local can_update = true
         local cant_update_fields = ''
-        for k,v in pairs(options) do
+        for k, _ in pairs(options) do
             if not can_update_field[k] then
                 can_update = false
                 cant_update_fields = cant_update_fields .. ' ' .. k
@@ -1188,7 +1186,7 @@ box.schema.index.alter = function(space_id, index_id, options)
     if options.type == nil then
         options.type = tuple.type
     end
-    for k, t in pairs(index_options) do
+    for k, _ in pairs(index_options) do
         if options[k] ~= nil then
             index_opts[k] = options[k]
         end
@@ -1281,7 +1279,6 @@ end
 
 -- global struct port instance to use by select()/get()
 local port_tuple = ffi.new('struct port_tuple')
-local port_tuple_entry_t = ffi.typeof('struct port_tuple_entry')
 
 -- Helper function to check space:method() usage
 local function check_space_arg(space, method)
@@ -1499,7 +1496,8 @@ end
 
 base_index_mt.get_ffi = function(index, key)
     check_index_arg(index, 'get')
-    local key, key_end = tuple_encode(key)
+    local key_end
+    key, key_end = tuple_encode(key)
     if builtin.box_index_get(index.space_id, index.id,
                              key, key_end, ptuple) ~= 0 then
         return box.error() -- error
@@ -1532,7 +1530,8 @@ end
 
 base_index_mt.select_ffi = function(index, key, opts)
     check_index_arg(index, 'select')
-    local key, key_end = tuple_encode(key)
+    local key_end
+    key, key_end = tuple_encode(key)
     local iterator, offset, limit = check_select_opts(opts, key + 1 >= key_end)
 
     local port = ffi.cast('struct port *', port_tuple)
@@ -1554,7 +1553,7 @@ end
 
 base_index_mt.select_luac = function(index, key, opts)
     check_index_arg(index, 'select')
-    local key = keify(key)
+    key = keify(key)
     local iterator, offset, limit = check_select_opts(opts, #key == 0)
     return internal.select(index.space_id, index.id, iterator,
         offset, limit, key)
@@ -2489,20 +2488,20 @@ local function drop(uid, opts)
     -- recursive delete of user data
     local _vpriv = box.space[box.schema.VPRIV_ID]
     local spaces = box.space[box.schema.VSPACE_ID].index.owner:select{uid}
-    for k, tuple in pairs(spaces) do
+    for _, tuple in pairs(spaces) do
         box.space[tuple.id]:drop()
     end
     local funcs = box.space[box.schema.VFUNC_ID].index.owner:select{uid}
-    for k, tuple in pairs(funcs) do
+    for _, tuple in pairs(funcs) do
         box.schema.func.drop(tuple.id)
     end
     -- if this is a role, revoke this role from whoever it was granted to
     local grants = _vpriv.index.object:select{'role', uid}
-    for k, tuple in pairs(grants) do
+    for _, tuple in pairs(grants) do
         revoke(tuple.grantee, tuple.grantee, uid)
     end
     local sequences = box.space[box.schema.VSEQUENCE_ID].index.owner:select{uid}
-    for k, tuple in pairs(sequences) do
+    for _, tuple in pairs(sequences) do
         box.schema.sequence.drop(tuple.id)
     end
     -- xxx: hack, we have to revoke session and usage privileges
@@ -2514,7 +2513,7 @@ local function drop(uid, opts)
     end
     local privs = _vpriv.index.primary:select{uid}
 
-    for k, tuple in pairs(privs) do
+    for _, tuple in pairs(privs) do
         -- we need an additional box.session.su() here, because of
         -- unnecessary check for privilege PRIV_REVOKE in priv_def_check()
         box.session.su("admin", revoke, uid, uid, tuple.privilege,
@@ -2680,7 +2679,7 @@ box.once = function(key, func, ...)
         box.error(box.error.ILLEGAL_PARAMS, "Usage: box.once(key, func, ...)")
     end
 
-    local key = "once"..key
+    key = "once"..key
     if box.space._schema:get{key} ~= nil then
         return
     end

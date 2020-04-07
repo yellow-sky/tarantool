@@ -22,7 +22,7 @@ local function locked(f)
 end
 
 -- all available options
-local default_cfg = {
+local default_config = {
     listen              = nil,
     memtx_memory        = 256 * 1024 *1024,
     strip_core          = true,
@@ -87,7 +87,7 @@ local default_cfg = {
 
 -- types of available options
 -- could be comma separated lua types or 'any' if any type is allowed
-local template_cfg = {
+local template_config = {
     listen              = 'string, number',
     memtx_memory        = 'number',
     strip_core          = 'boolean',
@@ -170,7 +170,7 @@ local function normalize_uri_list(port_list)
 end
 
 -- options that require special handling
-local modify_cfg = {
+local modify_config = {
     listen             = normalize_uri,
     replication        = normalize_uri_list,
 }
@@ -335,7 +335,7 @@ end
 -- value of the old option, value of the new if present. It
 -- returns two values - value to replace the old option and to
 -- replace the new one.
-local translate_cfg = {
+local translate_config = {
     snapshot_count = {'checkpoint_count'},
     snapshot_period = {'checkpoint_interval'},
     slab_alloc_arena = {'memtx_memory', function(old)
@@ -430,7 +430,6 @@ local function prepare_cfg(cfg, default_cfg, template_cfg, modify_cfg, prefix)
         else
             local good_types = string.gsub(template_cfg[k], ' ', '');
             if (string.find(',' .. good_types .. ',', ',' .. type(v) .. ',') == nil) then
-                good_types = string.gsub(good_types, ',', ', ');
                 box.error(box.error.CFG, readable_name, "should be one of types "..
                     template_cfg[k])
             end
@@ -473,8 +472,8 @@ local function compare_cfg(cfg1, cfg2)
 end
 
 local function reload_cfg(oldcfg, cfg)
-    cfg = upgrade_cfg(cfg, translate_cfg)
-    local newcfg = prepare_cfg(cfg, default_cfg, template_cfg, modify_cfg)
+    cfg = upgrade_cfg(cfg, translate_config)
+    local newcfg = prepare_cfg(cfg, default_config, template_config, modify_config)
     local ordered_cfg = {}
     -- iterate over original table because prepare_cfg() may store NILs
     for key, val in pairs(cfg) do
@@ -527,16 +526,16 @@ for k, v in pairs(box) do
 end
 
 setmetatable(box, {
-    __index = function(table, index)
+    __index = function()
         error(debug.traceback("Please call box.cfg{} first"))
         error("Please call box.cfg{} first")
      end
 })
 
 local function load_cfg(cfg)
-    cfg = upgrade_cfg(cfg, translate_cfg)
-    cfg = prepare_cfg(cfg, default_cfg, template_cfg, modify_cfg)
-    apply_default_cfg(cfg, default_cfg);
+    cfg = upgrade_cfg(cfg, translate_config)
+    cfg = prepare_cfg(cfg, default_config, template_config, modify_config)
+    apply_default_cfg(cfg, default_config);
     -- Save new box.cfg
     box.cfg = cfg
     if not pcall(private.cfg_check)  then
@@ -551,7 +550,7 @@ local function load_cfg(cfg)
     box_configured = nil
     box.cfg = setmetatable(cfg,
         {
-            __newindex = function(table, index)
+            __newindex = function()
                 error('Attempt to modify a read-only table')
             end,
             __call = locked(reload_cfg),
@@ -563,7 +562,7 @@ local function load_cfg(cfg)
             if not dynamic_cfg_skip_at_load[key] then
                 fun()
             end
-            if not compare_cfg(val, default_cfg[key]) then
+            if not compare_cfg(val, default_config[key]) then
                 if log_cfg_option[key] ~= nil then
                     val = log_cfg_option[key](val)
                 end

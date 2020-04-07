@@ -25,7 +25,15 @@ exclude_files = {
     ".git/**/*.lua",
 }
 
+files["**/*.lua"] = {
+    globals = {"box", "_TARANTOOL", "help", "tutorial"},
+    ignore = {"212/self", "122"}
+}
 files["extra/dist/tarantoolctl.in"] = {ignore = {"212/self", "122", "431"}}
 files["src/lua/swim.lua"] = {ignore = {"431"}}
 files["src/lua/fio.lua"] = {ignore = {"231"}}
 files["src/lua/init.lua"] = {globals = {"dostring"}}
+files["src/box/lua/console.lua"] = {ignore = {"212"}}
+files["src/box/lua/load_cfg.lua"] = {ignore = {"542"}}
+files["src/box/lua/net_box.lua"] = {ignore = {"431", "432", "231", "411", "212"}}
+files["src/box/lua/schema.lua"] = {ignore = {"431", "432", "542", "212"}}
