@@ -46,7 +46,6 @@ local instance_dir
 local default_cfg
 local positional_arguments
 local keyword_arguments
-local lua_arguments = arg
 local language
 
 -- function for printing usage reference
@@ -64,7 +63,7 @@ end
 
 local function check_user_level()
     local uid = os.getenv('UID')
-    local udir = nil
+    local udir
     if uid == 0 or os.getenv("NOTIFY_SOCKET") then
         return nil
     end
@@ -790,7 +789,7 @@ end
 local function eval()
     local console_sock_path = uri.parse(console_sock).service
     local filename = arg[3]
-    local code = nil
+    local code
     if filename == nil then
         if stdin_isatty() then
             log.error("Usage:")
@@ -848,7 +847,6 @@ end
 -- xlog / snap file, so even when it stops on LSN >= @a opts.to on
 -- a current file a next file will be processed.
 local function filter_xlog(gen, param, state, opts, cb)
-    local spaces = opts.spaces
     local from, to, spaces = opts.from, opts.to, opts.space
     local show_system, replicas = opts['show-system'], opts.replica
 
@@ -875,7 +873,7 @@ local function cat()
     local cat_format = opts.format
     local format_cb = cat_formats[cat_format]
     local is_printed = false
-    for id, file in ipairs(positional_arguments) do
+    for _, file in ipairs(positional_arguments) do
         log.error("Processing file '%s'", file)
         local gen, param, state = xlog.pairs(file)
         filter_xlog(gen, param, state, opts, function(record)
@@ -901,7 +899,7 @@ local function play()
     if not remote:wait_connected() then
         error(("Error while connecting to host '%s'"):format(uri))
     end
-    for id, file in ipairs(positional_arguments) do
+    for _, file in ipairs(positional_arguments) do
         log.info(("Processing file '%s'"):format(file))
         local gen, param, state = xlog.pairs(file)
         filter_xlog(gen, param, state, opts, function(record)
@@ -923,7 +921,7 @@ local function play()
 end
 
 local function find_arg(name_arg)
-    for i, key in ipairs(arg) do
+    for _, key in ipairs(arg) do
         if key:find(name_arg) ~= nil then
             return key
         end
@@ -937,7 +935,7 @@ local function rocks()
     local util = require("luarocks.util")
     local command_line = require("luarocks.cmd")
     local options = keyword_arguments
-    local key = nil
+    local key
     if options["only-server"] ~= nil then
         key = find_arg("only%-server")
     else
@@ -954,7 +952,7 @@ local function rocks()
     end
 
     -- Tweak help messages
-    util.see_help = function(command, program)
+    util.see_help = function()
         -- TODO: print extended help message here
         return "See Tarantool documentation for help."
     end
@@ -1321,7 +1319,7 @@ local function usage_command(name, cmd)
     if type(header) == 'string' then
         header = { header }
     end
-    for no, line in ipairs(header) do
+    for _, line in ipairs(header) do
         log.error("    " .. line, name)
     end
 end
