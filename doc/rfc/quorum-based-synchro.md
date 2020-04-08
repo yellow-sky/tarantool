@@ -1,5 +1,3 @@
-# RFC Template
-
 * **Status**: In progress
 * **Start date**: 31-03-2020
 * **Authors**: Sergey Ostanevich @sergos \<sergos@tarantool.org\>
@@ -112,29 +110,31 @@ Customer        Leader          WAL(L)        Replica        WAL(R)
    |         [TXN Rollback        |             |              |
    |           destroyed]         |             |              |
    |               |              |             |              |
-   |               |----Quorum--->|             |              |
+   |               |---Confirm--->|             |              |
    |               |              |             |              |
-   |               |-----------Quorum---------->|              |
+   |               |----------Confirm---------->|              |
    |               |              |             |              |
    |<---TXN Ok-----|              |       [TXN Rollback        |
    |               |              |         destroyed]         |
    |               |              |             |              |
-   |               |              |             |----Quorum--->|
+   |               |              |             |---Confirm--->|
    |               |              |             |              |
 ```
 
 The quorum should be collected as a table for a list of transactions
 waiting for quorum. The latest transaction that collects the quorum is
 considered as complete, as well as all transactions prior to it, since
-all transactions should be applied in order. Leader writes a 'quorum'
-message to the WAL and it is delivered to replicas.
+all transactions should be applied in order. Leader writes a 'confirm'
+message to the WAL that refers to the transaction's LSN and it has its
+own LSN. This confirm message is delivered to all replicas through the 
+existing replication mechanism.
 
 Replica should report a positive or a negative result of the TXN to the
 leader via the IPROTO explicitly to allow leader to collect the quorum
-or anti-quorum for the TXN. In case negative result for the TXN received
-from minor number of replicas, then leader has to send an error message
-to each replica, which in turn has to disconnect from the replication
-the same way as it is done now in case of conflict.
+or anti-quorum for the TXN. In case a negative result for the TXN is 
+received from minor number of replicas, then leader has to send an error
+message to the replicas, which in turn have to disconnect from the 
+replication the same way as it is done now in case of conflict.
 
 In case leader receives enough error messages to do not achieve the
 quorum it should write the 'rollback' message in the WAL. After that
@@ -144,12 +144,12 @@ receive quorum.
 ### Recovery and failover.
 
 Tarantool instance during reading WAL should postpone the commit until
-the quorum is read. In case the WAL eof is achieved, the instance should
-keep rollback for all transactions that are waiting for a quorum entry
-until the role of the instance is set. In case this instance become a
-replica there are no additional actions needed, sine all info about
-quorum/rollback will arrive via replication. In case this instance is
-assigned a leader role, it should write 'rollback' in its WAL and
+the 'confirm' is read. In case the WAL eof is achieved, the instancei
+should keep rollback for all transactions that are waiting for a confirm
+entry until the role of the instance is set. In case this instance
+become a replica there are no additional actions needed, since all info
+about quorum/rollback will arrive via replication. In case this instance
+is assigned a leader role, it should write 'rollback' in its WAL and
 perform rollback for all transactions waiting for a quorum.
 
 In case of a leader failure a replica with the biggest LSN with former
@@ -165,20 +165,20 @@ We also can reuse current machinery of snapshot generation. Upon
 receiving a request to create a snapshot an instance should request a
 readview for the current commit operation. Although start of the
 snapshot generation should be postponed until this commit operation
-receives its quorum. In case operation is rolled back, the snapshot
+receives its confirmation. In case operation is rolled back, the snapshot
 generation should be aborted and restarted using current transaction
 after rollback is complete.
 
 After snapshot is created the WAL should start from the first operation
 that follows the commit operation snapshot is generated for. That means
-WAL will contain quorum messages that refer to transactions that are
+WAL will contain 'confirm' messages that refer to transactions that are
 not present in the WAL. Apparently, we have to allow this for the case
-quorum refers to a transaction with LSN less than the first entry in the
-WAL and only once.
+'confirm' refers to a transaction with LSN less than the first entry in
+the WAL.
 
 In case master appears unavailable a replica still have to be able to
-create snapshot. Replica can perform rollback for all transactions that
-are not confirmed and claim its lsn as the latest confirmed txn. Then it
+create a snapshot. Replica can perform rollback for all transactions that
+are not confirmed and claim its LSN as the latest confirmed txn. Then it
 can create a snapshot in a regular way and start with blank xlog file.
 All rolled back transactions will appear through the regular replication
 in case master reappears later on.
