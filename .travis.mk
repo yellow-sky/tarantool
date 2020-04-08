@@ -77,8 +77,9 @@ deps_buster_clang_8: deps_debian
 # Release
 
 build_debian:
-	cmake . -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_WERROR=ON ${CMAKE_EXTRA_PARAMS}
+	cmake . -DENABLE_DIST=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_WERROR=ON ${CMAKE_EXTRA_PARAMS}
 	make -j
+	sudo make install
 
 test_debian_no_deps: build_debian
 	cd test && /usr/bin/python test-run.py --force $(TEST_RUN_EXTRA_PARAMS)
@@ -144,6 +145,15 @@ test_static_build: deps_debian_static
 
 test_static_docker_build:
 	docker build --network=host --build-arg RUN_TESTS=ON -f Dockerfile.staticbuild .
+
+# ###################
+# Static Analysis
+# ###################
+
+test_debian_luacheck: build_debian
+	tarantoolctl rocks install luacheck
+	# TODO: run in parallel with LuaLanes
+	.rocks/bin/luacheck --codes --config .luacheckrc .
 
 #######
 # OSX #
