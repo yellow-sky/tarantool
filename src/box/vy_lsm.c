@@ -984,13 +984,17 @@ vy_lsm_commit_upsert(struct vy_lsm *lsm, struct vy_mem *mem,
 		struct tuple *upserted =
 			vy_apply_upsert(stmt, older, lsm->cmp_def,
 					lsm->mem_format, false);
-		lsm->stat.upsert.applied++;
-
 		if (upserted == NULL) {
-			/* OOM */
-			diag_clear(diag_get());
+			/*
+			 * OOM or upserted tuple does not fulfill
+			 * space format. Hence, upsert can't be
+			 * transformed into replace. Log error
+			 * and exit.
+			 */
+			diag_log();
 			return;
 		}
+		lsm->stat.upsert.applied++;
 		int64_t upserted_lsn = vy_stmt_lsn(upserted);
 		if (upserted_lsn != lsn) {
 			/**
