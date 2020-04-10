@@ -515,11 +515,11 @@ vy_tx_write(struct vy_lsm *lsm, struct vy_mem *mem,
 						    region_stmt);
 				tuple_unref(applied);
 				return rc;
+			} else {
+				struct error *e = diag_last_error(diag_get());
+				assert(e != NULL);
+				error_log(e);
 			}
-			/*
-			 * Ignore a memory error, because it is
-			 * not critical to apply the optimization.
-			 */
 		}
 	} else {
 		/* Invalidate cache element. */
@@ -1047,12 +1047,18 @@ vy_tx_set(struct vy_tx *tx, struct vy_lsm *lsm, struct tuple *stmt)
 
 		applied = vy_apply_upsert(stmt, old->stmt, lsm->cmp_def,
 					  lsm->mem_format, true);
-		lsm->stat.upsert.applied++;
-		if (applied == NULL)
-			return -1;
-		stmt = applied;
-		assert(vy_stmt_type(stmt) != 0);
-		lsm->stat.upsert.squashed++;
+		if (applied == NULL) {
+			struct error *e = diag_last_error(diag_get());
+			assert(e != NULL);
+			if (e->type != &type_ClientError)
+				return -1;
+			error_log(e);
+		} else {
+			lsm->stat.upsert.applied++;
+			stmt = applied;
+			assert(vy_stmt_type(stmt) != 0);
+			lsm->stat.upsert.squashed++;
+		}
 	}
 
 	/* Allocate a MVCC container. */
