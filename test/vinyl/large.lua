@@ -1,4 +1,3 @@
-local fiber = require('fiber')
 local digest = require('digest')
 
 local PAGE_SIZE = 1024
