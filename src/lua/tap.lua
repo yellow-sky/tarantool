@@ -53,7 +53,6 @@ local function ok(test, cond, message, extra)
     io.write(string.format("not ok - %s\n", message))
     extra = extra or {}
     if test.trace then
-        debug.getinfo(3, "Sl")
         extra.trace = traceback()
         extra.filename = extra.trace[#extra.trace].filename
         extra.line = extra.trace[#extra.trace].line

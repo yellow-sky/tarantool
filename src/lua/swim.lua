@@ -782,20 +782,20 @@ local swim_member_event_mt = {
 --
 -- Create a closure function for preprocessing raw SWIM member
 -- event trigger parameters.
--- @param instance SWIM instance.
+-- @param s SWIM instance.
 -- @param callback User functions to call.
 -- @param ctx An optional parameter for @a callback passed as is.
 -- @return A function to set as a trigger.
 --
-local function swim_on_member_event_new(instance, callback, ctx)
+local function swim_on_member_event_new(s, callback, ctx)
     -- Do not keep a hard reference to a SWIM instance. Otherwise
     -- it is a cyclic reference, and both the instance and the
     -- trigger will never be GC-ed.
-    instance = setmetatable({instance}, {__mode = 'v'})
+    s = setmetatable({s}, {__mode = 'v'})
     return function(member_ptr, event_mask)
-        local i = instance[1]
-        if i then
-            local m = swim_wrap_member(i, member_ptr)
+        local si = s[1]
+        if si then
+            local m = swim_wrap_member(si, member_ptr)
             local event = setmetatable({event_mask}, swim_member_event_mt)
             return callback(m, event, ctx)
         end
