@@ -125,6 +125,10 @@ vy_apply_upsert(struct tuple *new_stmt, struct tuple *old_stmt,
 	if (old_type != IPROTO_UPSERT) {
 		assert(old_type == IPROTO_INSERT ||
 		       old_type == IPROTO_REPLACE);
+		if (tuple_validate_raw(format, result_mp) != 0) {
+			region_truncate(region, region_svp);
+			return NULL;
+		}
 		/*
 		 * UPDATE case: return the updated old stmt.
 		 */
