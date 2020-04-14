@@ -1,7 +1,7 @@
 * **Status**: In progress
 * **Start date**: 31-03-2020
 * **Authors**: Sergey Ostanevich @sergos \<sergos@tarantool.org\>
-* **Issues**:
+* **Issues**: https://github.com/tarantool/tarantool/issues/4842
 
 ## Summary
 
@@ -12,7 +12,7 @@ formulated at MRG planning meeting:
   - consistency of data on replica and leader
   - switch from leader to replica without data loss
   - up to date replicas to run read-only requests
-  - ability to switch async replicas into sync ones
+  - ability to switch async replicas into sync ones and vice versa
   - guarantee of rollback on leader and sync replicas
   - simplicity of cluster orchestration
 
@@ -26,13 +26,13 @@ What this RFC is not:
 
 There are number of known implemenatation of consistent data presence in
 a cluster. They can be commonly named as "wait for LSN" technique. The
-biggest issue with this technique is the abscence of rollback gauarantees
+biggest issue with this technique is the abscence of rollback guarantees
 at replica in case of transaction failure on one master or some of the
-replics in the cluster.
+replicas in the cluster.
 
 To provide such capabilities a new functionality should be introduced in
-Tarantool core, with limitation mentioned before - backward compatilibity
-and ease of cluster orchestration.
+Tarantool core, with requirements mentioned before - backward
+compatilibity and ease of cluster orchestration.
 
 ## Detailed design
 
