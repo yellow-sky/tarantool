@@ -22,7 +22,6 @@ What this RFC is not:
     assignments an so on
   - master-master configuration support
 
-
 ## Background and motivation
 
 There are number of known implemenatation of consistent data presence in
@@ -38,6 +37,7 @@ and ease of cluster orchestration.
 ## Detailed design
 
 ### Quorum commit
+
 The main idea behind the proposal is to reuse existent machinery as much
 as possible. It will ensure the well-tested and proven functionality
 across many instances in MRG and beyond is used. The transaction rollback
@@ -77,7 +77,6 @@ Customer        Leader          WAL(L)        Replica        WAL(R)
    |               |              |         destroyed]         |
    |               |              |             |              |
 ```
-
 
 To introduce the 'quorum' we have to receive confirmation from replicas
 to make a decision on whether the quorum is actually present. Leader
@@ -126,14 +125,14 @@ waiting for quorum. The latest transaction that collects the quorum is
 considered as complete, as well as all transactions prior to it, since
 all transactions should be applied in order. Leader writes a 'confirm'
 message to the WAL that refers to the transaction's LSN and it has its
-own LSN. This confirm message is delivered to all replicas through the 
+own LSN. This confirm message is delivered to all replicas through the
 existing replication mechanism.
 
 Replica should report a positive or a negative result of the TXN to the
 leader via the IPROTO explicitly to allow leader to collect the quorum
-or anti-quorum for the TXN. In case a negative result for the TXN is 
+or anti-quorum for the TXN. In case a negative result for the TXN is
 received from minor number of replicas, then leader has to send an error
-message to the replicas, which in turn have to disconnect from the 
+message to the replicas, which in turn have to disconnect from the
 replication the same way as it is done now in case of conflict.
 
 In case leader receives enough error messages to do not achieve the
@@ -144,7 +143,7 @@ receive quorum.
 ### Recovery and failover.
 
 Tarantool instance during reading WAL should postpone the commit until
-the 'confirm' is read. In case the WAL eof is achieved, the instancei
+the 'confirm' is read. In case the WAL eof is achieved, the instance
 should keep rollback for all transactions that are waiting for a confirm
 entry until the role of the instance is set. In case this instance
 become a replica there are no additional actions needed, since all info
@@ -158,6 +157,9 @@ leader's ID is elected as a new leader. The replica should record
 without quorum should be rolled back. This rollback will be delivered to
 all replicas and they will perform rollbacks of all transactions waiting
 for quorum.
+
+An interface to force apply pending transactions by issuing a confirm
+entry for them have to be introduced for manual recovery.
 
 ### Snapshot generation.
 
@@ -213,7 +215,6 @@ Cluster description should contain explicit attribute for each replica
 to denote it participates in synchronous activities. Also the description
 should contain criterion on how many replicas responses are needed to
 achieve the quorum.
-
 
 ## Rationale and alternatives
 
