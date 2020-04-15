@@ -24,15 +24,15 @@ What this RFC is not:
 
 ## Background and motivation
 
-There are number of known implemenatation of consistent data presence in
+There are number of known implementation of consistent data presence in
 a cluster. They can be commonly named as "wait for LSN" technique. The
-biggest issue with this technique is the abscence of rollback guarantees
+biggest issue with this technique is the absence of rollback guarantees
 at replica in case of transaction failure on one master or some of the
 replicas in the cluster.
 
 To provide such capabilities a new functionality should be introduced in
 Tarantool core, with requirements mentioned before - backward
-compatilibity and ease of cluster orchestration.
+compatibility and ease of cluster orchestration.
 
 ## Detailed design
 
