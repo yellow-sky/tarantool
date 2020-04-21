@@ -53,27 +53,27 @@ Currently replication represented by the following scheme:
 Customer        Leader          WAL(L)        Replica        WAL(R)
    |------TXN----->|              |             |              |
    |               |              |             |              |
-   |         [TXN Rollback        |             |              |
+   |         [TXN undo log        |             |              |
    |            created]          |             |              |
    |               |              |             |              |
    |               |-----TXN----->|             |              |
    |               |              |             |              |
    |               |<---WAL Ok----|             |              |
    |               |              |             |              |
-   |         [TXN Rollback        |             |              |
+   |         [TXN undo log        |             |              |
    |           destroyed]         |             |              |
    |               |              |             |              |
    |<----TXN Ok----|              |             |              |
    |               |-------Replicate TXN------->|              |
    |               |              |             |              |
-   |               |              |       [TXN Rollback        |
+   |               |              |       [TXN undo log        |
    |               |              |          created]          |
    |               |              |             |              |
    |               |              |             |-----TXN----->|
    |               |              |             |              |
    |               |              |             |<---WAL Ok----|
    |               |              |             |              |
-   |               |              |       [TXN Rollback        |
+   |               |              |       [TXN undo log        |
    |               |              |         destroyed]         |
    |               |              |             |              |
 ```
@@ -87,14 +87,14 @@ complete the customers' request. So the picture will change to:
 Customer        Leader          WAL(L)        Replica        WAL(R)
    |------TXN----->|              |             |              |
    |               |              |             |              |
-   |         [TXN Rollback        |             |              |
+   |         [TXN undo log        |             |              |
    |            created]          |             |              |
    |               |              |             |              |
    |               |-----TXN----->|             |              |
    |               |              |             |              |
    |               |-------Replicate TXN------->|              |
    |               |              |             |              |
-   |               |              |       [TXN Rollback        |
+   |               |              |       [TXN undo log        |
    |               |<---WAL Ok----|          created]          |
    |               |              |             |              |
    |           [Waiting           |             |-----TXN----->|
@@ -106,14 +106,14 @@ Customer        Leader          WAL(L)        Replica        WAL(R)
    |            [Quorum           |             |              |
    |           achieved]          |             |              |
    |               |              |             |              |
-   |         [TXN Rollback        |             |              |
+   |         [TXN undo log        |             |              |
    |           destroyed]         |             |              |
    |               |              |             |              |
    |               |---Confirm--->|             |              |
    |               |              |             |              |
    |               |----------Confirm---------->|              |
    |               |              |             |              |
-   |<---TXN Ok-----|              |       [TXN Rollback        |
+   |<---TXN Ok-----|              |       [TXN undo log        |
    |               |              |         destroyed]         |
    |               |              |             |              |
    |               |              |             |---Confirm--->|
