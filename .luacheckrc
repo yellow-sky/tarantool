@@ -19,6 +19,7 @@ exclude_files = {
     "test/xlog/*.lua",
     "test/wal_off/*.lua",
     "test/var/**/*.lua",
+    "test/luajit-tap",
     "test-run/**/*.lua",
     "third_party/**/*.lua",
     ".rocks/**/*.lua",
