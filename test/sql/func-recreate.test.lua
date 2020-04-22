@@ -3,35 +3,15 @@ engine = test_run:get_cfg('engine')
 _ = box.space._session_settings:update('sql_default_engine', {{'=', 2, engine}})
 
 -- Check errors during function create process
-fiber = require('fiber')
 test_run:cmd("setopt delimiter ';'")
 box.schema.func.create('WAITFOR', {language = 'Lua',
-                       body = 'function (n) fiber.sleep(n) return n end',
+                       body = 'function (n) return n end',
                        param_list = {'number'}, returns = 'number',
-                       exports = {'LUA', 'SQL'}})
-test_run:cmd("setopt delimiter ''");
-
-ch = fiber.channel(1)
-
-_ = fiber.create(function () ch:put(box.execute('select WAITFOR(0.2)')) end)
-fiber.sleep(0.1)
-
-box.func.WAITFOR:drop()
-
-test_run:cmd("setopt delimiter ';'")
+                       exports = {'LUA', 'SQL'}});
 box.schema.func.create('WAITFOR', {language = 'Lua',
-                       body = 'function (n) fiber.sleep(n) return n end',
+                       body = 'function (n) return n end',
                        param_list = {'number'}, returns = 'number',
-                       exports = {'LUA', 'SQL'}})
-test_run:cmd("setopt delimiter ''");
-ch:get()
-box.func.WAITFOR:drop()
-
-test_run:cmd("setopt delimiter ';'")
-box.schema.func.create('WAITFOR', {language = 'Lua',
-                   body = 'function (n) fiber.sleep(n) return n end',
-                   param_list = {'number'}, returns = 'number',
-                   exports = {'LUA', 'SQL'}})
+                       exports = {'LUA', 'SQL'}});
 test_run:cmd("setopt delimiter ''");
 
 box.func.WAITFOR:drop()
