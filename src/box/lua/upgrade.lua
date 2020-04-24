@@ -978,6 +978,14 @@ local function upgrade_to_2_3_1()
     create_session_settings_space()
 end
 
+local function upgrade_to_2_3_1_1()
+    -- Formats must be equal in order to avoid crashes in SQL
+    -- caused by incorrectly allocated cursor.
+    local _func = box.space[box.schema.FUNC_ID]
+    local _vfunc = box.space[box.schema.VFUNC_ID]
+    _vfunc:format(_func:format())
+end
+
 --------------------------------------------------------------------------------
 
 local function get_version()
@@ -1015,6 +1023,7 @@ local function upgrade(options)
         {version = mkversion(2, 2, 1), func = upgrade_to_2_2_1, auto = true},
         {version = mkversion(2, 3, 0), func = upgrade_to_2_3_0, auto = true},
         {version = mkversion(2, 3, 1), func = upgrade_to_2_3_1, auto = true},
+        {version = mkversion(2, 3, 1, 1), func = upgrade_to_2_3_1_1, auto = true},
     }
 
     for _, handler in ipairs(handlers) do

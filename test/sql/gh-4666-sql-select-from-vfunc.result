@@ -1,0 +1,7 @@
+-- test-run result file version 2
+--
+-- Make sure assertion does not fail.
+--
+_ = box.execute([[select * from "_vfunc";]])
+ | ---
+ | ...
