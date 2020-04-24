@@ -349,6 +349,11 @@ xdir_create(struct xdir *dir, const char *dirname, enum xdir_type type,
 		dir->suffix = NONE;
 		dir->force_recovery = true;
 		break;
+	case SIDX:
+		dir->filetype = "SIDX";
+		dir->filename_ext = ".sidx";
+		dir->suffix = INPROGRESS;
+		break;
 	case VYLOG:
 		dir->filetype = "VYLOG";
 		dir->filename_ext = ".vylog";

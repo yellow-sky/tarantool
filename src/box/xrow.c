@@ -124,8 +124,6 @@ int
 xrow_header_decode(struct xrow_header *header, const char **pos,
 		   const char *end, bool end_is_exact)
 {
-	/* FIXME more accurate pointers get and return */
-	memset(header, 0, sizeof(struct xrow_header) - sizeof(int *) - sizeof(size_t));
 	const char *tmp = *pos;
 	const char * const start = *pos;
 	if (mp_check(&tmp, end) != 0) {
@@ -173,19 +171,19 @@ error:
 			has_tsn = true;
 			header->tsn = mp_decode_uint(pos);
 			break;
-		case IPROTO_SIDX:
-			header->sidx_arr_size = mp_decode_uint(pos);
-			if (header->sidx_arr_size < header->sidx_arr_alloc_size) {
-				size_t new_size = header->sidx_arr_size * 2;
-				free(header->sidx_arr);
-				header->sidx_arr = malloc(new_size * sizeof(
-					header->sidx_arr[0]));
-				assert(header->sidx_arr);
-				header->sidx_arr_alloc_size = new_size;
-			}
-			for (size_t i = 0; i < header->sidx_arr_size; i++)
-				header->sidx_arr[i] = mp_decode_uint(pos);
-			break;
+		// case IPROTO_SIDX:
+		// 	header->sidx_arr_size = mp_decode_uint(pos);
+		// 	if (header->sidx_arr_size < header->sidx_arr_alloc_size) {
+		// 		size_t new_size = header->sidx_arr_size * 2;
+		// 		free(header->sidx_arr);
+		// 		header->sidx_arr = malloc(new_size * sizeof(
+		// 			header->sidx_arr[0]));
+		// 		assert(header->sidx_arr);
+		// 		header->sidx_arr_alloc_size = new_size;
+		// 	}
+		// 	for (size_t i = 0; i < header->sidx_arr_size; i++)
+		// 		header->sidx_arr[i] = mp_decode_uint(pos);
+		// 	break;
 		case IPROTO_FLAGS:
 			flags = mp_decode_uint(pos);
 			header->is_commit = flags & IPROTO_FLAG_COMMIT;
@@ -286,13 +284,13 @@ xrow_header_encode(const struct xrow_header *header, uint64_t sync,
 		map_size++;
 	}
 
-	if (header->sidx_arr_size > 0) {
-		d = mp_encode_uint(d, IPROTO_SIDX);
-		d = mp_encode_uint(d, header->sidx_arr_size);
-		for (size_t i = 0; i < header->sidx_arr_size; i++)
-			d = mp_encode_uint(d, header->sidx_arr[i]);
-		map_size++;
-	}
+	// if (header->sidx_arr_size > 0) {
+	// 	d = mp_encode_uint(d, IPROTO_SIDX);
+	// 	d = mp_encode_uint(d, header->sidx_arr_size);
+	// 	for (size_t i = 0; i < header->sidx_arr_size; i++)
+	// 		d = mp_encode_uint(d, header->sidx_arr[i]);
+	// 	map_size++;
+	// }
 
 	if (header->tm) {
 		d = mp_encode_uint(d, IPROTO_TIMESTAMP);

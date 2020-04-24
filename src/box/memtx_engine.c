@@ -36,6 +36,10 @@
 #include <small/mempool.h>
 
 #include <math.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 
 #include "fiber.h"
 #include "errinj.h"
@@ -144,6 +148,7 @@ memtx_engine_shutdown(struct engine *engine)
 	slab_cache_destroy(&memtx->slab_cache);
 	tuple_arena_destroy(&memtx->arena);
 	xdir_destroy(&memtx->snap_dir);
+	xdir_destroy(&memtx->sidx_dir);
 	free(memtx);
 }
 
@@ -174,6 +179,8 @@ memtx_engine_recover_snapshot(struct memtx_engine *memtx,
 	int64_t signature = vclock_sum(vclock);
 	const char *snap_filename = xdir_format_filename(&memtx->snap_dir,
 						    signature, NONE);
+	const char *file = xdir_format_filename(&memtx->sidx_dir,
+						    signature, NONE);
 
 	struct xlog_cursor snap_cursor;
 	if (xlog_cursor_open(&snap_cursor, snap_filename) < 0)
@@ -182,10 +189,26 @@ memtx_engine_recover_snapshot(struct memtx_engine *memtx,
 	say_info("recovering from `%s'", snap_filename);
 	int rc;
 	struct xrow_header snap_row;
-	snap_row.sidx_arr = NULL;
 
 	uint64_t row_count = 0;
 	size_t line_cnt = 0;
+	int fd = open(file, O_RDONLY);
+	if (fd < 0) {
+		fprintf(stderr, "can't open file %s: [%d] %s\n", file, errno, strerror(errno));
+		assert(0);
+	}
+	/* find size of input file */
+	struct stat statbuf;
+	if (fstat(fd, &statbuf) < 0) {
+		fprintf(stderr, "can't stat file %s: [%d] %s\n", file, errno, strerror(errno));
+		assert(0);
+	}
+	size_t *map = mmap(0, statbuf.st_size, PROT_READ, MAP_SHARED, fd, 0);
+	if (map == MAP_FAILED) {
+		fprintf(stderr, "can't mmap file %s: [%d] %s\n", file, errno, strerror(errno));
+		return 0;
+	}
+	size_t map_cnt = 0;
 	while ((rc = xlog_cursor_next(&snap_cursor, &snap_row,
 				      memtx->force_recovery)) == 0) {
 		snap_row.lsn = signature;
@@ -197,11 +220,12 @@ memtx_engine_recover_snapshot(struct memtx_engine *memtx,
 		// fprintf(stderr, "restore indexes sp=%u line_cnt=%ld\n", sp->def->id, line_cnt);
 		if (sidx_cnt > 0) {
 			line_cnt++;
-			assert(snap_row.sidx_arr_size == sidx_cnt);
+			size_t sidx_arr_size = map[map_cnt++];
+			assert(sidx_arr_size == sidx_cnt);
 			for (uint32_t i = 0; i < sidx_cnt; i++) {
 				struct index *index = space_index(sp, i + 1);
 				if (index_support_build_number(index)) {
-					size_t num = snap_row.sidx_arr[i];
+					size_t num = map[map_cnt++];
 					index_build_number(index, tuple, num);
 				}
 			}
@@ -219,6 +243,11 @@ memtx_engine_recover_snapshot(struct memtx_engine *memtx,
 		}
 	}
 	xlog_cursor_close(&snap_cursor, false);
+	int r = munmap(map, statbuf.st_size);
+	if (r == -1) {
+		fprintf(stderr, "can't munmap file %s: [%d] %s\n", file, errno, strerror(errno));
+		return -1;
+	}
 	if (rc < 0)
 		return -1;
 
@@ -480,8 +509,7 @@ checkpoint_write_row(struct xlog *l, struct xrow_header *row)
 
 static int
 checkpoint_write_tuple(struct xlog *l, uint32_t space_id, uint32_t group_id,
-		       const char *data, uint32_t size, int* sidx_arr,
-		       size_t sidx_arr_size)
+		       const char *data, uint32_t size)
 {
 	struct request_replace_body body;
 	request_replace_body_create(&body, space_id);
@@ -490,8 +518,8 @@ checkpoint_write_tuple(struct xlog *l, uint32_t space_id, uint32_t group_id,
 	memset(&row, 0, sizeof(struct xrow_header));
 	row.type = IPROTO_INSERT;
 	row.group_id = group_id;
-	row.sidx_arr = sidx_arr;
-	row.sidx_arr_size = sidx_arr_size;
+	// row.sidx_arr = sidx_arr;
+	// row.sidx_arr_size = sidx_arr_size;
 
 	row.bodycnt = 2;
 	row.body[0].iov_base = &body;
@@ -520,6 +548,7 @@ struct checkpoint {
 	/** The vclock of the snapshot file. */
 	struct vclock vclock;
 	struct xdir snap_dir;
+	struct xdir sidx_dir;
 	// struct xdir sidx_dir;
 	/**
 	 * Do nothing, just touch the snapshot file - the
@@ -544,7 +573,7 @@ checkpoint_new(const char *snap_dirname, uint64_t snap_io_rate_limit)
 	opts.sync_interval = SNAP_SYNC_INTERVAL;
 	opts.free_cache = true;
 	xdir_create(&ckpt->snap_dir, snap_dirname, SNAP, &INSTANCE_UUID, &opts);
-	// xdir_create(&ckpt->sidx_dir, snap_dirname, SIDX, &INSTANCE_UUID, &opts);
+	xdir_create(&ckpt->sidx_dir, snap_dirname, SIDX, &INSTANCE_UUID, &opts);
 	vclock_create(&ckpt->vclock);
 	ckpt->touch = false;
 	return ckpt;
@@ -564,6 +593,7 @@ checkpoint_delete(struct checkpoint *ckpt)
 		free(entry);
 	}
 	xdir_destroy(&ckpt->snap_dir);
+	xdir_destroy(&ckpt->sidx_dir);
 	free(ckpt);
 }
 
@@ -756,6 +786,15 @@ checkpoint_f(va_list ap)
 	ERROR_INJECT_SLEEP(ERRINJ_SNAP_WRITE_DELAY);
 	struct checkpoint_entry *entry;
 	size_t line_cnt = 0;
+	
+	int64_t signature = vclock_sum(&ckpt->vclock);
+	const char *file = xdir_format_filename(&ckpt->sidx_dir,
+						signature, NONE);
+	int fd = open(file, O_WRONLY | O_CREAT | O_TRUNC, 0x777);
+	if (fd == -1) {
+		fprintf(stderr, "can't open file %s: [%d] %s\n", file, errno, strerror(errno));
+		assert(0);
+	}
 	rlist_foreach_entry(entry, &ckpt->entries, link) {
 		// fprintf(stderr, "[DBG]: inside entry %p\n", entry);
 		int rc;
@@ -792,6 +831,7 @@ checkpoint_f(va_list ap)
 			sidx_arr = malloc(sizeof(*sidx_arr) * sidx_cnt);
 			assert(sidx_arr);
 			if (index_map != NULL && sidx_cnt > 0) {
+				write(fd, &sidx_cnt, sizeof(sidx_cnt)); /* not interested in snap time, interested in bootstrap */
 				line_cnt++;
 				// fprintf(stderr, "[DBG]: sp_id=%u idx_cnt=%u(%u)\n", entry->space_id, i, entry->index_count - 1);
 				size_t cnt_sidx = 0;
@@ -803,7 +843,9 @@ checkpoint_f(va_list ap)
 							index_map[i - 1], it, data
 						);
 						assert(num <= it->index_size);
-						sidx_arr[cnt_sidx++] = num;
+						write(fd, &num, sizeof(num)); /* not interested in snap time, interested in bootstrap */
+						cnt_sidx++;
+						// sidx_arr[cnt_sidx++] = num;
 						// fprintf(stderr, "[DBG]: sp_id=%u num=%lu(%lu)\n", entry->space_id, num, entry->iterator[i + 1]->index_size);
 					}
 				}
@@ -811,15 +853,13 @@ checkpoint_f(va_list ap)
 				// fprintf(stderr, "store indexes sp=%u (%p)%p size=%ld\n", entry->space_id, p, tmp, sz);
 			}
 			if (checkpoint_write_tuple(&snap, entry->space_id,
-					entry->group_id, data, size, sidx_arr, sidx_cnt) != 0) {
+					entry->group_id, data, size) != 0) {
 				if (index_map != NULL) {
 					checkpoint_entry_index_map_free(index_map, entry->index_count - 1);
 				}
 				goto fail;
 			}
 		}
-		if (sidx_cnt > 0)
-			free(sidx_arr);
 		if (index_map != NULL) {
 			checkpoint_entry_index_map_free(index_map, entry->index_count - 1);
 		}
@@ -828,8 +868,14 @@ checkpoint_f(va_list ap)
 	}
 	if (xlog_flush(&snap) < 0)
 		goto fail;
+	int r = fsync(fd);
+	if (r == -1)
+		fprintf(stderr, "can't sync file file %s: [%d] %s\n", file, errno, strerror(errno));
 
 	xlog_close(&snap, false);
+	r = close(fd);
+	if (r == -1)
+		fprintf(stderr, "can't close file file %s: [%d] %s\n", file, errno, strerror(errno));
 	say_info("done");
 	return 0;
 fail:
@@ -1214,6 +1260,8 @@ memtx_engine_new(const char *snap_dirname, bool force_recovery,
 
 	xdir_create(&memtx->snap_dir, snap_dirname, SNAP, &INSTANCE_UUID,
 		    &xlog_opts_default);
+	xdir_create(&memtx->sidx_dir, snap_dirname, SIDX, &INSTANCE_UUID,
+		    &xlog_opts_default);
 	memtx->snap_dir.force_recovery = force_recovery;
 
 	if (xdir_scan(&memtx->snap_dir) != 0)
@@ -1285,6 +1333,7 @@ memtx_engine_new(const char *snap_dirname, bool force_recovery,
 	return memtx;
 fail:
 	xdir_destroy(&memtx->snap_dir);
+	xdir_destroy(&memtx->sidx_dir);
 	free(memtx);
 	return NULL;
 }

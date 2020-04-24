@@ -97,6 +97,7 @@ enum xdir_type {
 	SNAP,		/* memtx snapshot */
 	XLOG,		/* write ahead log */
 	VYLOG,		/* vinyl metadata log */
+	SIDX,		/* test saving secondary */
 };
 
 /**

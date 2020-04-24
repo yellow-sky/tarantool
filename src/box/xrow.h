@@ -92,9 +92,9 @@ struct xrow_header {
 	int bodycnt;
 	uint32_t schema_version;
 	struct iovec body[XROW_BODY_IOVMAX];
-	size_t sidx_arr_size;
-	int *sidx_arr;
-	size_t sidx_arr_alloc_size;
+	// size_t sidx_arr_size;
+	// int *sidx_arr;
+	// size_t sidx_arr_alloc_size;
 };
 
 /**
