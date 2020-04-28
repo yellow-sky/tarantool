@@ -29,6 +29,7 @@
  * SUCH DAMAGE.
  */
 #include "txn.h"
+#include "txn_limbo.h"
 #include "engine.h"
 #include "tuple.h"
 #include "journal.h"
@@ -433,7 +434,7 @@ txn_complete(struct txn *txn)
 			engine_rollback(txn->engine, txn);
 		if (txn_has_flag(txn, TXN_HAS_TRIGGERS))
 			txn_run_rollback_triggers(txn, &txn->on_rollback);
-	} else {
+	} else if (!txn_has_flag(txn, TXN_WAIT_SYNC)) {
 		/* Commit the transaction. */
 		if (txn->engine != NULL)
 			engine_commit(txn->engine, txn);
@@ -448,6 +449,19 @@ txn_complete(struct txn *txn)
 					     txn->signature - n_rows + 1,
 					     stop_tm - txn->start_tm);
 		}
+	} else {
+		/*
+		 * Complete is called on every WAL operation
+		 * authored by this transaction. And it not always
+		 * is one. And not always is enough for commit.
+		 * In case the transaction is waiting for acks, it
+		 * can't be committed right away. Give control
+		 * back to the fiber, owning the transaction so as
+		 * it could decide what to do next.
+		 */
+		if (txn->fiber != NULL && txn->fiber != fiber())
+			fiber_wakeup(txn->fiber);
+		return;
 	}
 	/*
 	 * If there is no fiber waiting for the transaction then
@@ -495,6 +509,7 @@ txn_journal_entry_new(struct txn *txn)
 
 	struct xrow_header **remote_row = req->rows;
 	struct xrow_header **local_row = req->rows + txn->n_applier_rows;
+	bool is_sync = false;
 
 	stailq_foreach_entry(stmt, &txn->stmts, next) {
 		if (stmt->has_triggers) {
@@ -506,12 +521,28 @@ txn_journal_entry_new(struct txn *txn)
 		if (stmt->row == NULL)
 			continue;
 
+		is_sync = is_sync || (stmt->space != NULL &&
+				      stmt->space->def->opts.is_sync);
+
 		if (stmt->row->replica_id == 0)
 			*local_row++ = stmt->row;
 		else
 			*remote_row++ = stmt->row;
 
 		req->approx_len += xrow_approx_len(stmt->row);
+	}
+	/*
+	 * There is no a check for all-local rows, because a local
+	 * space can't be synchronous. So if there is at least one
+	 * synchronous space, the transaction is not local.
+	 */
+	if (!txn_has_flag(txn, TXN_FORCE_ASYNC)) {
+		if (is_sync) {
+			txn_set_flag(txn, TXN_WAIT_SYNC);
+			txn_set_flag(txn, TXN_WAIT_ACK);
+		} else if (!txn_limbo_is_empty(&txn_limbo)) {
+			txn_set_flag(txn, TXN_WAIT_SYNC);
+		}
 	}
 
 	assert(remote_row == req->rows + txn->n_applier_rows);
@@ -621,6 +652,7 @@ int
 txn_commit(struct txn *txn)
 {
 	struct journal_entry *req;
+	struct txn_limbo_entry *limbo_entry;
 
 	txn->fiber = fiber();
 
@@ -642,8 +674,31 @@ txn_commit(struct txn *txn)
 		return -1;
 	}
 
+	bool is_sync = txn_has_flag(txn, TXN_WAIT_SYNC);
+	if (is_sync) {
+		/*
+		 * Remote rows, if any, come before local rows, so
+		 * check for originating instance id here.
+		 */
+		uint32_t origin_id = req->rows[0]->replica_id;
+
+		/*
+		 * Append now. Before even WAL write is done.
+		 * After WAL write nothing should fail, even OOM
+		 * wouldn't be acceptable.
+		 */
+		limbo_entry = txn_limbo_append(&txn_limbo, origin_id, txn);
+		if (limbo_entry == NULL) {
+			txn_rollback(txn);
+			txn_free(txn);
+			return -1;
+		}
+	}
+
 	fiber_set_txn(fiber(), NULL);
 	if (journal_write(req) != 0) {
+		if (is_sync)
+			txn_limbo_abort(&txn_limbo, limbo_entry);
 		fiber_set_txn(fiber(), txn);
 		txn_rollback(txn);
 		txn_free(txn);
@@ -652,7 +707,13 @@ txn_commit(struct txn *txn)
 		diag_log();
 		return -1;
 	}
-
+	if (is_sync) {
+		int64_t lsn = req->rows[req->n_rows - 1]->lsn;
+		txn_limbo_assign_lsn(&txn_limbo, limbo_entry, lsn);
+		/* Local WAL write is a first 'ACK'. */
+		txn_limbo_ack(&txn_limbo, txn_limbo.instance_id, lsn);
+		txn_limbo_wait_complete(&txn_limbo, limbo_entry);
+	}
 	if (!txn_has_flag(txn, TXN_IS_DONE)) {
 		txn->signature = req->res;
 		txn_complete(txn);
