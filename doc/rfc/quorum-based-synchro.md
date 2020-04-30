@@ -25,10 +25,10 @@ What this RFC is not:
 ## Background and motivation
 
 There are number of known implementation of consistent data presence in
-a cluster. They can be commonly named as "wait for LSN" technique. The
-biggest issue with this technique is the absence of rollback guarantees
-at replica in case of transaction failure on one master or some of the
-replicas in the cluster.
+a Tarantool cluster. They can be commonly named as "wait for LSN"
+technique. The biggest issue with this technique is the absence of
+rollback guarantees at replica in case of transaction failure on one
+master or some of the replicas in the cluster.
 
 To provide such capabilities a new functionality should be introduced in
 Tarantool core, with requirements mentioned before - backward
@@ -124,42 +124,69 @@ The quorum should be collected as a table for a list of transactions
 waiting for quorum. The latest transaction that collects the quorum is
 considered as complete, as well as all transactions prior to it, since
 all transactions should be applied in order. Leader writes a 'confirm'
-message to the WAL that refers to the transaction's LSN and it has its
-own LSN. This confirm message is delivered to all replicas through the
-existing replication mechanism.
+message to the WAL that refers to the transaction's [LEADER_ID, LSN] and
+the confirm has its own LSN. This confirm message is delivered to all
+replicas through the existing replication mechanism.
 
-Replica should report a positive or a negative result of the TXN to the
-leader via the IPROTO explicitly to allow leader to collect the quorum
-or anti-quorum for the TXN. In case a negative result for the TXN is
-received from minor number of replicas, then leader has to send an error
-message to the replicas, which in turn have to disconnect from the
-replication the same way as it is done now in case of conflict.
+Replica should report a TXN application success to the leader via the
+IPROTO explicitly to allow leader to collect the quorum for the TXN.
+In case of application failure the replica has to disconnect from the
+replication the same way as it is done now. The replica also has to
+report its disconnection to the orchestrator. Further actions require
+human intervention, since failure means either technical problem (such
+as not enough space for WAL) that has to be resovled or an inconsistent
+state that requires rejoin.
 
-In case leader receives enough error messages to do not achieve the
-quorum it should write the 'rollback' message in the WAL. After that
-leader and replicas will perform the rollback for all TXN that didn't
-receive quorum.
+As soon as leader appears in a situation it has not enough replicas
+to achieve quorum, the cluster should stop accepting any requests - both
+write and read. The reason for this is that replication of transactions
+can achieve quorum on replicas not visible to the leader. On the other
+hand, leader can't achieve quorum with available minority. Leader has to
+report the state and wait for human intervention. There's an option to
+ask leader to rollback to the latest transaction that has quorum: leader
+issues a 'rollback' message referring to the [LEADER_ID, LSN] where LSN
+is of the first transaction in the leader's undo log. The rollback
+message replicated to the available cluster will put it in a consistent
+state. After that configuration of the cluster can be updated to
+available quorum and leader can be switched back to write mode.
+
+### Leader role assignment.
+
+To assign a leader role to an instance the following should be performed:
+  1. among all available instances pick the one that has the biggest
+     vclock element of the former leader ID; an arbitrary istance can be
+     selected in case it is first time the leader is assigned
+  2. the leader should assure that number of available instances in the
+     cluster is enough to achieve the quorum and proceed to step 3,
+     otherwise the leader should report the situation of incomplete quorum,
+     as in the last paragraph of previous section
+  3. the selected instance has to take the responsibility to replicate
+     former leader entries from its WAL, obtainig quorum and commit
+     confirm messages referring to [FORMER_LEADER_ID, LSN] in its WAL,
+     replicating to the cluster, after that it can start adding its own
+     entries into the WAL
 
 ### Recovery and failover.
 
-Tarantool instance during reading WAL should postpone the commit until
-the 'confirm' is read. In case the WAL eof is achieved, the instance
-should keep rollback for all transactions that are waiting for a confirm
-entry until the role of the instance is set. In case this instance
-become a replica there are no additional actions needed, since all info
-about quorum/rollback will arrive via replication. In case this instance
-is assigned a leader role, it should write 'rollback' in its WAL and
-perform rollback for all transactions waiting for a quorum.
+Tarantool instance during reading WAL should postpone the undo log
+deletion until the 'confirm' is read. In case the WAL eof is achieved,
+the instance should keep undo log for all transactions that are waiting
+for a confirm entry until the role of the instance is set.
 
-In case of a leader failure a replica with the biggest LSN with former
-leader's ID is elected as a new leader. The replica should record
-'rollback' in its WAL which effectively means that all transactions
-without quorum should be rolled back. This rollback will be delivered to
-all replicas and they will perform rollbacks of all transactions waiting
-for quorum.
+If this instance will be assigned a leader role then all transactions
+that have no corresponding confirm message should be confirmed (see the
+leader role assignment).
 
-An interface to force apply pending transactions by issuing a confirm
-entry for them have to be introduced for manual recovery.
+In case there's not enough replicas to set up a quorum the cluster can
+be switched into a read-only mode. Note, this can't be done by default
+since some of transactions can have confirmed state. It is up to human
+intervention to force rollback of all transactions that have no confirm
+and to put the cluster into a consistent state.
+
+In case the instance will be assigned a replica role, it may appear in
+a state that it has conflicting WAL entries, in case it recovered from a
+leader role and some of transactions didn't replicated to the current
+leader. This situation should be resolved through rejoin of the instance.
 
 ### Snapshot generation.
 
@@ -203,7 +230,7 @@ Synchronous operation can be required for a set of spaces in the data
 scheme. That means only transactions that contain data modification for
 these spaces should require quorum. Such transactions named synchronous.
 As soon as last operation of synchronous transaction appeared in leader's
-WAL, it will cause all following transactions - matter if they are
+WAL, it will cause all following transactions - no matter if they are
 synchronous or not - wait for the quorum. In case quorum is not achieved
 the 'rollback' operation will cause rollback of all transactions after
 the synchronous one. It will ensure the consistent state of the data both
