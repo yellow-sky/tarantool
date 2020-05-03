@@ -23,6 +23,8 @@ cfg_filter(box.cfg)
  |     - 3600
  |   - - checkpoint_wal_threshold
  |     - 1000000000000000000
+ |   - - commit_majority
+ |     - 1
  |   - - coredump
  |     - false
  |   - - feedback_enabled
@@ -73,8 +75,6 @@ cfg_filter(box.cfg)
  |     - 1
  |   - - slab_alloc_factor
  |     - 1.05
- |   - - sql_cache_size
- |     - 5242880
  |   - - strip_core
  |     - true
  |   - - too_long_threshold
@@ -104,6 +104,8 @@ cfg_filter(box.cfg)
  |     - 3600
  |   - - checkpoint_wal_threshold
  |     - 1000000000000000000
+ |   - - commit_majority
+ |     - 1
  |   - - coredump
  |     - false
  |   - - feedback_enabled
@@ -154,8 +156,6 @@ cfg_filter(box.cfg)
  |     - 1
  |   - - slab_alloc_factor
  |     - 1.05
- |   - - sql_cache_size
- |     - 5242880
  |   - - strip_core
  |     - true
  |   - - too_long_threshold

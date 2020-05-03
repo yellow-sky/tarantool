@@ -239,6 +239,9 @@ struct wal_relay;
 typedef ssize_t (*wal_relay_filter_cb)(struct wal_relay *wal_relay,
 				       struct xrow_header **row);
 
+int
+wal_set_majority(uint32_t write_majority);
+
 /**
  * Wal relay maintains wal memory tracking and allows
  * to retrieve logged xrows direct from the wal memory.

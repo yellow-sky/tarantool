@@ -940,6 +940,14 @@ box_set_net_msg_max(void)
 				IPROTO_FIBER_POOL_SIZE_FACTOR);
 }
 
+void
+box_set_wal_majority(void)
+{
+	uint32_t commit_majority = cfg_geti("commit_majority");
+	if (wal_set_majority(commit_majority) != 0)
+		diag_raise();
+
+}
 
 /* }}} configuration bindings */
 

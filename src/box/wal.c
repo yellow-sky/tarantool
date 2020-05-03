@@ -188,6 +188,10 @@ struct wal_writer
 	struct rlist on_wal_exit;
 	/* A memory pool used to allocate wal status messages. */
 	struct mempool status_msg_pool;
+	/* A commit majority. */
+	size_t commit_majority;
+	/* A commit majority condition. */
+	struct fiber_cond commit_majority_cond;
 };
 
 struct wal_msg {
@@ -394,6 +398,46 @@ vclock_order_changed(const struct vclock *old, const struct vclock *target,
 	return rc >= 0 && rc != VCLOCK_ORDER_UNDEFINED;
 }
 
+static int
+wal_commit_majority_f(va_list ap)
+{
+	struct wal_writer *writer = va_arg(ap, struct wal_writer *);
+	while (!fiber_is_cancelled()) {
+		if (writer->commit_majority == 0)
+			goto next;
+		struct vclock commit_vclock;
+		if (mclock_get(&writer->mclock, writer->commit_majority - 1,
+			       &commit_vclock) != 0)
+			goto next;
+		struct wal_status_msg *status_msg = (struct wal_status_msg *)
+		mempool_alloc(&writer->status_msg_pool);
+		if (status_msg == NULL) {
+			say_error("Could not allocate wal ack message");
+			goto next;
+		}
+		/*
+		 * Replica could answer us with a vclock that is
+		 * bigger than local wal.
+		 */
+		vclock_create(&status_msg->vclock);
+		unsigned int map = commit_vclock.map | writer->vclock.map;
+		struct bit_iterator it;
+		bit_iterator_init(&it, &map, sizeof(map), true);
+		for (size_t id = bit_iterator_next(&it); id < VCLOCK_MAX;
+		    id = bit_iterator_next(&it)) {
+			int64_t lsn = MIN(vclock_get(&commit_vclock, id),
+					  vclock_get(&writer->vclock, id));
+			if (lsn > 0)
+				vclock_follow(&status_msg->vclock, id, lsn);
+		}
+
+		cpipe_push(&writer->tx_prio_pipe, tx_update_wal_ack, &status_msg->base);
+	next:
+		fiber_cond_wait(&writer->commit_majority_cond);
+	}
+	return 0;
+}
+
 /**
  * Initialize WAL writer context. Even though it's a singleton,
  * encapsulate the details just in case we may use
@@ -434,8 +478,6 @@ wal_writer_create(struct wal_writer *writer, enum wal_mode wal_mode,
 
 	mempool_create(&writer->msg_pool, &cord()->slabc,
 		       sizeof(struct wal_msg));
-
-	mclock_create(&writer->mclock);
 
 	fiber_cond_create(&writer->wal_gc_cond);
 	writer->gc_wal_vclock = NULL;
@@ -1126,15 +1168,8 @@ wal_write_to_disk(struct cmsg *msg)
 	fiber_gc();
 	wal_notify_watchers(writer, WAL_EVENT_WRITE);
 	cpipe_push(&writer->tx_prio_pipe, tx_schedule_commit, msg);
-	/* Transaction were written out so emit an ack request. */
-	struct wal_status_msg *status_msg = (struct wal_status_msg *)
-		mempool_alloc(&writer->status_msg_pool);
-	if (status_msg == NULL) {
-		say_error("Could not allocate wal ack message");
-		return;
-	}
-	vclock_copy(&status_msg->vclock, &writer->vclock);
-	cpipe_push(&writer->tx_prio_pipe, tx_update_wal_ack, &status_msg->base);
+	mclock_update(&writer->mclock, instance_id, &writer->vclock);
+	fiber_cond_signal(&writer->commit_majority_cond);
 }
 
 
@@ -1173,6 +1208,13 @@ wal_writer_f(va_list ap)
 	/* Initialize memory pool for status messages. */
 	mempool_create(&writer->status_msg_pool, &cord()->slabc,
 		       sizeof(struct wal_status_msg));
+
+	mclock_create(&writer->mclock);
+
+	writer->commit_majority = 1;
+	fiber_cond_create(&writer->commit_majority_cond);
+	struct fiber *commit_fiber = fiber_new("commit", wal_commit_majority_f);
+	fiber_start(commit_fiber, writer);
 
 	/** Initialize eio in this thread */
 	coio_enable();
@@ -1301,6 +1343,32 @@ wal_write_in_wal_mode_none(struct journal *journal,
 	trigger_run(&replicaset.on_write, &writer->vclock);
 	trigger_run(&replicaset.on_wal_ack, &writer->vclock);
 	return 0;
+}
+
+struct wal_set_majority_msg {
+	struct cbus_call_msg base;
+	uint32_t write_majority;
+};
+
+static int
+wal_set_majority_f(struct cbus_call_msg *base)
+{
+	struct wal_set_majority_msg *msg =
+		container_of(base, struct wal_set_majority_msg, base);
+	struct wal_writer *writer = &wal_writer_singleton;
+	writer->commit_majority = msg->write_majority;
+	fiber_cond_signal(&writer->commit_majority_cond);
+	return 0;
+}
+
+int
+wal_set_majority(uint32_t write_majority)
+{
+	struct wal_set_majority_msg msg;
+	struct wal_writer *writer = &wal_writer_singleton;
+	msg.write_majority = write_majority;
+	return cbus_call(&writer->wal_pipe, &writer->tx_prio_pipe, &msg.base,
+			  wal_set_majority_f, NULL, TIMEOUT_INFINITY);
 }
 
 static void
@@ -1439,6 +1507,7 @@ wal_relay_delete_f(struct cmsg *base)
 	vclock_create(&vclock);
 	mclock_update(&writer->mclock, msg->replica_id, &vclock);
 	fiber_cond_signal(&writer->wal_gc_cond);
+	fiber_cond_signal(&writer->commit_majority_cond);
 	free(msg);
 }
 
@@ -1482,6 +1551,7 @@ wal_relay_reader_f(va_list ap)
 
 	mclock_update(&writer->mclock, replica_id, &wal_relay->replica_vclock);
 	fiber_cond_signal(&writer->wal_gc_cond);
+	fiber_cond_signal(&writer->commit_majority_cond);
 
 	struct ibuf ibuf;
 	struct ev_io io;
@@ -1508,6 +1578,7 @@ wal_relay_reader_f(va_list ap)
 			fiber_cond_signal(&writer->wal_gc_cond);
 		vclock_copy(&wal_relay->replica_vclock, &cur_vclock);
 		mclock_update(&writer->mclock, replica_id, &cur_vclock);
+		fiber_cond_signal(&writer->commit_majority_cond);
 	}
 	ibuf_destroy(&ibuf);
 	fiber_cancel(wal_relay->fiber);

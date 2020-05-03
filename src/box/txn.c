@@ -918,10 +918,11 @@ txn_engine_on_wal_ack(struct trigger *trigger, void *data)
 	if (rc < 0 && rc != VCLOCK_ORDER_UNDEFINED)
 		return 0;
 	/* Do not ack foreign transactions in read only mode. */
-	if (box_is_ro() && vclock_get(&replicaset.commit_vclock, instance_id) ==
-			   vclock_get(&replicaset.wal_vclock, instance_id))
+/*	if (box_is_ro() && vclock_get(&replicaset.commit_vclock, instance_id) ==
+			   vclock_get(&replicaset.wal_vclock, instance_id)) {
 		return 0;
-
+	}
+*/
 	/* Create an ack row and process it through engine. */
 	size_t gc_svp = region_used(&fiber()->gc);
 	struct xrow_header *row = (struct xrow_header *)
