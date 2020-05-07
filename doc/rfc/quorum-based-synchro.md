@@ -188,6 +188,92 @@ a state that it has conflicting WAL entries, in case it recovered from a
 leader role and some of transactions didn't replicated to the current
 leader. This situation should be resolved through rejoin of the instance.
 
+Consider an exmaple below. Originally instance with ID1 was assinged a
+Leader role and the cluster had 2 replicas with quorum set to 2.
+
++---------------------+---------------------+---------------------+
+| ID1                 | ID2                 | ID3                 |
+| Leader              | Replica 1           | Replica 2           |
++---------------------+---------------------+---------------------+
+| ID1 Tx1             | ID1 Tx1             | ID1 Tx1             |
++---------------------+---------------------+---------------------+
+| ID1 Tx2             | ID1 Tx2             | ID1 Tx2             |
++---------------------+---------------------+---------------------+
+| ID1 Tx3             | ID1 Tx3             | ID1 Tx3             |
++---------------------+---------------------+---------------------+
+| ID1 Conf [ID1, Tx1] | ID1 Conf [ID1, Tx1] |                     |
++---------------------+---------------------+---------------------+
+| ID1 Tx4             | ID1 Tx4             |                     |
++---------------------+---------------------+---------------------+
+| ID1 Tx5             | ID1 Tx5             |                     |
++---------------------+---------------------+---------------------+
+| ID1 Conf [ID1, Tx2] |                     |                     |
++---------------------+---------------------+---------------------+
+| Tx6                 |                     |                     |
++---------------------+---------------------+---------------------+
+| Tx7                 |                     |                     |
++---------------------+---------------------+---------------------+
+
+Suppose at this moment the ID1 instance crashes. Then the ID2 instance
+should be assigned a leader role since its ID1 LSN is the biggest.
+Then this new leader will deliver its WAL to all replicas.
+
+As soon as quorum for Tx4 and Tx5 will be obtained, it should write the
+corresponding Confirms to its WAL. Note that Tx are still uses ID1.
+
++---------------------+---------------------+---------------------+
+| ID1                 | ID2                 | ID3                 |
+| (dead)              | Leader              | Replica 2           |
++---------------------+---------------------+---------------------+
+| ID1 Tx1             | ID1 Tx1             | ID1 Tx1             |
++---------------------+---------------------+---------------------+
+| ID1 Tx2             | ID1 Tx2             | ID1 Tx2             |
++---------------------+---------------------+---------------------+
+| ID1 Tx3             | ID1 Tx3             | ID1 Tx3             |
++---------------------+---------------------+---------------------+
+| ID1 Conf [ID1, Tx1] | ID1 Conf [ID1, Tx1] | ID1 Conf [ID1, Tx1] |
++---------------------+---------------------+---------------------+
+| ID1 Tx4             | ID1 Tx4             | ID1 Tx4             |
++---------------------+---------------------+---------------------+
+| ID1 Tx5             | ID1 Tx5             | ID1 Tx5             |
++---------------------+---------------------+---------------------+
+| ID1 Conf [ID1, Tx2] | ID2 Conf [Id1, Tx5] | ID2 Conf [Id1, Tx5] |
++---------------------+---------------------+---------------------+
+| ID1 Tx6             |                     |                     |
++---------------------+---------------------+---------------------+
+| ID1 Tx7             |                     |                     |
++---------------------+---------------------+---------------------+
+
+After rejoining ID1 will figure out the inconsistence of its WAL: the
+last WAL entry it has is corresponding to Tx7, while in Leader's log the
+last entry with ID1 is Tx5. The ID1's WAL should be truncated after
+the Tx5, so that after replaying it the Replica 1 will appear in
+consistent state with cluster.
+
++---------------------+---------------------+---------------------+
+| ID1                 | ID2                 | ID3                 |
+| Replica 1           | Leader              | Replica 2           |
++---------------------+---------------------+---------------------+
+| ID1 Tx1             | ID1 Tx1             | ID1 Tx1             |
++---------------------+---------------------+---------------------+
+| ID1 Tx2             | ID1 Tx2             | ID1 Tx2             |
++---------------------+---------------------+---------------------+
+| ID1 Tx3             | ID1 Tx3             | ID1 Tx3             |
++---------------------+---------------------+---------------------+
+| ID1 Conf [ID1, Tx1] | ID1 Conf [ID1, Tx1] | ID1 Conf [ID1, Tx1] |
++---------------------+---------------------+---------------------+
+| ID1 Tx4             | ID1 Tx4             | ID1 Tx4             |
++---------------------+---------------------+---------------------+
+| ID1 Tx5             | ID1 Tx5             | ID1 Tx5             |
++---------------------+---------------------+---------------------+
+|                     | ID2 Conf [Id1, Tx5] | ID2 Conf [Id1, Tx5] |
++---------------------+---------------------+---------------------+
+|                     | ID2 Tx1             | ID2 Tx1             |
++---------------------+---------------------+---------------------+
+|                     | ID2 Tx2             | ID2 Tx2             |
++---------------------+---------------------+---------------------+
+
+
 ### Snapshot generation.
 
 We also can reuse current machinery of snapshot generation. Upon
