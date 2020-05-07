@@ -23,3 +23,8 @@ exclude_files = {
     ".rocks/**/*.lua",
     ".git/**/*.lua",
 }
+
+files["extra/dist/tarantoolctl.in"] = {
+    globals = {"box", "_TARANTOOL"},
+    ignore = {"212/self", "122", "431"}
+}
