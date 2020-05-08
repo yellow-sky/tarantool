@@ -264,6 +264,7 @@
 #include <string.h>
 #include <assert.h>
 #include <stddef.h>
+#include "decimal.h"
 
 typedef long long int sql_int64;
 typedef unsigned long long int sql_uint64;
@@ -365,6 +366,9 @@ sql_value_boolean(sql_value *val);
 
 int
 sql_value_int(sql_value *);
+
+decimal_t
+sql_value_decimal(sql_value *);
 
 /**
  * Get row column subtype.
@@ -502,6 +506,9 @@ sql_column_int(sql_stmt *, int iCol);
 
 bool
 sql_column_boolean(struct sql_stmt *stmt, int column);
+
+decimal_t
+sql_column_decimal(struct sql_stmt *stmt, int column);
 
 sql_int64
 sql_column_int64(sql_stmt *, int iCol);
@@ -1306,7 +1313,8 @@ enum trim_side_mask {
 #define sql_type_is_numeric(X)  ((X) == FIELD_TYPE_INTEGER || \
 				 (X) == FIELD_TYPE_NUMBER || \
 				 (X) == FIELD_TYPE_UNSIGNED || \
-				 (X) == FIELD_TYPE_DOUBLE)
+				 (X) == FIELD_TYPE_DOUBLE || \
+				 (X) == FIELD_TYPE_DECIMAL)
 
 /*
  * Additional bit values that can be ORed with an type without

@@ -49,6 +49,7 @@
 #include "box/sql_stmt_cache.h"
 #include "session.h"
 #include "rmean.h"
+#include "mp_decimal.h"
 
 const char *sql_info_key_strs[] = {
 	"row_count",
@@ -220,6 +221,15 @@ sql_column_to_messagepack(struct sql_stmt *stmt, int i,
 		if (pos == NULL)
 			goto oom;
 		mp_encode_nil(pos);
+		break;
+	}
+	case MP_EXT: {
+		decimal_t decvalue = sql_column_decimal(stmt, i);
+		size = mp_sizeof_decimal(&decvalue);
+		char *pos = (char *) region_alloc(region, size);
+		if (pos == NULL)
+			goto oom;
+		mp_encode_decimal(pos, &decvalue);
 		break;
 	}
 	default:

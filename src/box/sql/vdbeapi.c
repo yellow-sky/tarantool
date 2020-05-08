@@ -166,6 +166,15 @@ sql_value_boolean(sql_value *val)
 	return b;
 }
 
+decimal_t
+sql_value_decimal(sql_value *val)
+{
+	struct Mem *mem = (struct Mem *) val;
+	decimal_t decvalue;
+	sqlVdbeDecimalValue(mem, &decvalue);
+	return decvalue;
+}
+
 int
 sql_value_int(sql_value * pVal)
 {
@@ -690,6 +699,12 @@ bool
 sql_column_boolean(struct sql_stmt *stmt, int i)
 {
 	return sql_value_boolean(columnMem(stmt, i));
+}
+
+decimal_t
+sql_column_decimal(struct sql_stmt *stmt, int i)
+{
+	return sql_value_decimal(columnMem(stmt, i));
 }
 
 sql_int64

@@ -270,12 +270,9 @@ mem_apply_numeric_type(struct Mem *record)
 		mem_set_int(record, integer_value, is_neg);
 		return 0;
 	}
-	double float_value;
-	if (sqlAtoF(record->z, &float_value, record->n) == 0)
-		return -1;
-	record->u.r = float_value;
-	MemSetTypeFlag(record, MEM_Real);
-	return 0;
+	if (strpbrk(record->z, "eE") != NULL)
+		return sqlVdbeMemRealify(record);
+	return mem_apply_decimal_type(record);
 }
 
 /**
@@ -426,14 +423,20 @@ sql_value_apply_type(
  */
 static u16 SQL_NOINLINE computeNumericType(Mem *pMem)
 {
-	assert((pMem->flags & (MEM_Int | MEM_UInt | MEM_Real)) == 0);
+	assert((pMem->flags & (MEM_Int | MEM_UInt | MEM_Real |
+			       MEM_Decimal)) == 0);
 	assert((pMem->flags & (MEM_Str|MEM_Blob))!=0);
-	if (sqlAtoF(pMem->z, &pMem->u.r, pMem->n)==0)
-		return 0;
 	bool is_neg;
 	if (sql_atoi64(pMem->z, (int64_t *) &pMem->u.i, &is_neg, pMem->n) == 0)
 		return is_neg ? MEM_Int : MEM_UInt;
-	return MEM_Real;
+	if (strpbrk(pMem->z, "eE") != NULL) {
+		if (sqlAtoF(pMem->z, &pMem->u.r, pMem->n) == 0)
+			return 0;
+		return MEM_Real;
+	}
+	if (decimal_from_string(&pMem->u.d, pMem->z) == NULL)
+		return 0;
+	return MEM_Decimal;
 }
 
 /*
@@ -445,8 +448,9 @@ static u16 SQL_NOINLINE computeNumericType(Mem *pMem)
  */
 static u16 numericType(Mem *pMem)
 {
-	if ((pMem->flags & (MEM_Int | MEM_UInt | MEM_Real)) != 0)
-		return pMem->flags & (MEM_Int | MEM_UInt | MEM_Real);
+	if ((pMem->flags & (MEM_Int | MEM_UInt | MEM_Real | MEM_Decimal)) != 0)
+		return pMem->flags & (MEM_Int | MEM_UInt | MEM_Real |
+				      MEM_Decimal);
 	if (pMem->flags & (MEM_Str|MEM_Blob)) {
 		return computeNumericType(pMem);
 	}
@@ -1589,6 +1593,8 @@ case OP_Remainder: {           /* same as TK_REM, in1, in2, out3 */
 	i64 iB;         /* Integer value of right operand */
 	double rA;      /* Real value of left operand */
 	double rB;      /* Real value of right operand */
+	decimal_t dA;	/* Decimal value of left operand. */
+	decimal_t dB;	/* Decimal value of right operand. */
 
 	pIn1 = &aMem[pOp->p1];
 	type1 = numericType(pIn1);
@@ -1643,42 +1649,83 @@ case OP_Remainder: {           /* same as TK_REM, in1, in2, out3 */
 		}
 		mem_set_int(pOut, iB, is_res_neg);
 	} else {
-		if (sqlVdbeRealValue(pIn1, &rA) != 0) {
-			diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
-				 sql_value_to_diag_str(pIn1), "numeric");
-			goto abort_due_to_error;
+		if (((type1 | type2) & MEM_Decimal) != 0) {
+			if (sqlVdbeDecimalValue(pIn1, &dA) != 0) {
+				goto left_mismatch;
+			}
+			if (sqlVdbeDecimalValue(pIn2, &dB) != 0) {
+				goto right_mismatch;
+			}
+		} else {
+			if (sqlVdbeRealValue(pIn1, &rA) != 0) {
+			left_mismatch:
+				diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
+					 sql_value_to_diag_str(pIn1),
+					 "numeric");
+				goto abort_due_to_error;
+			}
+			if (sqlVdbeRealValue(pIn2, &rB) != 0) {
+			right_mismatch:
+				diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
+					 sql_value_to_diag_str(pIn2),
+					 "numeric");
+				goto abort_due_to_error;
+			}
 		}
-		if (sqlVdbeRealValue(pIn2, &rB) != 0) {
-			diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
-				 sql_value_to_diag_str(pIn2), "numeric");
-			goto abort_due_to_error;
+		assert(((type1 | type2) & (MEM_Real | MEM_Decimal)) != 0);
+
+		if (((type1 | type2) & MEM_Decimal) != 0) {
+			decimal_t *d = NULL;
+			decimal_t result;
+			switch (pOp->opcode) {
+			case OP_Add:
+				d = decimal_add(&result, &dB, &dA);
+				break;
+			case OP_Subtract:
+				d = decimal_sub(&result, &dB, &dA);
+				break;
+			case OP_Multiply:
+				d = decimal_mul(&result, &dB, &dA);
+				break;
+			case OP_Divide:
+				if (decNumberIsZero(&dA))
+					goto division_by_zero;
+				d = decimal_div(&result, &dB, &dA);
+				break;
+			default:
+				if (decNumberIsZero(&dA))
+					goto division_by_zero;
+				d = decimal_remainder(&result, &dB, &dA);
+				break;
+			}
+			if (d == NULL)
+				goto decimal_overflow;
+			pOut->u.d = result;
+			MemSetTypeFlag(pOut, MEM_Decimal);
+		} else {
+			switch (pOp->opcode) {
+			case OP_Add:         rB += rA;       break;
+			case OP_Subtract:    rB -= rA;       break;
+			case OP_Multiply:    rB *= rA;       break;
+			case OP_Divide:
+				if (rA == (double)0)
+					goto division_by_zero;
+				rB /= rA;
+				break;
+			default:
+				iA = (i64)rA;
+				iB = (i64)rB;
+				if (iA == 0)
+					goto division_by_zero;
+				if (iA==-1) iA = 1;
+				rB = (double)(iB % iA);
+				break;
+			}
+			if (sqlIsNaN(rB))
+				goto arithmetic_result_is_null;
+			pOut->u.r = rB;
+			MemSetTypeFlag(pOut, MEM_Real);
 		}
-		assert(((type1 | type2) & MEM_Real) != 0);
-		switch( pOp->opcode) {
-		case OP_Add:         rB += rA;       break;
-		case OP_Subtract:    rB -= rA;       break;
-		case OP_Multiply:    rB *= rA;       break;
-		case OP_Divide: {
-			if (rA == (double)0)
-				goto division_by_zero;
-			rB /= rA;
-			break;
-		}
-		default: {
-			iA = (i64)rA;
-			iB = (i64)rB;
-			if (iA == 0)
-				goto division_by_zero;
-			if (iA==-1) iA = 1;
-			rB = (double)(iB % iA);
-			break;
-		}
-		}
-		if (sqlIsNaN(rB)) {
-			goto arithmetic_result_is_null;
-		}
-		pOut->u.r = rB;
-		MemSetTypeFlag(pOut, MEM_Real);
 	}
 	break;
 
@@ -1692,6 +1739,9 @@ division_by_zero:
 	goto abort_due_to_error;
 integer_overflow:
 	diag_set(ClientError, ER_SQL_EXECUTE, "integer is overflowed");
+	goto abort_due_to_error;
+decimal_overflow:
+	diag_set(ClientError, ER_SQL_EXECUTE, "decimal overflow");
 	goto abort_due_to_error;
 }
 
@@ -2266,7 +2316,8 @@ case OP_Ge: {             /* same as TK_GE, jump, in1, in3 */
 			}
 		} else if (type == FIELD_TYPE_STRING) {
 			if ((flags1 & MEM_Str) == 0 &&
-			    (flags1 & (MEM_Int | MEM_UInt | MEM_Real)) != 0) {
+			    (flags1 & (MEM_Int | MEM_UInt | MEM_Real |
+				       MEM_Decimal)) != 0) {
 				testcase( pIn1->flags & MEM_Int);
 				testcase( pIn1->flags & MEM_Real);
 				sqlVdbeMemStringify(pIn1);
@@ -2275,7 +2326,8 @@ case OP_Ge: {             /* same as TK_GE, jump, in1, in3 */
 				assert(pIn1!=pIn3);
 			}
 			if ((flags3 & MEM_Str) == 0 &&
-			    (flags3 & (MEM_Int | MEM_UInt | MEM_Real)) != 0) {
+			    (flags3 & (MEM_Int | MEM_UInt | MEM_Real |
+				       MEM_Decimal)) != 0) {
 				testcase( pIn3->flags & MEM_Int);
 				testcase( pIn3->flags & MEM_Real);
 				sqlVdbeMemStringify(pIn3);

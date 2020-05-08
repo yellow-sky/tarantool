@@ -388,6 +388,8 @@ sql_type_result(enum field_type lhs, enum field_type rhs)
 	if (sql_type_is_numeric(lhs) || sql_type_is_numeric(rhs)) {
 		if (lhs == FIELD_TYPE_NUMBER || rhs == FIELD_TYPE_NUMBER)
 			return FIELD_TYPE_NUMBER;
+		if (lhs == FIELD_TYPE_DECIMAL || rhs == FIELD_TYPE_DECIMAL)
+			return FIELD_TYPE_DECIMAL;
 		if (lhs == FIELD_TYPE_DOUBLE || rhs == FIELD_TYPE_DOUBLE)
 			return FIELD_TYPE_DOUBLE;
 		if (lhs == FIELD_TYPE_INTEGER || rhs == FIELD_TYPE_INTEGER)

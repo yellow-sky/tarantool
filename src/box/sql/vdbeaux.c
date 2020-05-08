@@ -44,6 +44,7 @@
 #include "vdbeInt.h"
 #include "tarantoolInt.h"
 #include "box/execute.h"
+#include "mp_extension_types.h"
 
 /*
  * Create a new virtual database engine.
@@ -2852,7 +2853,8 @@ sqlMemCompare(const Mem * pMem1, const Mem * pMem2, const struct coll * pColl)
 
 	/* At least one of the two values is a number
 	 */
-	if ((combined_flags & (MEM_Int | MEM_UInt | MEM_Real)) != 0) {
+	if ((combined_flags & (MEM_Int | MEM_UInt | MEM_Real |
+			       MEM_Decimal)) != 0) {
 		if ((f1 & f2 & MEM_Int) != 0) {
 			if (pMem1->u.i < pMem2->u.i)
 				return -1;
@@ -2874,10 +2876,17 @@ sqlMemCompare(const Mem * pMem1, const Mem * pMem2, const struct coll * pColl)
 				return +1;
 			return 0;
 		}
+		if ((f1 & f2 & MEM_Decimal) != 0) {
+			return decimal_compare(&pMem1->u.d, &pMem2->u.d);
+		}
 		if ((f1 & MEM_Int) != 0) {
 			if ((f2 & MEM_Real) != 0) {
 				return double_compare_uint64(-pMem2->u.r,
 							     -pMem1->u.i, 1);
+			} else if ((f2 & MEM_Decimal) != 0) {
+				decimal_t lhs;
+				decimal_from_int64(&lhs, pMem1->u.i);
+				return decimal_compare(&lhs, &pMem2->u.d);
 			} else {
 				return -1;
 			}
@@ -2888,6 +2897,10 @@ sqlMemCompare(const Mem * pMem1, const Mem * pMem2, const struct coll * pColl)
 							     pMem1->u.u, -1);
 			} else if ((f2 & MEM_Int) != 0) {
 				return +1;
+			} else if ((f2 & MEM_Decimal) != 0) {
+				decimal_t lhs;
+				decimal_from_uint64(&lhs, pMem1->u.u);
+				return decimal_compare(&lhs, &pMem2->u.d);
 			} else {
 				return -1;
 			}
@@ -2899,9 +2912,18 @@ sqlMemCompare(const Mem * pMem1, const Mem * pMem2, const struct coll * pColl)
 			} else if ((f2 & MEM_UInt) != 0) {
 				return double_compare_uint64(pMem1->u.r,
 							     pMem2->u.u, 1);
+			} else if ((f2 & MEM_Decimal) != 0) {
+				decimal_t lhs;
+				decimal_from_double(&lhs, pMem1->u.r);
+				return decimal_compare(&lhs, &pMem2->u.d);
 			} else {
 				return -1;
 			}
+		}
+		if ((f1 & MEM_Decimal) != 0) {
+			decimal_t rhs;
+			sqlVdbeDecimalValue(pMem2, &rhs);
+			return decimal_compare(&pMem1->u.d, &rhs);
 		}
 		return +1;
 	}
@@ -3053,6 +3075,10 @@ sqlVdbeCompareMsgpack(const char **key1,
 			} else if ((pKey2->flags & MEM_Real) != 0) {
 				rc = double_compare_uint64(pKey2->u.r,
 							   mem1.u.u, -1);
+			} else if ((pKey2->flags & MEM_Decimal) != 0) {
+				decimal_t lhs;
+				decimal_from_uint64(&lhs, mem1.u.u);
+				rc = decimal_compare(&lhs, &pKey2->u.d);
 			} else if ((pKey2->flags & MEM_Null) != 0) {
 				rc = 1;
 			} else if ((pKey2->flags & MEM_Bool) != 0) {
@@ -3075,6 +3101,10 @@ sqlVdbeCompareMsgpack(const char **key1,
 			} else if (pKey2->flags & MEM_Real) {
 				rc = double_compare_uint64(-pKey2->u.r,
 							   -mem1.u.i, 1);
+			} else if ((pKey2->flags & MEM_Decimal) != 0) {
+				decimal_t lhs;
+				decimal_from_int64(&lhs, mem1.u.i);
+				rc = decimal_compare(&lhs, &pKey2->u.d);
 			} else if ((pKey2->flags & MEM_Null) != 0) {
 				rc = 1;
 			} else if ((pKey2->flags & MEM_Bool) != 0) {
@@ -3103,6 +3133,10 @@ sqlVdbeCompareMsgpack(const char **key1,
 				} else if (mem1.u.r > pKey2->u.r) {
 					rc = +1;
 				}
+			} else if (pKey2->flags & MEM_Decimal) {
+				decimal_t lhs;
+				decimal_from_double(&lhs, mem1.u.r);
+				rc = decimal_compare(&lhs, &pKey2->u.d);
 			} else if ((pKey2->flags & MEM_Null) != 0) {
 				rc = 1;
 			} else if ((pKey2->flags & MEM_Bool) != 0) {
@@ -3158,14 +3192,28 @@ sqlVdbeCompareMsgpack(const char **key1,
 			}
 			break;
 		}
+	case MP_EXT: {
+		int8_t ext_type;
+		uint32_t len = mp_decode_extl(&aKey1, &ext_type);
+		switch (ext_type) {
+		case MP_DECIMAL:
+			decimal_unpack(&aKey1, len, &mem1.u.d);
+			decimal_t rhs;
+			sqlVdbeDecimalValue(pKey2, &rhs);
+			rc = decimal_compare(&mem1.u.d, &rhs);
+			break;
+		default:
+			goto ext_default;
+		}
+		break;
+	}
 	case MP_ARRAY:
 	case MP_MAP:
-	case MP_EXT:{
+	ext_default:
 			mem1.z = (char *)aKey1;
 			mp_next(&aKey1);
 			mem1.n = aKey1 - (char *)mem1.z;
 			goto do_blob;
-		}
 	}
 	*key1 = aKey1;
 	return rc;
@@ -3202,7 +3250,6 @@ vdbe_decode_msgpack_into_mem(const char *buf, struct Mem *mem, uint32_t *len)
 	switch (mp_typeof(*buf)) {
 	case MP_ARRAY:
 	case MP_MAP:
-	case MP_EXT:
 	default: {
 		mem->flags = 0;
 		break;
@@ -3242,6 +3289,20 @@ install_blob:
 		mem->n = (int) mp_decode_binl(&buf);
 		mem->flags = MEM_Blob | MEM_Ephem;
 		goto install_blob;
+	}
+	case MP_EXT: {
+		int8_t ext_type;
+		uint32_t len = mp_decode_extl(&buf, &ext_type);
+		switch (ext_type) {
+		case MP_DECIMAL:
+			decimal_unpack(&buf, len, &mem->u.d);
+			mem->flags = MEM_Decimal;
+			break;
+		default:
+			mem->flags = 0;
+			break;
+		}
+		break;
 	}
 	case MP_FLOAT: {
 		mem->u.r = mp_decode_float(&buf);
