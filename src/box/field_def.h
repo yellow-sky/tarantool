@@ -159,6 +159,22 @@ field_mp_plain_type_is_compatible(enum field_type type, enum mp_type mp_type,
 	return (mask & (1U << mp_type)) != 0;
 }
 
+/**
+ * Checks if mp_extension_type (MsgPack) is compatible
+ * with given field type.
+ */
+static inline bool
+field_mp_ext_type_is_compatible(enum field_type type, int8_t ext_type)
+{
+	uint32_t mask;
+	if (ext_type >= 0) {
+		mask = field_ext_type[type];
+		return (mask & (1U << ext_type)) != 0;
+	} else {
+		return false;
+	}
+}
+
 /** Checks if mp_type (MsgPack) is compatible with field type. */
 static inline bool
 field_mp_type_is_compatible(enum field_type type, const char *data,
@@ -167,19 +183,13 @@ field_mp_type_is_compatible(enum field_type type, const char *data,
 	assert(type < field_type_MAX);
 	enum mp_type mp_type = mp_typeof(*data);
 	assert((size_t)mp_type < CHAR_BIT * sizeof(*field_mp_type));
-	uint32_t mask;
 	if (mp_type != MP_EXT) {
 		return field_mp_plain_type_is_compatible(type, mp_type,
 							 is_nullable);
 	} else {
 		int8_t ext_type;
 		mp_decode_extl(&data, &ext_type);
-		if (ext_type >= 0) {
-			mask = field_ext_type[type];
-			return (mask & (1U << ext_type)) != 0;
-		} else {
-			return false;
-		}
+		return field_mp_ext_type_is_compatible(type, ext_type);
 	}
 }
 
