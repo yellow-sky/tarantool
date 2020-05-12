@@ -172,7 +172,7 @@ local function get_iflags(table, flags)
     if type(flags) ~= 'table' then
         flags = { flags }
     end
-    for i, f in pairs(flags) do
+    for _, f in pairs(flags) do
         if table[f] == nil then
             return nil
         end
@@ -660,7 +660,7 @@ local function check_delimiter(self, limit, eols)
     end
 
     local shortest
-    for i, eol in ipairs(eols) do
+    for _, eol in ipairs(eols) do
         local data = ffi.C.memmem(rbuf.rpos, rbuf:size(), eol, #eol)
         if data ~= nil then
             local len = ffi.cast('char *', data) - rbuf.rpos + #eol
@@ -706,16 +706,16 @@ local function read(self, limit, timeout, check, ...)
         local res = sysread(self, data, rbuf:unused())
         if res == 0 then -- eof
             self._errno = nil
-            local len = rbuf:size()
-            local data = ffi.string(rbuf.rpos, len)
+            len = rbuf:size()
+            data = ffi.string(rbuf.rpos, len)
             rbuf.rpos = rbuf.rpos + len
             return data
         elseif res ~= nil then
             rbuf.wpos = rbuf.wpos + res
-            local len = check(self, limit, ...)
+            len = check(self, limit, ...)
             if len ~= nil then
                 self._errno = nil
-                local data = ffi.string(rbuf.rpos, len)
+                data = ffi.string(rbuf.rpos, len)
                 rbuf.rpos = rbuf.rpos + len
                 return data
             end
@@ -1039,7 +1039,7 @@ local function tcp_connect(host, port, timeout)
         boxerrno(0)
         return s
     end
-    local timeout = timeout or TIMEOUT_INFINITY
+    timeout = timeout or TIMEOUT_INFINITY
     local stop = fiber.clock() + timeout
     local dns = getaddrinfo(host, port, timeout, { type = 'SOCK_STREAM',
         protocol = 'tcp' })
@@ -1047,7 +1047,7 @@ local function tcp_connect(host, port, timeout)
         boxerrno(boxerrno.EINVAL)
         return nil
     end
-    for i, remote in pairs(dns) do
+    for _, remote in pairs(dns) do
         timeout = stop - fiber.clock()
         if timeout <= 0 then
             boxerrno(boxerrno.ETIMEDOUT)
@@ -1078,8 +1078,8 @@ local function tcp_server_handler(server, sc, from)
     end
 end
 
-local function tcp_server_loop(server, s, addr)
-    fiber.name(format("%s/%s:%s", server.name, addr.host, addr.port), {truncate = true})
+local function tcp_server_loop(server, s, address)
+    fiber.name(format("%s/%s:%s", server.name, address.host, address.port), {truncate = true})
     log.info("started")
     while socket_readable(s) do
         local sc, from = socket_accept(s)
@@ -1104,15 +1104,15 @@ local function tcp_server_usage()
     error('Usage: socket.tcp_server(host, port, handler | opts)')
 end
 
-local function tcp_server_do_bind(s, addr)
-    if socket_bind(s, addr.host, addr.port) then
-        if addr.family == 'AF_UNIX' then
+local function tcp_server_do_bind(s, address)
+    if socket_bind(s, address.host, address.port) then
+        if address.family == 'AF_UNIX' then
             -- Make close() remove the unix socket file created
             -- by bind(). Note, this must be done before closing
             -- the socket fd so that no other tcp server can
             -- reuse the same path before we remove the file.
             s.close = function(self)
-                fio.unlink(addr.port)
+                fio.unlink(address.port)
                 return socket_close(self)
             end
         end
@@ -1121,12 +1121,12 @@ local function tcp_server_do_bind(s, addr)
     return false
 end
 
-local function tcp_server_bind_addr(s, addr)
-    if tcp_server_do_bind(s, addr) then
+local function tcp_server_bind_addr(s, address)
+    if tcp_server_do_bind(s, address) then
         return true
     end
 
-    if addr.family ~= 'AF_UNIX' then
+    if address.family ~= 'AF_UNIX' then
         return false
     end
 
@@ -1136,7 +1136,7 @@ local function tcp_server_bind_addr(s, addr)
 
     local save_errno = boxerrno()
 
-    local sc = tcp_connect(addr.host, addr.port)
+    local sc = tcp_connect(address.host, address.port)
     if sc ~= nil then
         sc:close()
         boxerrno(save_errno)
@@ -1148,13 +1148,13 @@ local function tcp_server_bind_addr(s, addr)
         return false
     end
 
-    log.info("tcp_server: remove dead UNIX socket: %s", addr.port)
-    if not fio.unlink(addr.port) then
+    log.info("tcp_server: remove dead UNIX socket: %s", address.port)
+    if not fio.unlink(address.port) then
         log.warn("tcp_server: %s", boxerrno.strerror())
         boxerrno(save_errno)
         return false
     end
-    return tcp_server_do_bind(s, addr)
+    return tcp_server_do_bind(s, address)
 end
 
 
@@ -1172,8 +1172,8 @@ local function tcp_server_bind(host, port, prepare, timeout)
         end
     end
 
-    for _, addr in ipairs(dns) do
-        local s = socket_new(addr.family, addr.type, addr.protocol)
+    for _, address in ipairs(dns) do
+        local s = socket_new(address.family, address.type, address.protocol)
         if s ~= nil then
             local backlog
             if prepare then
@@ -1181,13 +1181,13 @@ local function tcp_server_bind(host, port, prepare, timeout)
             else
                 socket_setsockopt(s, 'SOL_SOCKET', 'SO_REUSEADDR', 1) -- ignore error
             end
-            if not tcp_server_bind_addr(s, addr) or not s:listen(backlog) then
+            if not tcp_server_bind_addr(s, address) or not s:listen(backlog) then
                 local save_errno = boxerrno()
                 socket_close(s)
                 boxerrno(save_errno)
                 return nil
             end
-            return s, addr
+            return s, address
        end
     end
     -- DNS resolved successfully, but addresss family is not supported
@@ -1211,12 +1211,12 @@ local function tcp_server(host, port, opts, timeout)
         tcp_server_usage()
     end
     server.name = server.name or 'server'
-    local s, addr = tcp_server_bind(host, port, server.prepare, timeout)
+    local s, address = tcp_server_bind(host, port, server.prepare, timeout)
     if not s then
         return nil
     end
-    fiber.create(tcp_server_loop, server, s, addr)
-    return s, addr
+    fiber.create(tcp_server_loop, server, s, address)
+    return s, address
 end
 
 socket_mt   = {
@@ -1311,10 +1311,9 @@ local function lsocket_tcp_getpeername(self)
     return peer.host, tostring(peer.port), peer.family:match("AF_(.*)"):lower()
 end
 
-local function lsocket_tcp_settimeout(self, value, mode)
+local function lsocket_tcp_settimeout(self, value)
     check_socket(self)
     self.timeout = value
-    -- mode is effectively ignored
     return 1
 end
 
@@ -1467,7 +1466,7 @@ local function lsocket_tcp_receive(self, pattern, prefix)
         local result = { prefix }
         local deadline = fiber.clock() + (self.timeout or TIMEOUT_INFINITY)
         repeat
-            local data = read(self, LIMIT_INFINITY, timeout, check_infinity)
+            data = read(self, LIMIT_INFINITY, timeout, check_infinity)
             if data == nil then
                 if not errno_is_transient[self._errno] then
                     return nil, socket_error(self)
@@ -1535,7 +1534,7 @@ lsocket_tcp_mt.__index.send = lsocket_tcp_send;
 -- TCP Constructor and Shortcuts
 --
 
-local function lsocket_tcp()
+local function lsocket_tcp(self)
     local s = socket_new('AF_INET', 'SOCK_STREAM', 'tcp')
     if not s then
         return nil, socket_error(self)
@@ -1559,7 +1558,7 @@ local function lsocket_bind(host, port, backlog)
     if host == nil or port == nil then
         error("Usage: luasocket.bind(host, port [, backlog])")
     end
-    local function prepare(s) return backlog end
+    local function prepare() return backlog end
     local s = tcp_server_bind(host, port, prepare)
     if not s then
         return nil, boxerrno.strerror()

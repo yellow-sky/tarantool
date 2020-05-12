@@ -28,3 +28,7 @@ files["extra/dist/tarantoolctl.in"] = {
     globals = {"box", "_TARANTOOL"},
     ignore = {"212/self", "122", "431"}
 }
+files["src/lua/*.lua"] = {ignore = {"212/self"}}
+files["src/lua/help.lua"] = {globals = {"help", "tutorial"}}
+files["src/lua/init.lua"] = {globals = {"dostring", "os", "package"}}
+files["src/lua/swim.lua"] = {ignore = {"431"}}

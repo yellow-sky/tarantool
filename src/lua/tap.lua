@@ -53,7 +53,6 @@ local function ok(test, cond, message, extra)
     io.write(string.format("not ok - %s\n", message))
     extra = extra or {}
     if test.trace then
-        local frame = debug.getinfo(3, "Sl")
         extra.trace = traceback()
         extra.filename = extra.trace[#extra.trace].filename
         extra.line = extra.trace[#extra.trace].line
@@ -75,9 +74,6 @@ end
 local function skip(test, message, extra)
     ok(test, true, message.." # skip", extra)
 end
-
-
-local nan = 0/0
 
 local function cmpdeeply(got, expected, extra)
     if type(expected) == "number" or type(got) == "number" then
@@ -190,38 +186,38 @@ local function isboolean(test, v, message, extra)
     return is(test, type(v), 'boolean', message, extra)
 end
 
-local function isfunction(test, v, message, extra)
-    return is(test, type(v), 'function', message, extra)
+local function isfunction(testcase, v, message, extra)
+    return is(testcase, type(v), 'function', message, extra)
 end
 
-local function isudata(test, v, utype, message, extra)
+local function isudata(testcase, v, utype, message, extra)
     extra = extra or {}
     extra.expected = 'userdata<'..utype..'>'
     if type(v) == 'userdata' then
         extra.got = 'userdata<'..getmetatable(v)..'>'
-        return ok(test, getmetatable(v) == utype, message, extra)
+        return ok(testcase, getmetatable(v) == utype, message, extra)
     else
         extra.got = type(v)
-        return fail(test, message, extra)
+        return fail(testcase, message, extra)
     end
 end
 
-local function iscdata(test, v, ctype, message, extra)
+local function iscdata(testcase, v, ctype, message, extra)
     extra = extra or {}
     extra.expected = ffi.typeof(ctype)
     if type(v) == 'cdata' then
         extra.got = ffi.typeof(v)
-        return ok(test, ffi.istype(ctype, v), message, extra)
+        return ok(testcase, ffi.istype(ctype, v), message, extra)
     else
         extra.got = type(v)
-        return fail(test, message, extra)
+        return fail(testcase, message, extra)
     end
 end
 
 local test_mt
 local function test(parent, name, fun, ...)
     local level = parent ~= nil and parent.level + 1 or 0
-    local test = setmetatable({
+    local testcase = setmetatable({
         parent  = parent;
         name    = name;
         level   = level;
@@ -232,48 +228,48 @@ local function test(parent, name, fun, ...)
         strict = false;
     }, test_mt)
     if fun ~= nil then
-        test:diag('%s', test.name)
-        fun(test, ...)
-        test:diag('%s: end', test.name)
-        return test:check()
+        testcase:diag('%s', testcase.name)
+        fun(testcase, ...)
+        testcase:diag('%s: end', testcase.name)
+        return testcase:check()
     else
-        return test
+        return testcase
     end
 end
 
-local function plan(test, planned)
-    test.planned = planned
-    io.write(string.rep(' ', 4 * test.level), string.format("1..%d\n", planned))
+local function plan(testcase, planned)
+    testcase.planned = planned
+    io.write(string.rep(' ', 4 * testcase.level), string.format("1..%d\n", planned))
 end
 
-local function check(test)
-    if test.checked then
+local function check(testcase)
+    if testcase.checked then
         error('check called twice')
     end
-    test.checked = true
-    if test.planned ~= test.total then
-        if test.parent ~= nil then
-            ok(test.parent, false, "bad plan", { planned = test.planned;
-                run = test.total})
+    testcase.checked = true
+    if testcase.planned ~= testcase.total then
+        if testcase.parent ~= nil then
+            ok(testcase.parent, false, "bad plan", { planned = testcase.planned;
+                run = testcase.total})
         else
-            diag(test, string.format("bad plan: planned %d run %d",
-                test.planned, test.total))
+            diag(testcase, string.format("bad plan: planned %d run %d",
+                testcase.planned, testcase.total))
         end
-    elseif test.failed > 0 then
-        if test.parent ~= nil then
-            ok(test.parent, false, "failed subtests", {
-                failed = test.failed;
-                planned = test.planned;
+    elseif testcase.failed > 0 then
+        if testcase.parent ~= nil then
+            ok(testcase.parent, false, "failed subtests", {
+                failed = testcase.failed;
+                planned = testcase.planned;
             })
         else
-            diag(test, "failed subtest: %d", test.failed)
+            diag(testcase, "failed subtest: %d", testcase.failed)
         end
     else
-        if test.parent ~= nil then
-            ok(test.parent, true, test.name)
+        if testcase.parent ~= nil then
+            ok(testcase.parent, true, testcase.name)
         end
     end
-    return test.planned == test.total and test.failed == 0
+    return testcase.planned == testcase.total and testcase.failed == 0
 end
 
 test_mt = {

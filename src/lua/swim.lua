@@ -371,7 +371,7 @@ end
 --
 local function swim_member_payload_str(m)
     local ptr = swim_check_member(m, 'member:payload_str()')
-    local cdata, size = swim_member_payload_raw(ptr)
+    local _, size = swim_member_payload_raw(ptr)
     if size > 0 then
         return ffi.string(swim_member_payload_raw(ptr))
     end
@@ -462,7 +462,7 @@ local swim_member_mt = {
         is_dropped = swim_member_is_dropped,
     },
     __serialize = swim_member_serialize,
-    __newindex = function(m)
+    __newindex = function()
         return error('swim_member is a read-only object')
     end
 }
@@ -793,9 +793,9 @@ local function swim_on_member_event_new(s, callback, ctx)
     -- trigger will never be GC-ed.
     s = setmetatable({s}, {__mode = 'v'})
     return function(member_ptr, event_mask)
-        local s = s[1]
-        if s then
-            local m = swim_wrap_member(s, member_ptr)
+        local si = s[1]
+        if si then
+            local m = swim_wrap_member(si, member_ptr)
             local event = setmetatable({event_mask}, swim_member_event_mt)
             return callback(m, event, ctx)
         end

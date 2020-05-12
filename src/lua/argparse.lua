@@ -90,8 +90,8 @@ local function convert_parameter(name, convert_from, convert_to)
     return convert_from
 end
 
-local function parameters_parse(t_in, options)
-    local t_out, t_in = {}, t_in or {}
+local function parameters_parse(param, options)
+    local t_out, t_in = {}, param or {}
 
     -- Prepare a lookup table for options. An option name -> a
     -- type name to convert a parameter into or true (which means
@@ -145,7 +145,7 @@ local function parameters_parse(t_in, options)
                 if parameter_has_value(lookup[command]) then
                     -- in case next argument is value of this key (not --arg)
                     local next_arg = t_in[i + 1]
-                    local is_long, is_short, is_dash = parse_param_prefix(next_arg)
+                    is_long, is_short, is_dash = parse_param_prefix(next_arg)
                     if is_dash then
                         skip_param = true
                     elseif is_long == false and not is_short and not is_dash then

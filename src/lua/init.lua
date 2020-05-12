@@ -144,9 +144,9 @@ local function gen_search_func(path_fn, templates, need_traverse)
 
         local searchpaths = {}
 
-        for _, path in ipairs(paths) do
+        for _, p in ipairs(paths) do
             for _, template in pairs(templates) do
-                table.insert(searchpaths, fio.pathjoin(path, template))
+                table.insert(searchpaths, fio.pathjoin(p, template))
             end
         end
 
@@ -176,7 +176,8 @@ local function gen_loader_func(search_fn, load_fn)
         if not file then
             return err
         end
-        local loaded, err = load_fn(file, name)
+        local loaded
+        loaded, err = load_fn(file, name)
         if err == nil then
             return loaded
         else
