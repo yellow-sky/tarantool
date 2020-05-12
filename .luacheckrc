@@ -28,7 +28,15 @@ files["extra/dist/tarantoolctl.in"] = {
     globals = {"box", "_TARANTOOL"},
     ignore = {"212/self", "122", "431"}
 }
+files["**/*.lua"] = {
+    globals = {"box", "_TARANTOOL"},
+    ignore = {"212/self", "143"}
+}
 files["src/lua/*.lua"] = {ignore = {"212/self"}}
 files["src/lua/help.lua"] = {globals = {"help", "tutorial"}}
 files["src/lua/init.lua"] = {globals = {"dostring", "os", "package"}}
 files["src/lua/swim.lua"] = {ignore = {"431"}}
+files["src/box/lua/console.lua"] = {globals = {"help", "tutorial"}, ignore = {"212"}}
+files["src/box/lua/load_cfg.lua"] = {ignore = {"542"}}
+files["src/box/lua/net_box.lua"] = {ignore = {"431", "432", "411"}}
+files["src/box/lua/schema.lua"] = {globals = {"tonumber64"}, ignore = {"431", "432"}}

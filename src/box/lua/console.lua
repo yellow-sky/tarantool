@@ -465,7 +465,7 @@ local text_connection_mt = {
                 -- Make sure it is exactly "\set output" command.
                 if operators[items[1]] == set_param and
                     param_handlers[items[2]] == set_output then
-                    local err, fmt, opts = parse_output(items[3])
+                    local err, fmt = parse_output(items[3])
                     if not err then
                         self.fmt = fmt
                         self.eos = output_eos[fmt]
@@ -489,7 +489,7 @@ local text_connection_mt = {
                     break
                 end
                 if fmt == "yaml" then
-                    local handle, prefix = yaml.decode(rc, {tag_only = true})
+                    local handle = yaml.decode(rc, {tag_only = true})
                     if not handle then
                         -- Can not fail - tags are encoded with no
                         -- user participation and are correct always.
@@ -869,7 +869,7 @@ local function listen(uri)
         host = u.host
         port = u.service or 3313
     end
-    local s, addr = socket.tcp_server(host, port, { handler = client_handler,
+    local s = socket.tcp_server(host, port, { handler = client_handler,
         name = 'console'})
     if not s then
         error(string.format('failed to create server %s:%s: %s',
