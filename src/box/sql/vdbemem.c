@@ -892,6 +892,15 @@ sqlVdbeMemSetDouble(Mem * pMem, double val)
 	}
 }
 
+void
+sqlVdbeMemSetDecimal(struct Mem *mem, decimal_t *value)
+{
+	assert(value != NULL);
+	sqlVdbeMemSetNull(mem);
+	mem->u.d = *value;
+	mem->flags = MEM_Decimal;
+}
+
 /*
  * Return true if the Mem object contains a TEXT or BLOB that is
  * too large - whose size exceeds SQL_MAX_LENGTH.

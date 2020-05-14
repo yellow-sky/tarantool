@@ -50,6 +50,13 @@ const char *mp_type_strs[] = {
 	/* .MP_EXT    = */ "extension",
 };
 
+const char *mp_ext_type_strs[] = {
+	/* .MP_UNKNOWN_EXTENSION = */ "unknown",
+	/* .MP_DECIMAL           = */ "decimal",
+	/* .MP_UUID              = */ "uuid",
+	/* .MP_ERROR             = */ "error",
+};
+
 /*
  * messagepack types supported by given field types.
  * MP_EXT requires to parse extension type to check

@@ -51,7 +51,9 @@
 #include "box/tuple.h"
 #include "lua/msgpack.h"
 #include "lua/utils.h"
+#include "lua/decimal.h"
 #include "mpstream/mpstream.h"
+#include "mp_decimal.h"
 
 /*
  * Return the collating function associated with a function.
@@ -131,6 +133,17 @@ port_vdbemem_dump_lua(struct port *base, struct lua_State *L, bool is_flat)
 		case MP_BOOL:
 			lua_pushboolean(L, sql_value_boolean(param));
 			break;
+		case MP_EXT:
+			switch (sql_value_ext_type(param)) {
+			case MP_DECIMAL: {
+				decimal_t *decval = lua_pushdecimal(L);
+				*decval = sql_value_decimal(param);
+				break;
+			}
+			default:
+				unreachable();
+			}
+			break;
 		default:
 			unreachable();
 		}
@@ -189,6 +202,17 @@ port_vdbemem_get_msgpack(struct port *base, uint32_t *size)
 			mpstream_encode_bool(&stream, sql_value_boolean(param));
 			break;
 		}
+		case MP_EXT:
+			switch (sql_value_ext_type(param)) {
+			case MP_DECIMAL: {
+				decimal_t decvalue = sql_value_decimal(param);
+				mpstream_encode_decimal(&stream, &decvalue);
+				break;
+			}
+			default:
+				unreachable();
+			}
+			break;
 		default:
 			unreachable();
 		}
@@ -286,7 +310,17 @@ port_lua_get_vdbemem(struct port *base, uint32_t *size)
 		case MP_NIL:
 			sqlVdbeMemSetNull(&val[i]);
 			break;
+		case MP_EXT:
+			switch (field.ext_type) {
+			case MP_DECIMAL:
+				sqlVdbeMemSetDecimal(&val[i], field.decval);
+				break;
+			default:
+				goto unsupported_type;
+			}
+			break;
 		default:
+		unsupported_type:
 			diag_set(ClientError, ER_SQL_EXECUTE,
 				 "Unsupported type passed from Lua");
 			goto error;
@@ -357,7 +391,22 @@ port_c_get_vdbemem(struct port *base, uint32_t *size)
 		case MP_NIL:
 			sqlVdbeMemSetNull(&val[i]);
 			break;
+		case MP_EXT: {
+			int8_t ext_type;
+			uint32_t len = mp_decode_extl(&data, &ext_type);
+			switch (ext_type) {
+			case MP_DECIMAL: {
+				decimal_unpack(&data, len, &val[i].u.d);
+				MemSetTypeFlag(&val[i], MEM_Decimal);
+				break;
+			}
+			default:
+				goto unsupported_type;
+			}
+			break;
+		}
 		default:
+		unsupported_type:
 			diag_set(ClientError, ER_SQL_EXECUTE,
 				 "Unsupported type passed from C");
 			goto error;
@@ -443,6 +492,15 @@ typeofFunc(sql_context * context, int NotUsed, sql_value ** argv)
 	case MP_NIL:
 		z = "boolean";
 		break;
+	case MP_EXT:
+		switch (sql_value_ext_type(argv[0])) {
+		case MP_DECIMAL:
+			z = "decimal";
+			break;
+		default:
+			unreachable();
+		}
+		break;
 	default:
 		unreachable();
 		break;
@@ -465,6 +523,12 @@ lengthFunc(sql_context * context, int argc, sql_value ** argv)
 	case MP_INT:
 	case MP_UINT:
 	case MP_BOOL:
+	case MP_EXT: {
+		int8_t ext_type = sql_value_ext_type(argv[0]);
+		assert(ext_type == MP_DECIMAL);
+		(void)ext_type;
+		FALLTHROUGH;
+	}
 	case MP_DOUBLE:{
 			sql_result_uint(context, sql_value_bytes(argv[0]));
 			break;
@@ -518,6 +582,18 @@ absFunc(sql_context * context, int argc, sql_value ** argv)
 		context->is_aborted = true;
 		return;
 	}
+	case MP_EXT:
+		switch (sql_value_ext_type(argv[0])) {
+		case MP_DECIMAL: {
+			decimal_t res, decvalue = sql_value_decimal(argv[0]);
+			decimal_abs(&res, &decvalue);
+			sql_result_decimal(context, &res);
+			return;
+		}
+		default:
+			unreachable();
+		}
+		break;
 	default:{
 			/* Because sql_value_double() returns 0.0 if the argument is not
 			 * something that can be converted into a number, we have:
@@ -838,6 +914,14 @@ roundFunc(sql_context * context, int argc, sql_value ** argv)
 		diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
 			 sql_value_to_diag_str(argv[0]), "numeric");
 		context->is_aborted = true;
+		return;
+	}
+	if (sql_value_type(argv[0]) == MP_EXT &&
+	    sql_value_ext_type(argv[0]) == MP_DECIMAL) {
+		n = MIN(n, DECIMAL_MAX_DIGITS);
+		decimal_t decvalue = sql_value_decimal(argv[0]);
+		decimal_t *res = decimal_round(&decvalue, n);
+		sql_result_decimal(context, res);
 		return;
 	}
 	r = sql_value_double(argv[0]);
@@ -1358,6 +1442,18 @@ quoteFunc(sql_context * context, int argc, sql_value ** argv)
 					    SQL_TRANSIENT);
 			break;
 		}
+	case MP_EXT:
+		switch(sql_value_ext_type(argv[0])) {
+		case MP_DECIMAL: {
+			decimal_t decvalue = sql_value_decimal(argv[0]);
+			sql_result_text(context, decimal_to_string(&decvalue),
+					-1, SQL_TRANSIENT);
+			break;
+		}
+		default:
+			unreachable();
+		}
+		break;
 	case MP_UINT:
 	case MP_INT:{
 			sql_result_value(context, argv[0]);
@@ -1903,19 +1999,30 @@ soundexFunc(sql_context * context, int argc, sql_value ** argv)
 	}
 }
 
+/**
+ * Needed for tracking sum type in SumCtx structure.
+ */
+enum sum_type {
+	SUM_TYPE_INT = 0,
+	SUM_TYPE_DOUBLE,
+	SUM_TYPE_DECIMAL
+};
+
 /*
  * An instance of the following structure holds the context of a
  * sum() or avg() aggregate computation.
  */
 typedef struct SumCtx SumCtx;
 struct SumCtx {
+	decimal_t dSum;		/* Decimal sum. */
 	double rSum;		/* Floating point sum */
 	int64_t iSum;		/* Integer sum */
 	/** True if iSum < 0. */
 	bool is_neg;
 	i64 cnt;		/* Number of elements summed */
-	u8 overflow;		/* True if integer overflow seen */
-	u8 approx;		/* True if non-integer value was input to the sum */
+	bool int_overflow;	/* True if integer overflow seen */
+	bool dec_overflow;	/* True if decimal overflow seen. */
+	enum sum_type sum_type;
 };
 
 /*
@@ -1934,10 +2041,13 @@ sum_step(struct sql_context *context, int argc, sql_value **argv)
 	assert(argc == 1);
 	UNUSED_PARAMETER(argc);
 	struct SumCtx *p = sql_aggregate_context(context, sizeof(*p));
+	if (p->cnt == 0)
+		decimal_zero(&p->dSum);
 	int type = sql_value_type(argv[0]);
 	if (type == MP_NIL || p == NULL)
 		return;
-	if (type != MP_DOUBLE && type != MP_INT && type != MP_UINT) {
+	if (type != MP_DOUBLE && type != MP_INT && type != MP_UINT &&
+	    !(type == MP_EXT && sql_value_ext_type(argv[0]) == MP_DECIMAL)) {
 		if (mem_apply_numeric_type(argv[0]) != 0) {
 			diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
 				 sql_value_to_diag_str(argv[0]), "number");
@@ -1947,21 +2057,39 @@ sum_step(struct sql_context *context, int argc, sql_value **argv)
 		type = sql_value_type(argv[0]);
 	}
 	p->cnt++;
+	decimal_t decvalue;
 	if (type == MP_INT || type == MP_UINT) {
 		int64_t v = sql_value_int64(argv[0]);
-		if (type == MP_INT)
+		if (type == MP_INT) {
+			if (!p->dec_overflow)
+				decimal_from_int64(&decvalue, v);
 			p->rSum += v;
-		else
+		} else {
+			if (!p->dec_overflow)
+				decimal_from_uint64(&decvalue, (uint64_t) v);
 			p->rSum += (uint64_t) v;
-		if ((p->approx | p->overflow) == 0 &&
+		}
+		if ((p->sum_type != SUM_TYPE_INT || p->int_overflow) == 0 &&
 		    sql_add_int(p->iSum, p->is_neg, v, type == MP_INT, &p->iSum,
 				&p->is_neg) != 0) {
-			p->overflow = 1;
+			p->int_overflow = true;
 		}
-	} else {
-		p->rSum += sql_value_double(argv[0]);
-		p->approx = 1;
+	} else if (type == MP_DOUBLE) {
+		if (p->sum_type != SUM_TYPE_DECIMAL)
+			p->sum_type = SUM_TYPE_DOUBLE;
+		double v = sql_value_double(argv[0]);
+		if (!p->dec_overflow)
+			decimal_from_double(&decvalue, v);
+		p->rSum += v;
+	} else if (!p->dec_overflow) {
+		p->sum_type = SUM_TYPE_DECIMAL;
+		double v = sql_value_double(argv[0]);
+		decvalue = sql_value_decimal(argv[0]);
+		p->rSum += v;
 	}
+	if (!p->dec_overflow &&
+	    decimal_add(&p->dSum, &p->dSum, &decvalue) == NULL)
+		p->dec_overflow = true;
 }
 
 static void
@@ -1970,11 +2098,19 @@ sumFinalize(sql_context * context)
 	SumCtx *p;
 	p = sql_aggregate_context(context, 0);
 	if (p && p->cnt > 0) {
-		if (p->overflow) {
+		if (p->int_overflow) {
 			diag_set(ClientError, ER_SQL_EXECUTE, "integer "\
 				 "overflow");
 			context->is_aborted = true;
-		} else if (p->approx) {
+		} else if (p->sum_type == SUM_TYPE_DECIMAL) {
+			if (p->dec_overflow) {
+				diag_set(ClientError, ER_SQL_EXECUTE, "decimal"\
+					 " overflow");
+				context->is_aborted = true;
+			} else {
+				sql_result_decimal(context, &p->dSum);
+			}
+		} else if (p->sum_type == SUM_TYPE_DOUBLE) {
 			sql_result_double(context, p->rSum);
 		} else {
 			mem_set_int(context->pOut, p->iSum, p->is_neg);
@@ -1988,7 +2124,26 @@ avgFinalize(sql_context * context)
 	SumCtx *p;
 	p = sql_aggregate_context(context, 0);
 	if (p && p->cnt > 0) {
-		sql_result_double(context, p->rSum / (double)p->cnt);
+		switch (p->sum_type) {
+		case SUM_TYPE_INT:
+		case SUM_TYPE_DOUBLE:
+			sql_result_double(context, p->rSum / (double)p->cnt);
+			break;
+		case SUM_TYPE_DECIMAL: {
+			decimal_t res, cnt;
+			decimal_from_int64(&cnt, p->cnt);
+			if (decimal_div(&res, &p->dSum, &cnt) == NULL) {
+				diag_set(ClientError, ER_SQL_EXECUTE, "decimal"\
+					 " overflow");
+				context->is_aborted = true;
+			} else {
+				sql_result_decimal(context, &res);
+			}
+			break;
+		}
+		default:
+			unreachable();
+		}
 	}
 }
 
@@ -1997,7 +2152,10 @@ totalFinalize(sql_context * context)
 {
 	SumCtx *p;
 	p = sql_aggregate_context(context, 0);
-	sql_result_double(context, p ? p->rSum : (double)0);
+	if (p == NULL || p->dec_overflow)
+		sql_result_double(context, p ? p->rSum : (double)0);
+	else
+		sql_result_decimal(context, &p->dSum);
 }
 
 /*

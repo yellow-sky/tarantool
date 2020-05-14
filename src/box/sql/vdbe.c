@@ -1908,10 +1908,21 @@ case OP_FunctionByName: {
 	region_truncate(region, region_svp);
 	if (mem == NULL)
 		goto abort_due_to_error;
+	bool rc;
 	enum mp_type type = sql_value_type((sql_value *)pOut);
-	if (!field_mp_plain_type_is_compatible(returns, type, true)) {
+	const char *type_str;
+	if (type == MP_EXT) {
+		enum mp_extension_type ext_type =
+					sql_value_ext_type((sql_value *)pOut);
+		rc = field_mp_ext_type_is_compatible(returns, ext_type);
+		type_str = mp_ext_type_strs[ext_type];
+	} else {
+		rc = field_mp_plain_type_is_compatible(returns, type, true);
+		type_str = mp_type_strs[type];
+	}
+	if (!rc) {
 		diag_set(ClientError, ER_FUNC_INVALID_RETURN_TYPE, pOp->p4.z,
-			 field_type_strs[returns], mp_type_strs[type]);
+			 field_type_strs[returns], type_str);
 		goto abort_due_to_error;
 	}
 

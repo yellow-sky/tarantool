@@ -235,6 +235,15 @@ sql_value_type(sql_value *pVal)
 	}
 }
 
+enum mp_extension_type
+sql_value_ext_type(sql_value *pVal)
+{
+	switch (pVal->flags & MEM_PURE_TYPE_MASK) {
+	case MEM_Decimal: return MP_DECIMAL;
+	default: unreachable();
+	}
+}
+
 /* Make a copy of an sql_value object
  */
 sql_value *
@@ -341,6 +350,12 @@ void
 sql_result_double(sql_context * pCtx, double rVal)
 {
 	sqlVdbeMemSetDouble(pCtx->pOut, rVal);
+}
+
+void
+sql_result_decimal(sql_context * pCtx, decimal_t *decvalue)
+{
+	sqlVdbeMemSetDecimal(pCtx->pOut, decvalue);
 }
 
 void

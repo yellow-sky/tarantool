@@ -75,6 +75,7 @@
 #include "box/sql.h"
 #include "box/txn.h"
 #include "trivia/util.h"
+#include "mp_extension_types.h"
 
 /*
  * These #defines should enable >2GB file support on POSIX if the
@@ -401,6 +402,9 @@ sql_value_to_diag_str(sql_value *value);
 enum mp_type
 sql_value_type(sql_value *);
 
+enum mp_extension_type
+sql_value_ext_type(sql_value *);
+
 static inline bool
 sql_value_is_null(sql_value *value)
 {
@@ -421,6 +425,9 @@ sql_result_blob64(sql_context *, const void *,
 
 void
 sql_result_double(sql_context *, double);
+
+void
+sql_result_decimal(sql_context * pCtx, decimal_t *decvalue);
 
 void
 sql_result_uint(sql_context *ctx, uint64_t u_val);

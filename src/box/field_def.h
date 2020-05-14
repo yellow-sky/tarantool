@@ -112,6 +112,9 @@ field_type_by_name(const char *name, size_t len);
 /* MsgPack type names */
 extern const char *mp_type_strs[];
 
+/** MsgPack extenstion type names. */
+extern const char *mp_ext_type_strs[];
+
 /** Two helper tables for field_mp_type_is_compatible */
 extern const uint32_t field_mp_type[];
 extern const uint32_t field_ext_type[];

@@ -523,6 +523,7 @@ void
 mem_set_int(struct Mem *mem, int64_t value, bool is_neg);
 
 void sqlVdbeMemSetDouble(Mem *, double);
+void sqlVdbeMemSetDecimal(struct Mem *mem, decimal_t *value);
 void sqlVdbeMemInit(Mem *, sql *, u32);
 void sqlVdbeMemSetNull(Mem *);
 void sqlVdbeMemSetZeroBlob(Mem *, int);
