@@ -106,17 +106,14 @@ Customer        Leader          WAL(L)        Replica        WAL(R)
    |            [Quorum           |             |              |
    |           achieved]          |             |              |
    |               |              |             |              |
-   |         [TXN undo log        |             |              |
-   |           destroyed]         |             |              |
-   |               |              |             |              |
    |               |---Confirm--->|             |              |
    |               |              |             |              |
    |               |----------Confirm---------->|              |
    |               |              |             |              |
-   |<---TXN Ok-----|              |       [TXN undo log        |
-   |               |              |         destroyed]         |
+   |<---TXN Ok-----|              |             |---Confirm--->|
    |               |              |             |              |
-   |               |              |             |---Confirm--->|
+   |         [TXN undo log        |       [TXN undo log        |
+   |           destroyed]         |         destroyed]         |
    |               |              |             |              |
 ```
 
@@ -134,7 +131,7 @@ In case of application failure the replica has to disconnect from the
 replication the same way as it is done now. The replica also has to
 report its disconnection to the orchestrator. Further actions require
 human intervention, since failure means either technical problem (such
-as not enough space for WAL) that has to be resovled or an inconsistent
+as not enough space for WAL) that has to be resolved or an inconsistent
 state that requires rejoin.
 
 As soon as leader appears in a situation it has not enough replicas
@@ -188,7 +185,7 @@ a state that it has conflicting WAL entries, in case it recovered from a
 leader role and some of transactions didn't replicated to the current
 leader. This situation should be resolved through rejoin of the instance.
 
-Consider an exmaple below. Originally instance with ID1 was assinged a
+Consider an example below. Originally instance with ID1 was assigned a
 Leader role and the cluster had 2 replicas with quorum set to 2.
 
 ```
@@ -245,11 +242,16 @@ corresponding Confirms to its WAL. Note that Tx are still uses ID1.
 | ID1 Tx7             |                     |                     |
 +---------------------+---------------------+---------------------+
 ```
-After rejoining ID1 will figure out the inconsistence of its WAL: the
+After rejoining ID1 will figure out the inconsistency of its WAL: the
 last WAL entry it has is corresponding to Tx7, while in Leader's log the
-last entry with ID1 is Tx5. The ID1's WAL should be truncated after
-the Tx5, so that after replaying it the Replica 1 will appear in
-consistent state with cluster.
+last entry with ID1 is Tx5.
+
+In case the ID1's WAL contains corresponding entry then Replica 1 can
+stop reading WAL as soon as it hits the vclock[ID1] obtained from the
+current Leader. It will put the ID1 into a consistent state and it can
+obtain latest data via replication. The WAL should be rotated after a
+snapshot creation. The old WAL should be renamed so it will not be
+reused in the future and kept for postmortem.
 ```
 +---------------------+---------------------+---------------------+
 | ID1                 | ID2                 | ID3                 |
@@ -274,6 +276,10 @@ consistent state with cluster.
 |                     | ID2 Tx2             | ID2 Tx2             |
 +---------------------+---------------------+---------------------+
 ```
+Although, there could be a situation that ID1's WAL begins with an LSN
+after the biggest available in the Leader's WAL. Either, for vinyl
+part of WAL can be referenced in .run files, hence can't be evicted by
+a simple WAL ignore. In such a case the ID1 needs a complete rejoin.
 
 ### Snapshot generation.
 
