@@ -1,7 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
--- test:plan(1279)
-test:plan(0)
+test:plan(1277)
 
 --!./tcltestrunner.lua
 -- 2003 October 31
@@ -447,37 +446,37 @@ datetest(13.34, "date('2001-01-01','-1.5 years')", "1999-07-02")
 -- functions always returns exactly the same value for multiple
 -- invocations within the same sql_step() call.
 --
+
+if false then -- FIXME
+
 local function sleeper()
     -- after 100 ms
     os.execute("sleep 0.1")
 end
 box.internal.sql_create_function("sleeper", "INT", sleeper)
 -- db("func", "sleeper", "sleeper")
-test:do_test(
+test:do_catchsql_test(
     "date-15.1",
-    function()
-        return test:execsql [[
-            SELECT c - a FROM (SELECT julianday('now') AS a,
-                                      sleeper(), julianday('now') AS c);
-        ]]
-    end, {
-        -- <date-15.1>
-        0.0
-        -- </date-15.1>
-    })
+    [[
+        SELECT c - a FROM (SELECT julianday('now') AS a,
+                           sleeper(), julianday('now') AS c);
+    ]] , {
+    -- <date-15.1>
+    0.0
+    -- </date-15.1>
+})
 
-test:do_test(
+test:do_catchsql_test(
     "date-15.2",
-    function()
-        return test:execsql [[
-            SELECT a==b FROM (SELECT current_timestamp AS a,
-                                      sleeper(), current_timestamp AS b);
-        ]]
-    end, {
-        -- <date-15.2>
-        1
-        -- </date-15.2>
+    [[
+        SELECT a==b FROM (SELECT current_timestamp AS a,
+                         sleeper(), current_timestamp AS b);
+    ]], {
+    -- <date-15.2>
+    1
+    -- </date-15.2>
     })
 
+end -- FIXME
 
 test:finish_test()
