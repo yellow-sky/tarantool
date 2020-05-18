@@ -331,6 +331,15 @@ mem_apply_type(struct Mem *record, enum field_type type)
 				mem_set_u64(record, u);
 			return 0;
 		}
+		if ((record->flags & MEM_Decimal) == MEM_Decimal) {
+			int64_t i;
+			bool is_neg = decNumberIsNegative(&record->u.d);
+			if (decimal_to_int64(&record->u.d, &i) == NULL)
+				return -1;
+			if (decimal_is_whole(&record->u.d))
+				mem_set_int(record, i, is_neg);
+			return 0;
+		}
 		if ((record->flags & MEM_Str) != 0) {
 			bool is_neg;
 			int64_t i;
@@ -367,9 +376,10 @@ mem_apply_type(struct Mem *record, enum field_type type)
 		 * NULL do not get converted).
 		 */
 		if ((record->flags & MEM_Str) == 0 &&
-		    (record->flags & (MEM_Real | MEM_Int | MEM_UInt)) != 0)
+		    (record->flags & (MEM_Real | MEM_Int | MEM_UInt |
+		    		      MEM_Decimal)) != 0)
 			sqlVdbeMemStringify(record);
-		record->flags &= ~(MEM_Real | MEM_Int | MEM_UInt);
+		record->flags &= ~(MEM_Real | MEM_Int | MEM_UInt | MEM_Decimal);
 		return 0;
 	case FIELD_TYPE_VARBINARY:
 		if ((record->flags & MEM_Blob) == 0)

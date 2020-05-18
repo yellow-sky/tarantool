@@ -36,6 +36,7 @@
 #define DECNUMDIGITS DECIMAL_MAX_DIGITS
 #include "third_party/decNumber/decNumber.h"
 #include <stdint.h>
+#include <stdbool.h>
 
 #if defined(__cplusplus)
 extern "C" {
@@ -58,6 +59,9 @@ decimal_precision(const decimal_t *dec);
  */
 int
 decimal_scale(const decimal_t *dec);
+
+bool
+decimal_is_whole(const decimal_t *dec);
 
 /**
  * Initialize a zero decimal number.

@@ -102,6 +102,15 @@ int  decimal_scale(const decimal_t *dec) {
 	return dec->exponent < 0 ? -dec->exponent : 0;
 }
 
+bool
+decimal_is_whole(const decimal_t *dec) 
+{
+	decimal_t d;
+	decNumberCopy(&d, dec);
+	decimal_trim(&d);
+	return decimal_scale(&d) == 0;
+}
+
 decimal_t *
 decimal_zero(decimal_t *dec)
 {

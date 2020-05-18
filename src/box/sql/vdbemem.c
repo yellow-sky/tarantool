@@ -493,6 +493,11 @@ sqlVdbeIntValue(Mem * pMem, int64_t *i, bool *is_neg)
 	} else if (flags & MEM_Real) {
 		*is_neg = pMem->u.r < 0;
 		return doubleToInt64(pMem->u.r, i);
+	} else if (flags & MEM_Decimal) {
+		*is_neg = decNumberIsNegative(&pMem->u.d);
+		if (decimal_to_int64(&pMem->u.d, i) == NULL)
+			return -1;
+		return decimal_is_whole(&pMem->u.d);
 	} else if (flags & (MEM_Str)) {
 		assert(pMem->z || pMem->n == 0);
 		if (sql_atoi64(pMem->z, i, is_neg, pMem->n) == 0)
@@ -522,6 +527,10 @@ sqlVdbeRealValue(Mem * pMem, double *v)
 		return 0;
 	} else if (pMem->flags & MEM_Str) {
 		if (sqlAtoF(pMem->z, v, pMem->n))
+			return 0;
+	} else if ((pMem->flags & MEM_Decimal) != 0) {
+		const char *dec_str =  decimal_to_string(&pMem->u.d);
+		if (sqlAtoF(dec_str, v, strlen(dec_str)))
 			return 0;
 	}
 	return -1;
@@ -609,7 +618,8 @@ sqlVdbeMemRealify(Mem * pMem)
 int
 vdbe_mem_numerify(struct Mem *mem)
 {
-	if ((mem->flags & (MEM_Int | MEM_UInt | MEM_Real | MEM_Null)) != 0)
+	if ((mem->flags & (MEM_Int | MEM_UInt | MEM_Real | MEM_Null |
+			   MEM_Decimal)) != 0)
 		return 0;
 	if ((mem->flags & MEM_Bool) != 0) {
 		mem->u.u = mem->u.b;
@@ -622,9 +632,15 @@ vdbe_mem_numerify(struct Mem *mem)
 	if (sql_atoi64(mem->z, &i, &is_neg, mem->n) == 0) {
 		mem_set_int(mem, i, is_neg);
 	} else {
-		if (sqlAtoF(mem->z, &mem->u.r, mem->n) == 0)
-			return -1;
-		MemSetTypeFlag(mem, MEM_Real);
+		if (strpbrk(mem->z, "eE") != NULL) {
+			if (sqlAtoF(mem->z, &mem->u.r, mem->n) == 0)
+				return -1;
+			MemSetTypeFlag(mem, MEM_Real);
+		} else {
+			if (decimal_from_string(&mem->u.d, mem->z) == NULL)
+				return -1;
+			MemSetTypeFlag(mem, MEM_Decimal);
+		}
 	}
 	return 0;
 }
@@ -694,6 +710,10 @@ sqlVdbeMemCast(Mem * pMem, enum field_type type)
 			mem_set_bool(pMem, pMem->u.r);
 			return 0;
 		}
+		if ((pMem->flags & MEM_Decimal) != 0) {
+			mem_set_bool(pMem, !decNumberIsZero(&pMem->u.d));
+			return 0;
+		}
 		if ((pMem->flags & MEM_Str) != 0) {
 			bool value;
 			if (str_cast_to_boolean(pMem->z, &value) != 0)
@@ -735,12 +755,23 @@ sqlVdbeMemCast(Mem * pMem, enum field_type type)
 			}
 			return -1;
 		}
+		if ((pMem->flags & MEM_Decimal) != 0) {
+			bool is_neg = decNumberIsNegative(&pMem->u.d);
+			int64_t val;
+			if (decimal_to_int64(&pMem->u.d, &val) != NULL) {
+				mem_set_int(pMem, val, is_neg);
+				return 0;
+			}
+			return -1;
+		}
 		if (type == FIELD_TYPE_UNSIGNED &&
 		    (pMem->flags & MEM_UInt) == 0)
 			return -1;
 		return 0;
 	case FIELD_TYPE_DOUBLE:
 		return sqlVdbeMemRealify(pMem);
+	case FIELD_TYPE_DECIMAL:
+		return mem_apply_decimal_type(pMem);
 	case FIELD_TYPE_NUMBER:
 		return vdbe_mem_numerify(pMem);
 	case FIELD_TYPE_VARBINARY:
