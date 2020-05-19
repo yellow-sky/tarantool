@@ -244,14 +244,15 @@ corresponding Confirms to its WAL. Note that Tx are still uses ID1.
 ```
 After rejoining ID1 will figure out the inconsistency of its WAL: the
 last WAL entry it has is corresponding to Tx7, while in Leader's log the
-last entry with ID1 is Tx5.
+last entry with ID1 is Tx5. Confirm for a Tx can only be issued after
+appearance of the Tx on the majoirty of replicas, hence there's a good
+chances that ID1 will have inconsistency in its WAL covered with undo
+log. So, by rolling back all excessive Txs (in the example they are Tx6
+and Tx7) the ID1 can put its memtx and vynil in consistent state.
 
-In case the ID1's WAL contains corresponding entry then Replica 1 can
-stop reading WAL as soon as it hits the vclock[ID1] obtained from the
-current Leader. It will put the ID1 into a consistent state and it can
-obtain latest data via replication. The WAL should be rotated after a
-snapshot creation. The old WAL should be renamed so it will not be
-reused in the future and kept for postmortem.
+At this point a snapshot can be created at ID1 with appropriate WAL
+rotation. The old WAL should be renamed so it will not be reused in the
+future and can be kept for postmortem.
 ```
 +---------------------+---------------------+---------------------+
 | ID1                 | ID2                 | ID3                 |
@@ -276,10 +277,8 @@ reused in the future and kept for postmortem.
 |                     | ID2 Tx2             | ID2 Tx2             |
 +---------------------+---------------------+---------------------+
 ```
-Although, there could be a situation that ID1's WAL begins with an LSN
-after the biggest available in the Leader's WAL. Either, for vinyl
-part of WAL can be referenced in .run files, hence can't be evicted by
-a simple WAL ignore. In such a case the ID1 needs a complete rejoin.
+Although, in case undo log is not enough to cover the WAL inconsistence
+with the new leader, the ID1 needs a complete rejoin.
 
 ### Snapshot generation.
 
