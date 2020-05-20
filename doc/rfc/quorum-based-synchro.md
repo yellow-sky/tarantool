@@ -34,6 +34,9 @@ To provide such capabilities a new functionality should be introduced in
 Tarantool core, with requirements mentioned before - backward
 compatibility and ease of cluster orchestration.
 
+The cluster operation is expected to be in a full-mesh topology, although
+the process of automated topology support is beyond this RFC.
+
 ## Detailed design
 
 ### Quorum commit
@@ -149,19 +152,53 @@ available quorum and leader can be switched back to write mode.
 
 ### Leader role assignment.
 
-To assign a leader role to an instance the following should be performed:
-  1. among all available instances pick the one that has the biggest
-     vclock element of the former leader ID; an arbitrary istance can be
-     selected in case it is first time the leader is assigned
-  2. the leader should assure that number of available instances in the
-     cluster is enough to achieve the quorum and proceed to step 3,
-     otherwise the leader should report the situation of incomplete quorum,
-     as in the last paragraph of previous section
-  3. the selected instance has to take the responsibility to replicate
-     former leader entries from its WAL, obtainig quorum and commit
-     confirm messages referring to [FORMER_LEADER_ID, LSN] in its WAL,
-     replicating to the cluster, after that it can start adding its own
-     entries into the WAL
+Be it a user-initiated assignment or an algorithmic one, it should use
+a common interface to assign the leader role. By now we implement a
+simplified machinery, still it should be feasible in the future to fit
+the algorithms, such as RAFT or proposed before box.ctl.promote.
+
+A system space \_voting can be used to replicate the voting among the
+cluster, this space should be writable even for a read-only instance.
+This space should contain a CURRENT_LEADER_ID at any time - means the
+current leader, can be a zero value at the start. This is needed to
+compare the  appropriate vclock component below.
+
+All replicas should be subscribed to changes in the space and react as
+described below.
+
+ promote(ID) - should be called from a replica with it's own ID.
+   Writes an entry in the voting space about this ID is waiting for
+   votes from cluster. The entry should also contain the current
+   vclock[CURRENT_LEADER_ID] of the nominee.
+
+Upon changes in the space each replica should compare its appropriate
+vclock component with submitted one and append its vote to the space:
+AYE in case nominee's vclock is bigger or equal to the replica's one,
+NAY otherwise.
+
+As soon as nominee collects the quorum for being elected, it claims
+himself a Leader by switching in rw mode, writes CURRENT_LEADER_ID as
+a FORMER_LEADER_ID in the \_voting space and put its ID as a
+CURRENT_LEADER_ID. In case a NAY is appeared in the \_voting or a
+timeout predefined in box.cfg is reached, the nominee should remove
+it's entry from the space.
+
+The leader should assure that number of available instances in the
+cluster is enough to achieve the quorum and proceed to step 3, otherwise
+the leader should report the situation of incomplete quorum, as
+described in the last paragraph of previous section.
+
+The new Leader has to take the responsibility to replicate former Leader's
+entries from its WAL, obtain quorum and commit confirm messages referring
+to [FORMER_LEADER_ID, LSN] in its WAL, replicating to the cluster, after
+that it can start adding its own entries into the WAL.
+
+ demote(ID) - should be called from the Leader instance.
+   The Leader has to switch in ro mode and wait for its' undo log is
+   empty. This effectively means all transactions are committed in the
+   cluster and it is safe pass the leadership. Then it should write
+   CURRENT_LEADER_ID as a FORMER_LEADER_ID and put CURRENT_LEADER_ID
+   into 0.
 
 ### Recovery and failover.
 
