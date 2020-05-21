@@ -48,6 +48,13 @@ macro(curl_build)
         set(LIBCURL_CFLAGS "${LIBCURL_CFLAGS} ${CMAKE_C_SYSROOT_FLAG} ${CMAKE_OSX_SYSROOT}")
     endif()
 
+    # Disable building shared libcurl libraries if
+    # cmake option -DBUILD_STATIC=ON is set
+    set(LIBCURL_BUILD_TYPE "--enable-shared")
+    if (BUILD_STATIC)
+        set(LIBCURL_BUILD_TYPE "--disable-shared")
+    endif()
+
     include(ExternalProject)
     ExternalProject_Add(
         bundled-libcurl-project
@@ -88,7 +95,7 @@ macro(curl_build)
 
                 --prefix <INSTALL_DIR>
                 --enable-static
-                --enable-shared
+                ${LIBCURL_BUILD_TYPE}
 
                 --with-zlib
                 ${LIBCURL_OPENSSL_OPT}
@@ -159,6 +166,11 @@ macro(curl_build)
         # Need to build ares first
         add_dependencies(bundled-libcurl-project bundled-ares)
     endif()
+
+    if (BUILD_STATIC)
+        add_dependencies(bundled-libcurl-project static-openssl)
+    endif()
+
     add_dependencies(bundled-libcurl bundled-libcurl-project)
 
     set(CURL_INCLUDE_DIRS ${LIBCURL_INSTALL_DIR}/include)

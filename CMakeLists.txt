@@ -17,6 +17,7 @@ include(TestBigEndian)
 include(CheckFunctionExists)
 include(FindOptionalPackage)
 include(FindPackageMessage)
+include(ExternalProject)
 
 find_program(ECHO echo)
 find_program(CAT cat)
@@ -320,20 +321,40 @@ endif()
 #
 # OpenSSL
 #
-find_package(OpenSSL)
-if (OPENSSL_FOUND)
-    message(STATUS "OpenSSL ${OPENSSL_VERSION} found")
-    include_directories(${OPENSSL_INCLUDE_DIR})
+if(BUILD_STATIC)
+    set(OPENSSL_VERSION 1.1.1f)
+    ExternalProject_Add(openssl
+        URL https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz
+        CONFIGURE_COMMAND <SOURCE_DIR>/config --libdir=lib --prefix=<INSTALL_DIR> no-shared
+        INSTALL_COMMAND $(MAKE) install_sw
+    )
+    ExternalProject_Get_Property(openssl install_dir)
+    message(STATUS "OpenSSL ${OPENSSL_VERSION} added as ExternalProject")
+    set(OPENSSL_FOUND TRUE)
+    set(OPENSSL_INCLUDE_DIR ${install_dir}/include)
+    set(OPENSSL_CRYPTO_LIBRARY ${install_dir}/lib/libcrypto.a)
+    set(OPENSSL_SSL_LIBRARY ${install_dir}/lib/libssl.a)
+    set(OPENSSL_LIBRARIES ${OPENSSL_SSL_LIBRARY} ${OPENSSL_CRYPTO_LIBRARY} ${CMAKE_DL_LIBS})
+
+    add_library(static-openssl STATIC IMPORTED GLOBAL)
+    add_dependencies(static-openssl openssl)
 else()
-    message(FATAL_ERROR "Could NOT find OpenSSL development files (libssl-dev/openssl-devel package)")
+    find_package(OpenSSL)
+    if (OPENSSL_FOUND)
+        message(STATUS "OpenSSL ${OPENSSL_VERSION} found")
+    else()
+        message(FATAL_ERROR "Could NOT find OpenSSL development files (libssl-dev/openssl-devel package)")
+    endif()
 endif()
+
+include_directories(${OPENSSL_INCLUDE_DIR})
 
 #
 # OpenSSL can require Z library (depending on build time options), so we add
 # it to libraries list in case of static openssl linking.
 #
 if(OPENSSL_USE_STATIC_LIBS)
-    if(BUILD_STATIC)
+    if (BUILD_STATIC)
         find_library(Z_LIBRARY libz.a)
     else()
         find_library(Z_LIBRARY z)
