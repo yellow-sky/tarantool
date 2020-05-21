@@ -7,7 +7,7 @@ if (NOT (CMAKE_C_COMPILER_ID STREQUAL CMAKE_CXX_COMPILER_ID))
                     "The final binary may be unusable.")
 endif()
 
-# We support building with Clang and gcc. First check 
+# We support building with Clang and gcc. First check
 # what we're using for build.
 #
 if (CMAKE_C_COMPILER_ID STREQUAL Clang)
@@ -17,7 +17,7 @@ if (CMAKE_C_COMPILER_ID STREQUAL Clang)
 endif()
 
 #
-# Hard coding the compiler version is ugly from cmake POV, but 
+# Hard coding the compiler version is ugly from cmake POV, but
 # at least gives user a friendly error message. The most critical
 # demand for C++ compiler is support of C++11 lambdas, added
 # only in version 4.5 https://gcc.gnu.org/projects/cxx0x.html
@@ -120,13 +120,29 @@ set (CMAKE_CXX_FLAGS_RELWITHDEBINFO
 
 unset(CC_DEBUG_OPT)
 
-check_include_file(libunwind.h HAVE_LIBUNWIND_H)
 if(BUILD_STATIC)
-    set(UNWIND_LIB_NAME libunwind.a)
+    set(LIBUNWIND_VERSION 1.3-rc1)
+    ExternalProject_Add(libunwind
+        URL http://download.savannah.nongnu.org/releases/libunwind/libunwind-1.3-rc1.tar.gz
+        # BUILD_IN_SOURCE ON
+        # SOURCE_DIR ${CMAKE_BINARY_DIR}/libunwind-1.3-rc1
+        CONFIGURE_COMMAND <SOURCE_DIR>/configure
+            --disable-documentation
+            --enable-static
+            --enable-shared
+            --enable-krb4
+            --prefix <INSTALL_DIR>
+    )
+    ExternalProject_Get_Property(libunwind install_dir)
+    message(STATUS "libunwind ${LIBUNWIND_VERSION} added as ExternalProject")
+    include_directories(${install_dir}/include)
+    set(HAVE_LIBUNWIND_H TRUE)
+    set(UNWIND_LIBRARY ${install_dir}/lib/libunwind.a)
 else()
     set(UNWIND_LIB_NAME unwind)
+    find_library(UNWIND_LIBRARY PATH_SUFFIXES system NAMES ${UNWIND_LIB_NAME})
+    check_include_file(libunwind.h HAVE_LIBUNWIND_H)
 endif()
-find_library(UNWIND_LIBRARY PATH_SUFFIXES system NAMES ${UNWIND_LIB_NAME})
 
 # Disabled backtraces support on FreeBSD by default, because of
 # gh-4278.
