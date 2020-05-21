@@ -77,7 +77,7 @@ deps_buster_clang_8: deps_debian
 # Release
 
 build_debian:
-	cmake . -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_WERROR=ON ${CMAKE_EXTRA_PARAMS}
+	cmake . -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_WERROR=ON -DENABLE_DIST=ON ${CMAKE_EXTRA_PARAMS}
 	make -j
 
 test_debian_no_deps: build_debian
@@ -86,6 +86,13 @@ test_debian_no_deps: build_debian
 test_debian: deps_debian test_debian_no_deps
 
 test_debian_clang8: deps_debian deps_buster_clang_8 test_debian_no_deps
+
+# Integration testing
+
+test_module_vshard: build_debian
+	make install
+		git clone --recurse-submodules https://github.com/tarantool/vshard.git vshard
+		cd vshard && cmake . && make test
 
 # Debug with coverage
 

@@ -1,5 +1,6 @@
 stages:
   - test
+  - integration_test
   - perf
   - cleanup
 
@@ -182,6 +183,16 @@ freebsd_12_release:
     MAKE: 'gmake'
   script:
     - ${GITLAB_MAKE} vms_test_freebsd
+
+# ###################
+# Integration testing
+# ###################
+
+release_module_vshard_test:
+  <<: *docker_test_definition
+  stage: integration_test
+  script:
+    - ${GITLAB_MAKE} test_module_vshard
 
 # ####
 # Perf
