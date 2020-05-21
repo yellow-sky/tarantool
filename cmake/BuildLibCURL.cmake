@@ -88,7 +88,11 @@ macro(curl_build)
 
                 --prefix <INSTALL_DIR>
                 --enable-static
-                --enable-shared
+
+                # Disable building shared libcurl libraries if
+                # cmake option -DBUILD_STATIC=ON is set
+                $<$<BOOL:${BUILD_STATIC}>:--disable-shared>
+                $<$<NOT:$<BOOL:${BUILD_STATIC}>>:--enable-shared>
 
                 --with-zlib
                 ${LIBCURL_OPENSSL_OPT}
@@ -158,6 +162,10 @@ macro(curl_build)
     if (BUNDLED_LIBCURL_USE_ARES)
         # Need to build ares first
         add_dependencies(bundled-libcurl-project bundled-ares)
+    endif()
+
+    if (BUILD_STATIC)
+        add_dependencies(bundled-libcurl-project openssl)
     endif()
     add_dependencies(bundled-libcurl bundled-libcurl-project)
 
