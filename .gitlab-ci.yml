@@ -1,5 +1,6 @@
 stages:
   - test
+  - integration_test
   - perf
   - cleanup
 
@@ -182,6 +183,46 @@ freebsd_12_release:
     MAKE: 'gmake'
   script:
     - ${GITLAB_MAKE} vms_test_freebsd
+
+# ###################
+# Integration testing
+# ###################
+
+release_connector_python_asynctnt_test:
+  <<: *docker_test_definition
+  stage: integration_test
+  script:
+    - ${GITLAB_MAKE} test_connector_python_asynctnt
+
+release_connector_python_tarantool_test:
+  <<: *docker_test_definition
+  stage: integration_test
+  script:
+    - ${GITLAB_MAKE} test_connector_python_tarantool
+
+release_connector_go_tarantool_test:
+  <<: *docker_test_definition
+  stage: integration_test
+  script:
+    - ${GITLAB_MAKE} test_connector_go_tarantool
+
+release_connector_go_viciious_test:
+  <<: *docker_test_definition
+  stage: integration_test
+  script:
+    - ${GITLAB_MAKE} test_connector_go_viciious
+
+release_connector_php_tarantool_test:
+  <<: *docker_test_definition
+  stage: integration_test
+  script:
+    - ${GITLAB_MAKE} test_connector_php_tarantool
+
+release_connector_java_tarantool_test:
+  <<: *docker_test_definition
+  stage: integration_test
+  script:
+    - ${GITLAB_MAKE} test_connector_java_tarantool
 
 # ####
 # Perf
