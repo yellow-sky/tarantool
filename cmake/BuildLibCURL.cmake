@@ -159,6 +159,11 @@ macro(curl_build)
         # Need to build ares first
         add_dependencies(bundled-libcurl-project bundled-ares)
     endif()
+
+    if (BUILD_STATIC)
+        add_dependencies(bundled-libcurl-project static-openssl)
+    endif()
+
     add_dependencies(bundled-libcurl bundled-libcurl-project)
 
     set(CURL_INCLUDE_DIRS ${LIBCURL_INSTALL_DIR}/include)

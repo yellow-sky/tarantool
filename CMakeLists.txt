@@ -322,22 +322,46 @@ endif()
 # OpenSSL
 #
 if(BUILD_STATIC)
-    set(OPENSSL_VERSION 1.1.0h)
+    set(OPENSSL_VERSION 1.1.1f)
     ExternalProject_Add(openssl
         URL https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz
         CONFIGURE_COMMAND <SOURCE_DIR>/config --libdir=lib --prefix=<INSTALL_DIR>
-        INSTALL_COMMAND make install_sw
+        INSTALL_COMMAND $(MAKE) install_sw
     )
     ExternalProject_Get_Property(openssl install_dir)
     message(STATUS "OpenSSL ${OPENSSL_VERSION} added as ExternalProject")
     set(OPENSSL_FOUND TRUE)
     set(OPENSSL_INCLUDE_DIR ${install_dir}/include)
-    set(OPENSSL_CRYPTO_LIBRARY ${install_dir}/lib/crypto.a)
-    set(OPENSSL_SSL_LIBRARY ${install_dir}/lib/ssl.a)
+    set(OPENSSL_CRYPTO_LIBRARY ${install_dir}/lib/libcrypto.a)
+    set(OPENSSL_SSL_LIBRARY ${install_dir}/lib/libssl.a)
     set(OPENSSL_LIBRARIES
         ${OPENSSL_SSL_LIBRARY}
         ${OPENSSL_CRYPTO_LIBRARY}
+        ${CMAKE_DL_LIBS}
     )
+
+
+    include_directories(${OPENSSL_INCLUDE_DIR})
+    add_library(static-openssl STATIC IMPORTED GLOBAL)
+    
+    if(OPENSSL_USE_STATIC_LIBS)
+        find_library(Z_LIBRARY z)
+        set(OPENSSL_LIBRARIES ${OPENSSL_LIBRARIES} ${Z_LIBRARY})
+        set_target_properties(static-openssl PROPERTIES
+            IMPORTED_LOCATION ${Z_LIBRARY},
+        )
+    endif()
+
+    set_target_properties(static-openssl PROPERTIES
+       IMPORTED_LOCATION ${OPENSSL_CRYPTO_LIBRARY},
+    )
+    set_target_properties(static-openssl PROPERTIES
+        IMPORTED_LOCATION ${OPENSSL_SSL_LIBRARY},
+    )
+
+    add_dependencies(static-openssl openssl)
+    add_dependencies(build_bundled_libs static-openssl)
+
 else()
     find_package(OpenSSL)
     if (OPENSSL_FOUND)
