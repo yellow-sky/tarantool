@@ -163,7 +163,7 @@ box.execute("SELECT 'abc' || 1;")
 box.execute("SELECT 'abc' || 1.123;")
 ---
 - null
-- 'Inconsistent types: expected text or varbinary got real'
+- 'Inconsistent types: expected text or varbinary got decimal'
 ...
 box.execute("SELECT 1 || 'abc';")
 ---
@@ -173,7 +173,7 @@ box.execute("SELECT 1 || 'abc';")
 box.execute("SELECT 1.123 || 'abc';")
 ---
 - null
-- 'Inconsistent types: expected text or varbinary got real'
+- 'Inconsistent types: expected text or varbinary got decimal'
 ...
 box.execute("SELECt 'a' || 'b' || 1;")
 ---
@@ -304,7 +304,7 @@ box.execute('SELECT 1 + 1.1;')
 ---
 - metadata:
   - name: 1 + 1.1
-    type: double
+    type: decimal
   rows:
   - [2.1]
 ...
@@ -354,7 +354,7 @@ box.execute("SELECT * FROM tboolean WHERE s1 = 1;")
 box.execute("SELECT * FROM tboolean WHERE s1 = 1.123;")
 ---
 - null
-- 'Type mismatch: can not convert real to boolean'
+- 'Type mismatch: can not convert decimal to boolean'
 ...
 box.space.TBOOLEAN:drop()
 ---
@@ -596,7 +596,7 @@ box.execute("SELECT 18446744073709551615 = 18446744073709551615.0;")
   - name: 18446744073709551615 = 18446744073709551615.0
     type: boolean
   rows:
-  - [false]
+  - [true]
 ...
 box.execute("SELECT 18446744073709551615.0 > 18446744073709551615")
 ---
@@ -604,7 +604,7 @@ box.execute("SELECT 18446744073709551615.0 > 18446744073709551615")
   - name: 18446744073709551615.0 > 18446744073709551615
     type: boolean
   rows:
-  - [true]
+  - [false]
 ...
 box.execute("SELECT 18446744073709551615 IN ('18446744073709551615', 18446744073709551615.0)")
 ---
@@ -1249,7 +1249,7 @@ box.execute("SELECT * FROM t WHERE v = 1")
 box.execute("SELECT * FROM t WHERE v = 1.123")
 ---
 - null
-- 'Type mismatch: can not convert real to varbinary'
+- 'Type mismatch: can not convert decimal to varbinary'
 ...
 box.execute("SELECT * FROM t WHERE v = 'str'")
 ---
@@ -1694,15 +1694,15 @@ box.execute("SELECT 1.0;")
 ---
 - metadata:
   - name: '1.0'
-    type: double
+    type: decimal
   rows:
-  - [1]
+  - [1.0]
 ...
 box.execute("SELECT .01;")
 ---
 - metadata:
   - name: '.01'
-    type: double
+    type: decimal
   rows:
   - [0.01]
 ...
@@ -2082,11 +2082,11 @@ box.execute("SELECT 1.0, typeof(1.0);")
 ---
 - metadata:
   - name: '1.0'
-    type: double
+    type: decimal
   - name: typeof(1.0)
     type: string
   rows:
-  - [1, 'double']
+  - [1.0, 'decimal']
 ...
 box.execute("SELECT CAST(2 AS DOUBLE), typeof(CAST(2 AS DOUBLE));")
 ---

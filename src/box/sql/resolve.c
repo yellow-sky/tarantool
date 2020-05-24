@@ -506,7 +506,7 @@ static int
 exprProbability(Expr * p)
 {
 	double r = -1.0;
-	if (p->op != TK_FLOAT)
+	if (!(p->op == TK_FLOAT || p->op == TK_DECIMAL))
 		return -1;
 	sqlAtoF(p->u.zToken, &r, sqlStrlen30(p->u.zToken));
 	assert(r >= 0.0);

@@ -13,7 +13,7 @@ test_run:cmd("setopt delimiter ''");
 
 ch = fiber.channel(1)
 
-_ = fiber.create(function () ch:put(box.execute('select WAITFOR(0.2)')) end)
+_ = fiber.create(function () ch:put(box.execute('select WAITFOR(2e-1)')) end)
 fiber.sleep(0.1)
 
 box.func.WAITFOR:drop()

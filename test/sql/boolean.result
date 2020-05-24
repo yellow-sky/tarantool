@@ -4514,83 +4514,83 @@ SELECT a2, c, c % a2 FROM t6, t8;
 SELECT true > 2.3;
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT false > 2.3;
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT true < 2.3;
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT false < 2.3;
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT 2.3 > true;
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT 2.3 > false;
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT 2.3 < true;
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT 2.3 < false;
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 
 SELECT a1, a1 > 2.3 FROM t6
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT a1, a1 < 2.3 FROM t6
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT a1, 2.3 > a1 FROM t6
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT a1, 2.3 < a1 FROM t6
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT a2, a2 > 2.3 FROM t6
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT a2, a2 < 2.3 FROM t6
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT a2, 2.3 > a2 FROM t6
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT a2, 2.3 < a2 FROM t6
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 
 SELECT c, true > c FROM t8;
@@ -4678,83 +4678,83 @@ SELECT a2, c, c < a2 FROM t6, t8;
 SELECT true >= 2.3;
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT false >= 2.3;
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT true <= 2.3;
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT false <= 2.3;
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT 2.3 >= true;
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT 2.3 >= false;
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT 2.3 <= true;
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT 2.3 <= false;
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 
 SELECT a1, a1 >= 2.3 FROM t6
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT a1, a1 <= 2.3 FROM t6
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT a1, 2.3 >= a1 FROM t6
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT a1, 2.3 <= a1 FROM t6
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT a2, a2 >= 2.3 FROM t6
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT a2, a2 <= 2.3 FROM t6
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT a2, 2.3 >= a2 FROM t6
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT a2, 2.3 <= a2 FROM t6
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 
 SELECT c, true >= c FROM t8;
@@ -4842,83 +4842,83 @@ SELECT a2, c, c <= a2 FROM t6, t8;
 SELECT true == 2.3;
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT false == 2.3;
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT true != 2.3;
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT false != 2.3;
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT 2.3 == true;
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT 2.3 == false;
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT 2.3 != true;
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT 2.3 != false;
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 
 SELECT a1, a1 == 2.3 FROM t6
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT a1, a1 != 2.3 FROM t6
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT a1, 2.3 == a1 FROM t6
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT a1, 2.3 != a1 FROM t6
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT a2, a2 == 2.3 FROM t6
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT a2, a2 != 2.3 FROM t6
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT a2, 2.3 == a2 FROM t6
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT a2, 2.3 != a2 FROM t6
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 
 SELECT c, true == c FROM t8;
@@ -5059,22 +5059,22 @@ SELECT a2 IN (SELECT c FROM t8) FROM t6 LIMIT 1;
 SELECT true BETWEEN 0.1 and 9.9;
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT false BETWEEN 0.1 and 9.9;
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT a1, a1 BETWEEN 0.1 and 9.9 FROM t6;
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 SELECT a2, a2 BETWEEN 0.1 and 9.9 FROM t6;
  | ---
  | - null
- | - 'Type mismatch: can not convert real to boolean'
+ | - 'Type mismatch: can not convert decimal to boolean'
  | ...
 
 -- Check interaction of BOOLEAN and TEXT.

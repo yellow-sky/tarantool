@@ -985,6 +985,9 @@ idlist(A) ::= nm(Y). {
       case TK_FLOAT:
         p->type = FIELD_TYPE_DOUBLE;
         break;
+      case TK_DECIMAL:
+        p->type = FIELD_TYPE_DECIMAL;
+        break;
       case TK_TRUE:
       case TK_FALSE:
       case TK_UNKNOWN:
@@ -1062,6 +1065,7 @@ term(A) ::= STRING(X).     {spanExpr(&A,pParse,@X,X);/*A-overwrites-X*/}
 term(A) ::= FALSE(X) . {spanExpr(&A,pParse,@X,X);/*A-overwrites-X*/}
 term(A) ::= TRUE(X) . {spanExpr(&A,pParse,@X,X);/*A-overwrites-X*/}
 term(A) ::= UNKNOWN(X) . {spanExpr(&A,pParse,@X,X);/*A-overwrites-X*/}
+term(A) ::= DECIMAL(X) . {spanExpr(&A,pParse,@X,X);/*A-overwrites-X*/}
 
 term(A) ::= INTEGER(X). {
   A.pExpr = sql_expr_new_dequoted(pParse->db, TK_INTEGER, &X);
@@ -1834,6 +1838,7 @@ number_typedef(A) ::= NUMBER . { A.type = FIELD_TYPE_NUMBER; }
 number_typedef(A) ::= DOUBLE . { A.type = FIELD_TYPE_DOUBLE; }
 number_typedef(A) ::= INT|INTEGER_KW . { A.type = FIELD_TYPE_INTEGER; }
 number_typedef(A) ::= UNSIGNED . { A.type = FIELD_TYPE_UNSIGNED; }
+number_typedef(A) ::= DECIMAL . { A.type = FIELD_TYPE_DECIMAL; }
 
 /**
  * NUMERIC type is temporary disabled. To be enabled when

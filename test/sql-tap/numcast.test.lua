@@ -1,5 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
+decimal = require("decimal")
 test:plan(31)
 
 --!./tcltestrunner.lua
@@ -73,7 +74,7 @@ end
 test:do_execsql_test(
     "cast-2.1",
     [[
-        SELECT CAST((9223372036854775297.01) AS INTEGER);
+        SELECT CAST((922337203685477529701e-2) AS INTEGER);
     ]], {
         9223372036854775808ULL
     })
@@ -81,7 +82,7 @@ test:do_execsql_test(
 test:do_execsql_test(
     "cast-2.2",
     [[
-        SELECT CAST((18000000000000000000.) AS INTEGER);
+        SELECT CAST((18000000000000000000e0) AS INTEGER);
     ]], {
         18000000000000000000ULL
     })
@@ -89,7 +90,7 @@ test:do_execsql_test(
 test:do_execsql_test(
     "cast-2.3",
     [[
-        SELECT CAST((9223372036854775297.01) AS UNSIGNED);
+        SELECT CAST((922337203685477529701e-2) AS UNSIGNED);
     ]], {
         9223372036854775808ULL
     })
@@ -97,7 +98,7 @@ test:do_execsql_test(
 test:do_execsql_test(
     "cast-2.4",
     [[
-        SELECT CAST((18000000000000000000.) AS UNSIGNED);
+        SELECT CAST((18000000000000000000e0) AS UNSIGNED);
     ]], {
         18000000000000000000ULL
     })
@@ -105,7 +106,7 @@ test:do_execsql_test(
 test:do_catchsql_test(
     "cast-2.5",
     [[
-        SELECT CAST((20000000000000000000.) AS UNSIGNED);
+        SELECT CAST((20000000000000000000e0) AS UNSIGNED);
     ]], {
         1,"Type mismatch: can not convert 2.0e+19 to unsigned"
     })
@@ -114,7 +115,7 @@ test:do_execsql_test(
     "cast-2.6",
     [[
         CREATE TABLE t (i INTEGER PRIMARY KEY);
-        INSERT INTO t VALUES(9223372036854775297.01);
+        INSERT INTO t VALUES(922337203685477529701e-2);
         SELECT * FROM t;
     ]], {
         9223372036854775808ULL
@@ -123,7 +124,7 @@ test:do_execsql_test(
 test:do_execsql_test(
     "cast-2.7",
     [[
-        INSERT INTO t VALUES(18000000000000000000.01);
+        INSERT INTO t VALUES(1800000000000000000001e-2);
         SELECT * FROM t;
     ]], {
         9223372036854775808ULL,18000000000000000000ULL
@@ -132,7 +133,7 @@ test:do_execsql_test(
 test:do_catchsql_test(
     "cast-2.8",
     [[
-        INSERT INTO t VALUES(20000000000000000000.01);
+        INSERT INTO t VALUES(2000000000000000000001e-2);
         SELECT * FROM t;
     ]], {
         1,"Tuple field 1 type does not match one required by operation: expected integer"
@@ -164,7 +165,7 @@ test:do_execsql_test(
     [[
         SELECT CAST(x'31313131313131313131313131313131313131312E' AS NUMBER);
     ]], {
-        11111111111111110656
+        11111111111111111111ULL
     })
 
 test:do_execsql_test(
@@ -218,13 +219,14 @@ test:do_execsql_test(
         0,1.38,1,1.62
 })
 
+local div_res = decimal.new(1) / 3
 
 test:do_execsql_test(
     "numcast-3.8",
     [[
         SELECT (1 + 0) / 3, (1 + 0.) / 3, (1 + 0) / 3.;
     ]], {
-        0, 0.33333333333333, 0.33333333333333
+        0, div_res, div_res
 })
 
 test:do_execsql_test(
@@ -232,7 +234,7 @@ test:do_execsql_test(
     [[
         SELECT (1 - 0) / 3, (1 - 0.) / 3, (1 - 0) / 3.;
     ]], {
-        0, 0.33333333333333, 0.33333333333333
+        0, div_res, div_res
 })
 
 test:do_execsql_test(
@@ -240,7 +242,7 @@ test:do_execsql_test(
     [[
         SELECT (1 * 1) / 3, (1 * 1.) / 3, (1 * 1) / 3.;
     ]], {
-        0, 0.33333333333333, 0.33333333333333
+        0, div_res, div_res
 })
 
 test:do_execsql_test(
@@ -248,7 +250,7 @@ test:do_execsql_test(
     [[
         SELECT (1 / 1) / 3, (1 / 1.) / 3, (1 / 1) / 3.;
     ]], {
-        0 , 0.33333333333333, 0.33333333333333
+        0 , div_res, div_res
 })
 
 test:finish_test()

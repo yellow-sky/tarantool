@@ -87,7 +87,7 @@ box.execute('SELECT 1.5;')
 ---
 - metadata:
   - name: '1.5'
-    type: double
+    type: decimal
   rows:
   - [1.5]
 ...
@@ -95,9 +95,9 @@ box.execute('SELECT 1.0;')
 ---
 - metadata:
   - name: '1.0'
-    type: double
+    type: decimal
   rows:
-  - [1]
+  - [1.0]
 ...
 box.execute('SELECT \'abc\';')
 ---

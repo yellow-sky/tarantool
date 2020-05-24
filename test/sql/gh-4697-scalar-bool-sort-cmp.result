@@ -36,7 +36,7 @@ SELECT s2, typeof(s2) FROM test ORDER BY s2;
  |   - [null, 'boolean']
  |   - [true, 'boolean']
  |   - [1, 'integer']
- |   - [1.1, 'double']
+ |   - [1.1, 'decimal']
  | ...
 SELECT s3, typeof(s3) FROM test ORDER BY s3;
  | ---
@@ -49,5 +49,5 @@ SELECT s3, typeof(s3) FROM test ORDER BY s3;
  |   - [null, 'boolean']
  |   - [true, 'boolean']
  |   - [1, 'integer']
- |   - [1.1, 'double']
+ |   - [1.1, 'decimal']
  | ...

@@ -2,6 +2,7 @@ local tap = require('tap')
 local json = require('json')
 local test = tap.test("errno")
 local sql_tokenizer = require('sql_tokenizer')
+local decimal = require('decimal')
 
 -- pcall here, because we allow to run a test w/o test-run; use:
 -- LUA_PATH='test/sql-tap/lua/?.lua;test/sql/lua/?.lua;;' \
@@ -77,6 +78,13 @@ local function is_deeply_regex(got, expected)
             return true -- nan
         end
     end
+    if decimal.is_decimal(got) and decimal.is_decimal(expected) then
+        return got == expected
+    elseif decimal.is_decimal(got) then
+        return got == decimal.new(expected)
+    elseif decimal.is_decimal(expected) then
+        return decimal.new(got) == expected
+    end
     if type(expected) == "number" and type(got) == "number" then
         if got == expected then
             return true
@@ -84,7 +92,6 @@ local function is_deeply_regex(got, expected)
         local min_delta = 0.000000001 * math.abs(got)
         return (got - expected < min_delta) and (expected - got < min_delta)
     end
-
     if string_regex_p(expected) then
         return table_match_regex_p(got, expected)
     end

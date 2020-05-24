@@ -39,6 +39,7 @@
 #ifndef SQL_VDBE_H
 #define SQL_VDBE_H
 #include <stdio.h>
+#include "decimal.h"
 
 /*
  * A single VDBE is an opaque structure named "Vdbe".  Only routines
@@ -72,6 +73,7 @@ struct VdbeOp {
 		char *z;	/* Pointer to data for string (char array) types */
 		i64 *pI64;	/* Used when p4type is P4_INT64/UINT64 */
 		double *pReal;	/* Used when p4type is P4_REAL */
+		decimal_t d;	/* Used when p4type is P4_DECIMAL */
 		/**
 		 * A pointer to function implementation.
 		 * Used when p4type is P4_FUNC.
@@ -128,6 +130,7 @@ struct SubProgram {
 #define P4_COLLSEQ  (-3)	/* P4 is a pointer to a CollSeq structure */
 /** P4 is a pointer to a func structure. */
 #define P4_FUNC     (-4)
+#define P4_DECIMAL  (-5)	/* P4 is a decimal number */
 #define P4_MEM      (-7)	/* P4 is a pointer to a Mem*    structure */
 #define P4_TRANSIENT  0		/* P4 is a pointer to a transient string */
 #define P4_REAL     (-9)	/* P4 is a 64-bit floating point value */

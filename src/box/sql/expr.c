@@ -39,6 +39,7 @@
 #include "tarantoolInt.h"
 #include "box/schema.h"
 #include "box/session.h"
+#include "decimal.h"
 
 /* Forward declarations */
 static void exprCodeBetween(Parse *, Expr *, int,
@@ -3305,6 +3306,33 @@ codeReal(Vdbe * v, const char *z, int negateFlag, int iMem)
 }
 
 /**
+ * Generate an instruction that will put the decimal number
+ * described by text z[0..n-1] into register iMem.
+ *
+ * @param parse Parsing context.
+ * @param expr Expression being parsed. Expr.u.zToken is always
+ *             UTF8 and zero-terminated.
+ * @param negateFlag True if value is negative.
+ * @param mem Register to store parsed integer
+ */
+static void
+codeDecimal(struct Parse *parse, const char *z, int negateFlag, int iMem)
+{
+	decimal_t decvalue;
+	if (decimal_from_string(&decvalue, z) == NULL) {
+		diag_set(ClientError, ER_SQL_PARSER_GENERIC, "decimal "\
+			 "overflow");
+		parse->is_aborted = true;
+		return;
+	}
+	if (negateFlag)
+		decvalue.bits |= DECNEG;
+	sqlVdbeAddOp4(parse->pVdbe, OP_Decimal, 0, iMem, 0, (char *) &decvalue,
+		      P4_DECIMAL);
+	return;
+}
+
+/**
  * Generate an instruction that will put the integer describe by
  * text z[0..n-1] into register iMem.
  *
@@ -3750,6 +3778,11 @@ sqlExprCodeTarget(Parse * pParse, Expr * pExpr, int target)
 			codeReal(v, pExpr->u.zToken, 0, target);
 			return target;
 		}
+	case TK_DECIMAL:{
+			assert(!ExprHasProperty(pExpr, EP_IntValue));
+			codeDecimal(pParse, pExpr->u.zToken, false, target);
+			return target;
+	}
 	case TK_STRING:{
 			assert(!ExprHasProperty(pExpr, EP_IntValue));
 			sqlVdbeLoadString(v, target, pExpr->u.zToken);
@@ -3903,6 +3936,11 @@ sqlExprCodeTarget(Parse * pParse, Expr * pExpr, int target)
 			} else if (pLeft->op == TK_FLOAT) {
 				assert(!ExprHasProperty(pExpr, EP_IntValue));
 				codeReal(v, pLeft->u.zToken, 1, target);
+				return target;
+			} else if (pLeft->op == TK_DECIMAL) {
+				assert(!ExprHasProperty(pExpr, EP_IntValue));
+				codeDecimal(pParse, pLeft->u.zToken, true,
+					    target);
 				return target;
 			} else {
 				tempX.op = TK_INTEGER;

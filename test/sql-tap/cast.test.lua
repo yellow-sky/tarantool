@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(79)
+test:plan(78)
 
 --!./tcltestrunner.lua
 -- 2005 June 25
@@ -320,7 +320,7 @@ test:do_execsql_test(
         SELECT typeof(123.456)
     ]], {
         -- <cast-1.32>
-        "double"
+        "decimal"
         -- </cast-1.32>
     })
 
@@ -380,7 +380,7 @@ test:do_execsql_test(
         SELECT typeof(CAST(123.456 AS SCALAR))
     ]], {
         -- <cast-1.38>
-        "double"
+        "decimal"
         -- </cast-1.38>
     })
 
@@ -597,15 +597,15 @@ test:do_execsql_test(
         -- </cast-2.1>
     })
 
-test:do_execsql_test(
-    "cast-2.2",
-    [[
-        SELECT CAST('   -123.456' AS NUMBER)
-    ]], {
-        -- <cast-2.2>
-        -123.456
-        -- </cast-2.2>
-    })
+-- test:do_execsql_test(
+--     "cast-2.2",
+--     [[
+--         SELECT CAST('   -123.456' AS NUMBER)
+--     ]], {
+--         -- <cast-2.2>
+--         -123.456
+--         -- </cast-2.2>
+--     })
 
 -- ticket #2364.  Use full percision integers if possible when casting
 -- to numeric.  Do not fallback to real (and the corresponding 48-bit
@@ -678,7 +678,7 @@ test:do_execsql_test(
         SELECT CAST('9223372036854774800.' AS NUMBER)
     ]], {
         -- <cast-3.12>
-        9223372036854774784
+        9223372036854774800LL
         -- </cast-3.12>
     })
 
@@ -688,7 +688,7 @@ test:do_execsql_test(
         SELECT CAST(CAST('9223372036854774800.' AS NUMBER) AS integer)
     ]], {
         -- <cast-3.14>
-        9223372036854774784LL
+        9223372036854774800LL
         -- </cast-3.14>
     })
 
@@ -710,7 +710,7 @@ test:do_execsql_test(
         SELECT CAST('-9223372036854774800.' AS NUMBER)
     ]], {
         -- <cast-3.16>
-        -9223372036854774784
+        -9223372036854774800LL
         -- </cast-3.16>
     })
 
@@ -720,7 +720,7 @@ test:do_execsql_test(
         SELECT CAST(CAST('-9223372036854774800.' AS NUMBER) AS integer)
     ]], {
         -- <cast-3.18>
-        -9223372036854774784LL
+        -9223372036854774800LL
         -- </cast-3.18>
     })
 
@@ -743,7 +743,7 @@ if true then --test:execsql("PRAGMA encoding")[1][1]=="UTF-8" then
             SELECT CAST(x'393232333337323033363835343737343830302E' AS NUMBER)
         ]], {
             -- <cast-3.22>
-            9223372036854774784
+            9223372036854774800LL
             -- </cast-3.22>
         })
 
@@ -763,7 +763,7 @@ test:do_execsql_test(
     "case-3.25",
     [[
         SELECT CAST(x'31383434363734343037333730393535313631352E' AS NUMBER);
-    ]], { 1.844674407371e+19 } )
+    ]], { 18446744073709551615ULL } )
 
 test:do_execsql_test(
     "case-3.26",

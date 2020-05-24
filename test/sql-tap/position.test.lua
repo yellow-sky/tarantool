@@ -238,7 +238,7 @@ test:do_test(
         return test:catchsql "SELECT position(34, 123456.78);"
     end, {
         -- <position-1.24>
-        1, "Inconsistent types: expected text or varbinary got real"
+        1, "Inconsistent types: expected text or varbinary got decimal"
         -- </position-1.24>
     })
 
@@ -248,7 +248,7 @@ test:do_test(
         return test:catchsql "SELECT position(x'3334', 123456.78);"
     end, {
         -- <position-1.25>
-        1, "Inconsistent types: expected text or varbinary got real"
+        1, "Inconsistent types: expected text or varbinary got decimal"
         -- </position-1.25>
     })
 

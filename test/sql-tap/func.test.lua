@@ -518,7 +518,7 @@ test:do_execsql_test(
         SELECT typeof(round(5.1,1));
     ]], {
         -- <func-4.14>
-        "double"
+        "decimal"
         -- </func-4.14>
     })
 
@@ -528,7 +528,7 @@ test:do_execsql_test(
         SELECT typeof(round(5.1));
     ]], {
         -- <func-4.15>
-        "double"
+        "decimal"
         -- </func-4.15>
     })
 
@@ -2961,7 +2961,7 @@ test:do_execsql_test("func-77.1", "SELECT TOSTRING('1');", {'1'})
 test:do_execsql_test("func-77.2", "SELECT TOSTRING('a');", {'a'})
 test:do_catchsql_test("func-77.3", "SELECT TOSTRING(1);", {1, "Function 'TOSTRING' returned value of invalid type: expected string got unsigned"})
 test:do_catchsql_test("func-77.4", "SELECT TOSTRING(-1);", {1, "Function 'TOSTRING' returned value of invalid type: expected string got integer"})
-test:do_catchsql_test("func-77.5", "SELECT TOSTRING(-1.1);", {1, "Function 'TOSTRING' returned value of invalid type: expected string got double"})
+test:do_catchsql_test("func-77.5", "SELECT TOSTRING(-1.1);", {1, "Function 'TOSTRING' returned value of invalid type: expected string got decimal"})
 test:do_catchsql_test("func-77.6", "SELECT TOSTRING(TRUE);", {1, "Function 'TOSTRING' returned value of invalid type: expected string got boolean"})
 test:do_execsql_test("func-77.7", "SELECT TOSTRING(NULL);", {""})
 test:do_execsql_test("func-77.8", "SELECT TOSTRING(LUA('return nil'));", {""})
@@ -2981,7 +2981,7 @@ test:do_catchsql_test("func-78.1", "SELECT TOUNSIGNED('1');", {1, "Function 'TOU
 test:do_catchsql_test("func-78.2", "SELECT TOUNSIGNED('a');", {1, "Function 'TOUNSIGNED' returned value of invalid type: expected unsigned got string"})
 test:do_execsql_test("func-78.3", "SELECT TOUNSIGNED(1);", {1})
 test:do_catchsql_test("func-78.4", "SELECT TOUNSIGNED(-1);", {1, "Function 'TOUNSIGNED' returned value of invalid type: expected unsigned got integer"})
-test:do_catchsql_test("func-78.5", "SELECT TOUNSIGNED(-1.1);", {1, "Function 'TOUNSIGNED' returned value of invalid type: expected unsigned got double"})
+test:do_catchsql_test("func-78.5", "SELECT TOUNSIGNED(-1.1);", {1, "Function 'TOUNSIGNED' returned value of invalid type: expected unsigned got decimal"})
 test:do_catchsql_test("func-78.6", "SELECT TOUNSIGNED(TRUE);", {1, "Function 'TOUNSIGNED' returned value of invalid type: expected unsigned got boolean"})
 test:do_execsql_test("func-78.7", "SELECT TOUNSIGNED(NULL);", {""})
 test:do_execsql_test("func-78.8", "SELECT TOUNSIGNED(LUA('return nil'));", {""})
@@ -3001,7 +3001,7 @@ test:do_catchsql_test("func-79.1", "SELECT TOINTEGER('1');", {1, "Function 'TOIN
 test:do_catchsql_test("func-79.2", "SELECT TOINTEGER('a');", {1, "Function 'TOINTEGER' returned value of invalid type: expected integer got string"})
 test:do_execsql_test("func-79.3", "SELECT TOINTEGER(1);", {1})
 test:do_execsql_test("func-79.4", "SELECT TOINTEGER(-1);", {-1})
-test:do_catchsql_test("func-79.5", "SELECT TOINTEGER(-1.1);", {1, "Function 'TOINTEGER' returned value of invalid type: expected integer got double"})
+test:do_catchsql_test("func-79.5", "SELECT TOINTEGER(-1.1);", {1, "Function 'TOINTEGER' returned value of invalid type: expected integer got decimal"})
 test:do_catchsql_test("func-79.6", "SELECT TOINTEGER(TRUE);", {1, "Function 'TOINTEGER' returned value of invalid type: expected integer got boolean"})
 test:do_execsql_test("func-79.7", "SELECT TOINTEGER(NULL);", {""})
 test:do_execsql_test("func-79.8", "SELECT TOINTEGER(LUA('return nil'));", {""})
@@ -3041,7 +3041,7 @@ test:do_catchsql_test("func-81.1", "SELECT TOBOOLEAN('1');", {1, "Function 'TOBO
 test:do_catchsql_test("func-81.2", "SELECT TOBOOLEAN('a');", {1, "Function 'TOBOOLEAN' returned value of invalid type: expected boolean got string"})
 test:do_catchsql_test("func-81.3", "SELECT TOBOOLEAN(1);", {1, "Function 'TOBOOLEAN' returned value of invalid type: expected boolean got unsigned"})
 test:do_catchsql_test("func-81.4", "SELECT TOBOOLEAN(-1);", {1, "Function 'TOBOOLEAN' returned value of invalid type: expected boolean got integer"})
-test:do_catchsql_test("func-81.5", "SELECT TOBOOLEAN(-1.1);", {1, "Function 'TOBOOLEAN' returned value of invalid type: expected boolean got double"})
+test:do_catchsql_test("func-81.5", "SELECT TOBOOLEAN(-1.1);", {1, "Function 'TOBOOLEAN' returned value of invalid type: expected boolean got decimal"})
 test:do_execsql_test("func-81.6", "SELECT TOBOOLEAN(TRUE);", {true})
 test:do_execsql_test("func-81.7", "SELECT TOBOOLEAN(NULL);", {""})
 test:do_execsql_test("func-81.8", "SELECT TOBOOLEAN(LUA('return nil'));", {""})

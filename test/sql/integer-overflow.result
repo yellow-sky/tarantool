@@ -117,7 +117,7 @@ box.execute('SELECT CAST(\'18446744073709551616\' AS INTEGER);')
 box.execute('SELECT CAST(18446744073709551600. AS INTEGER);')
 ---
 - null
-- 'Type mismatch: can not convert 1.84467440737096e+19 to integer'
+- 'Type mismatch: can not convert 18446744073709551600 to integer'
 ...
 -- gh-3810: make sure that if space contains integers in range
 -- [INT64_MAX, UINT64_MAX], they are handled inside SQL in a

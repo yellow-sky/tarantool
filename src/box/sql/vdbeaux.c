@@ -744,6 +744,11 @@ sqlVdbeChangeP4(Vdbe * p, int addr, const char *zP4, int n)
 		vdbeChangeP4Full(p, pOp, zP4, n);
 		return;
 	}
+	if (n == P4_DECIMAL) {
+		pOp->p4.d = *(decimal_t *) zP4;
+		pOp->p4type = P4_DECIMAL;
+		return;
+	}
 	if (n == P4_INT32) {
 		/* Note: this cast is safe, because the origin data point was an int
 		 * that was cast to a (const char *).
@@ -1091,6 +1096,10 @@ displayP4(Op * pOp, char *zTemp, int nTemp)
 	case P4_BOOL:
 			sqlXPrintf(&x, "%d", pOp->p4.b);
 			break;
+	case P4_DECIMAL:
+			sqlXPrintf(&x, "%s",
+				   decimal_to_string(&pOp->p4.d));
+			break;
 	case P4_INT64:{
 			sqlXPrintf(&x, "%lld", *pOp->p4.pI64);
 			break;
@@ -1117,6 +1126,9 @@ displayP4(Op * pOp, char *zTemp, int nTemp)
 				sqlXPrintf(&x, "%llu", pMem->u.u);
 			} else if (pMem->flags & MEM_Real) {
 				sqlXPrintf(&x, "%.16g", pMem->u.r);
+			} else if (pMem->flags & MEM_Decimal) {
+				sqlXPrintf(&x, "%s",
+					   decimal_to_string(&pMem->u.d));
 			} else if (pMem->flags & MEM_Null) {
 				zP4 = "NULL";
 			} else {
