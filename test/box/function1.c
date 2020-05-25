@@ -4,6 +4,9 @@
 #include <stdio.h>
 #include <msgpuck.h>
 
+/** Should be resolved to local symbol, from function1dep.c. */
+extern int log_level;
+
 int
 function1(box_function_ctx_t *ctx, const char *args, const char *args_end)
 {
@@ -288,4 +291,15 @@ test_return_mp(box_function_ctx_t *ctx, const char *args, const char *args_end)
 		return -1;
 	rc = box_return_tuple(ctx, tuple);
 	return rc;
+}
+
+int
+test_local_symbol(box_function_ctx_t *ctx, const char *args,
+		  const char *args_end)
+{
+	(void)args;
+	(void)args_end;
+	char buf[16];
+	char *end = mp_encode_uint(buf, log_level);
+	return box_return_mp(ctx, buf, end);
 }

@@ -273,7 +273,15 @@ module_load(const char *package, const char *package_end)
 		diag_set(SystemError, "failed to create dso link");
 		goto error;
 	}
-	module->handle = dlopen(load_name, RTLD_NOW | RTLD_LOCAL);
+	int flags = RTLD_NOW | RTLD_LOCAL;
+#if !ENABLE_ASAN && defined(RTLD_DEEPBIND)
+	/*
+	 * ASAN can't work with DEEPBIND flag:
+	 * https://github.com/google/sanitizers/issues/611
+	 */
+	flags |= RTLD_DEEPBIND;
+#endif
+	module->handle = dlopen(load_name, flags);
 	if (unlink(load_name) != 0)
 		say_warn("failed to unlink dso link %s", load_name);
 	if (rmdir(dir_name) != 0)
