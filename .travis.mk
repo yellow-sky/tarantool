@@ -89,41 +89,46 @@ test_debian_clang8: deps_debian deps_buster_clang_8 test_debian_no_deps
 
 # Integration testing
 
-test_connector_python_asynctnt: build_debian
+install_tarantool:
 	make install
+
+test_connector_python_asynctnt: build_debian install_tarantool
+	# using latest released python-asynctnt connector: v1.2 
 	apt-get install -y python3-pip python3-dev pandoc python3-setuptools
-	git clone --depth=1  --recurse-submodules https://github.com/igorcoding/asynctnt.git asynctnt-python
+	git clone --depth=1 --recurse-submodules https://github.com/igorcoding/asynctnt.git --branch=v1.2 asynctnt-python
 	cd asynctnt-python && pip3 install -r requirements.txt && export PYTHON=python3 \
 		&& make && pip3 install -e . && make quicktest
 
-test_connector_python_tarantool: build_debian
-	make install
-	git clone --depth=1 https://github.com/tarantool/tarantool-python.git tarantool-python
+test_connector_python_tarantool: build_debian install_tarantool
+	# using latest released python-tarantool connector: 0.6.6
+	git clone --depth=1 --recurse-submodules https://github.com/tarantool/tarantool-python.git --branch=0.6.6 tarantool-python
 	cd tarantool-python && pip install -r requirements.txt && python setup.py install \
 		&& python setup.py test
 
-test_connector_go_tarantool: build_debian
-	make install
+test_connector_go_tarantool: build_debian install_tarantool
+	# using latest released go-tarantool connector: v1.5
 	wget --progress=dot:mega https://dl.google.com/go/go1.10.linux-amd64.tar.gz
 	tar -C /usr/local -xzf go1.10.linux-amd64.tar.gz
 	chmod -R a+rwx /usr/local/go
 	export PATH=/usr/local/go/bin:$$PATH && export GOPATH=/usr/local/go/go-tarantool \
 		&& go get github.com/tarantool/go-tarantool \
 		&& cd /usr/local/go/go-tarantool/src/github.com/tarantool/go-tarantool \
+		&& git checkout tags/v1.5 \
 		&& mkdir snap xlog && (tarantool config.lua &) && go test -v .
 
-test_connector_go_viciious: build_debian
-	make install
+test_connector_go_viciious: build_debian install_tarantool
+	# using latest released go-viciious connector: v1.0
 	wget --progress=dot:mega https://dl.google.com/go/go1.10.linux-amd64.tar.gz
 	tar -C /usr/local -xzf go1.10.linux-amd64.tar.gz
 	chmod -R a+rwx /usr/local/go 
 	export PATH=/usr/local/go/bin:$$PATH && export GOPATH=/usr/local/go/go-tarantool \
 		&& export GOBIN=$$GOPATH/bin && go get github.com/viciious/go-tarantool \
 		&& cd /usr/local/go/go-tarantool/src/github.com/viciious/go-tarantool \
+		&& git checkout tags/v1.0 \
 		&& mkdir log && export TNT_LOG_DIR=`pwd`/log && go test -v .
 
-test_connector_php_tarantool: build_debian
-	make install
+test_connector_php_tarantool: build_debian install_tarantool
+	# using latest php-tarantool connector from branch: branch=php7-v2
 	apt-get update && apt-get install -y lsb-release
 	wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
 	echo "deb https://packages.sury.org/php/ $$(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list
@@ -134,10 +139,10 @@ test_connector_php_tarantool: build_debian
 	cd tarantool-php && phpize && ./configure \
 		&& make && make install && /usr/bin/python test-run.py
 
-test_connector_java_tarantool: build_debian
-	make install
+test_connector_java_tarantool: build_debian install_tarantool
+	# using latest released java-tarantool connector: connector-1.9.4
 	apt-get update && apt-get install -y openjdk-8-jre openjdk-8-jdk
-	git clone --depth=1 https://github.com/tarantool/tarantool-java.git tarantool-java
+	git clone --depth=1 https://github.com/tarantool/tarantool-java.git --branch=connector-1.9.4 tarantool-java
 	cd tarantool-java && ./mvnw clean test && ./mvnw clean verify
 
 # Debug with coverage
