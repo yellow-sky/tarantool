@@ -584,7 +584,7 @@ i2:select{2}
 ...
 i2:select{1, 5}
 ---
-- error: Invalid key part count (expected [0..1], got 2)
+- - [5, 1, null, 1]
 ...
 i3:select{box.NULL}
 ---
@@ -615,7 +615,7 @@ i2:select{2}
 ...
 i2:select{1, 1}
 ---
-- error: Invalid key part count (expected [0..1], got 2)
+- - [5, 1, null, 1]
 ...
 i3:select{box.NULL}
 ---

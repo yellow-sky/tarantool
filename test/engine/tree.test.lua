@@ -575,6 +575,50 @@ s:select{}
 
 s:drop()
 
+-- https://github.com/tarantool/tarantool/issues/3898
+-- primary parst in non-unique secondary
+test_run:cmd("setopt delimiter ';'")
+function get_pairs(index, key, opts)
+    local result = {}
+    local limit = opts and opts.limit or 100500
+    for _,v in index:pairs(key, opts) do
+        table.insert(result, v)
+        limit = limit - 1
+        if limit == 0 then
+            return result
+        end
+    end
+    return result
+end;
+test_run:cmd("setopt delimiter ''");
+
+s = box.schema.space.create('test', { engine = engine })
+i1 = s:create_index('primary', {parts={1, 'unsigned'}})
+i2 = s:create_index('secondary', {parts={2, 'unsigned'},unique=false})
+order = {1, 5, 2, 4, 3}
+for i = 1,5 do for j = 1,5 do s:replace{i * 5 + j - 5, order[j]} end end
+i2:select{3}
+get_pairs(i2, {3})
+i2:select{3, 15}
+get_pairs(i2, {3, 15})
+i2:select({3, 15}, {iterator='GE', limit=3})
+get_pairs(i2, {3, 15}, {iterator='GE', limit=3})
+order = nil
+s:drop()
+
+s = box.schema.space.create('test', { engine = engine })
+i1 = s:create_index('primary', {parts={{1, 'unsigned'}, {2, 'unsigned'}}})
+i2 = s:create_index('secondary', {parts={{1, 'unsigned'}, {3, 'unsigned'}}, unique=false})
+s:replace{1, 1, 2}
+s:replace{1, 2, 2}
+s:replace{1, 3, 1}
+s:replace{1, 4, 3}
+i2:select{1, 2}
+get_pairs(i2, {1, 2})
+i2:select{1, 2, 2}
+get_pairs(i2, {1, 2, 2})
+s:drop()
+
 -------------------------------------------------------------------------------
 -- Cleanup
 -------------------------------------------------------------------------------

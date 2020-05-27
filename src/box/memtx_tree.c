@@ -257,7 +257,7 @@ tree_iterator_next_equal(struct iterator *iterator, struct tuple **ret)
 				   it->key_data.key,
 				   it->key_data.part_count,
 				   it->key_data.hint,
-				   index->base.def->key_def) != 0) {
+				   memtx_tree_cmp_def(&index->tree)) != 0) {
 		iterator->next = tree_iterator_dummie;
 		it->current.tuple = NULL;
 		*ret = NULL;
@@ -292,7 +292,7 @@ tree_iterator_prev_equal(struct iterator *iterator, struct tuple **ret)
 				   it->key_data.key,
 				   it->key_data.part_count,
 				   it->key_data.hint,
-				   index->base.def->key_def) != 0) {
+				   memtx_tree_cmp_def(&index->tree)) != 0) {
 		iterator->next = tree_iterator_dummie;
 		it->current.tuple = NULL;
 		*ret = NULL;

@@ -112,7 +112,7 @@ key_validate(const struct index_def *index_def, enum iterator_type type,
 			}
 		}
 	} else {
-		if (part_count > index_def->key_def->part_count) {
+		if (part_count > index_def->cmp_def->unique_part_count) {
 			diag_set(ClientError, ER_KEY_PART_COUNT,
 				 index_def->key_def->part_count, part_count);
 			return -1;

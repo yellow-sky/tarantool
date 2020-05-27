@@ -240,7 +240,14 @@ tuple_bloom_maybe_has_key(const struct tuple_bloom *bloom,
 				       key_hash(key, key_def));
 	}
 
-	assert(part_count <= key_def->part_count);
+	/*
+	 * For non-unique indexes it is allowed to provide primary parts
+	 * after last part of the secondary index.
+	 * That parts must not be used in bloom calculation.
+	 */
+	if (part_count > key_def->part_count)
+		part_count = key_def->part_count;
+
 	assert(bloom->part_count == key_def->part_count);
 
 	uint32_t h = HASH_SEED;
