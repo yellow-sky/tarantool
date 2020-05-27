@@ -498,12 +498,60 @@ port_lua_get_msgpack(struct port *base, uint32_t *size)
 	return data;
 }
 
+struct lua_state_recycle_record
+{
+	lua_State *L;
+	int ref;
+};
+
+struct
+{
+	struct lua_state_recycle_record *data;
+	size_t size;
+	size_t cap;
+} lua_state_recycle_data;
+
+static void
+lua_state_recycle_push(lua_State *L, int ref)
+{
+	if (lua_state_recycle_data.size == lua_state_recycle_data.cap)
+	{
+		size_t new_cap = lua_state_recycle_data.cap * 5 / 4 + 10;
+		struct lua_state_recycle_record *new_data =
+			realloc(lua_state_recycle_data.data, new_cap);
+		if (new_data == NULL) {
+			luaL_unref(tarantool_L, LUA_REGISTRYINDEX, ref);
+			return;
+		}
+		lua_state_recycle_data.data = new_data;
+		lua_state_recycle_data.cap = new_cap;
+	}
+	lua_settop(L, 0);
+	lua_state_recycle_data.data[lua_state_recycle_data.size].L = L;
+	lua_state_recycle_data.data[lua_state_recycle_data.size].ref = ref;
+	lua_state_recycle_data.size++;
+}
+
+static lua_State *
+lua_state_recycle_pop(int *ref)
+{
+	if (lua_state_recycle_data.size == 0)
+		return NULL;
+	lua_state_recycle_data.size--;
+	*ref = lua_state_recycle_data.data[lua_state_recycle_data.size].ref;
+	return lua_state_recycle_data.data[lua_state_recycle_data.size].L;
+}
+
 static void
 port_lua_destroy(struct port *base)
 {
 	struct port_lua *port = (struct port_lua *)base;
 	assert(port->vtab == &port_lua_vtab);
-	luaL_unref(tarantool_L, LUA_REGISTRYINDEX, port->ref);
+	if (port->recycle_state) {
+		lua_state_recycle_push(port->L, port->ref);
+	} else {
+		luaL_unref(tarantool_L, LUA_REGISTRYINDEX, port->ref);
+	}
 }
 
 /**
@@ -530,12 +578,17 @@ static inline int
 box_process_lua(lua_CFunction handler, struct execute_lua_ctx *ctx,
 		struct port *ret)
 {
-	lua_State *L = luaT_newthread(tarantool_L);
-	if (L == NULL)
-		return -1;
-	int coro_ref = luaL_ref(tarantool_L, LUA_REGISTRYINDEX);
+	int coro_ref;
+	lua_State *L = lua_state_recycle_pop(&coro_ref);
+	if (L == NULL) {
+		L = luaT_newthread(tarantool_L);
+		if (L == NULL)
+			return -1;
+		coro_ref = luaL_ref(tarantool_L, LUA_REGISTRYINDEX);
+	}
 	port_lua_create(ret, L);
 	((struct port_lua *) ret)->ref = coro_ref;
+	((struct port_lua *) ret)->recycle_state = true;
 
 	lua_pushcfunction(L, handler);
 	lua_pushlightuserdata(L, ctx);
