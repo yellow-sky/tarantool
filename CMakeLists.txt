@@ -322,7 +322,7 @@ endif()
 # OpenSSL
 #
 if(BUILD_STATIC)
-    set(OPENSSL_VERSION 1.1.1f)
+    set(OPENSSL_VERSION 1.1.0h)
     ExternalProject_Add(openssl
         URL https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz
         CONFIGURE_COMMAND <SOURCE_DIR>/config --libdir=lib --prefix=<INSTALL_DIR>
@@ -360,7 +360,7 @@ if(BUILD_STATIC)
     )
 
     add_dependencies(static-openssl openssl)
-    add_dependencies(build_bundled_libs static-openssl)
+    # add_dependencies(build_bundled_libs static-openssl)
 
 else()
     find_package(OpenSSL)
