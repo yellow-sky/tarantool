@@ -334,14 +334,9 @@ if(BUILD_STATIC)
     set(OPENSSL_INCLUDE_DIR ${install_dir}/include)
     set(OPENSSL_CRYPTO_LIBRARY ${install_dir}/lib/libcrypto.a)
     set(OPENSSL_SSL_LIBRARY ${install_dir}/lib/libssl.a)
-    set(OPENSSL_LIBRARIES
-        ${OPENSSL_SSL_LIBRARY}
-        ${OPENSSL_CRYPTO_LIBRARY}
-        ${CMAKE_DL_LIBS}
-    )
+    set(OPENSSL_LIBRARIES ${OPENSSL_SSL_LIBRARY} ${OPENSSL_CRYPTO_LIBRARY} ${CMAKE_DL_LIBS})
 
-
-    include_directories(${OPENSSL_INCLUDE_DIR})
+    # include_directories(${OPENSSL_INCLUDE_DIR})
     add_library(static-openssl STATIC IMPORTED GLOBAL)
     
     if(OPENSSL_USE_STATIC_LIBS)
@@ -360,8 +355,6 @@ if(BUILD_STATIC)
     )
 
     add_dependencies(static-openssl openssl)
-    # add_dependencies(build_bundled_libs static-openssl)
-
 else()
     find_package(OpenSSL)
     if (OPENSSL_FOUND)
