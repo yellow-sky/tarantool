@@ -138,17 +138,14 @@ as not enough space for WAL) that has to be resolved or an inconsistent
 state that requires rejoin.
 
 As soon as leader appears in a situation it has not enough replicas
-to achieve quorum, the cluster should stop accepting any requests - both
-write and read. The reason for this is that replication of transactions
-can achieve quorum on replicas not visible to the leader. On the other
-hand, leader can't achieve quorum with available minority. Leader has to
-report the state and wait for human intervention. There's an option to
-ask leader to rollback to the latest transaction that has quorum: leader
-issues a 'rollback' message referring to the [LEADER_ID, LSN] where LSN
-is of the first transaction in the leader's undo log. The rollback
-message replicated to the available cluster will put it in a consistent
-state. After that configuration of the cluster can be updated to
-available quorum and leader can be switched back to write mode.
+to achieve quorum, it should stop accepting write requests. There's an
+option for leader to rollback to the latest transaction that has quorum:
+leader issues a 'rollback' message referring to the [LEADER_ID, LSN]
+where LSN is of the first transaction in the leader's undo log. The
+rollback message replicated to the available cluster will put it in a
+consistent state. After that configuration of the cluster can be
+updated to a new available quorum and leader can be switched back to
+write mode.
 
 ### Leader role assignment.
 
@@ -272,7 +269,7 @@ corresponding Confirms to its WAL. Note that Tx are still uses ID1.
 +---------------------+---------------------+---------------------+
 | ID1 Tx5             | ID1 Tx5             | ID1 Tx5             |
 +---------------------+---------------------+---------------------+
-| ID1 Conf [ID1, Tx2] | ID2 Conf [Id1, Tx5] | ID2 Conf [Id1, Tx5] |
+| ID1 Conf [ID1, Tx2] | ID2 Conf [ID1, Tx5] | ID2 Conf [ID1, Tx5] |
 +---------------------+---------------------+---------------------+
 | ID1 Tx6             |                     |                     |
 +---------------------+---------------------+---------------------+
