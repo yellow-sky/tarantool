@@ -322,7 +322,7 @@ endif()
 # OpenSSL
 #
 if(BUILD_STATIC)
-    set(OPENSSL_VERSION 1.1.0h)
+    set(OPENSSL_VERSION 1.1.1f)
     ExternalProject_Add(openssl
         URL https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz
         CONFIGURE_COMMAND <SOURCE_DIR>/config --libdir=lib --prefix=<INSTALL_DIR>
