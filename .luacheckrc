@@ -7,6 +7,7 @@ exclude_files = {
     "build/**/*.lua",
     "src/box/lua/serpent.lua", -- third-party source code
     "test/app/*.test.lua",
+    "test/app-tap/lua/serializer_test.lua",
     "test/box/**/*.lua",
     "test/engine/*.test.lua",
     "test/engine_long/*.lua",
