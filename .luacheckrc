@@ -66,7 +66,6 @@ files["test/box/lua/fifo.lua"] = {globals = {"fifomax", "find_or_create_fifo", "
 files["test/box/lua/identifier.lua"] = {globals = {"run_test"}}
 files["test/box/lua/require_mod.lua"] = {globals = {"exports"}}
 files["test/engine/conflict.lua"] = {globals = {"test_conflict"}}
-files["test/luajit-tap/gh-4476-fix-string-find-recording.test.lua"] = {ignore = {"231"}}
 files["test/luajit-tap/or-232-unsink-64-kptr.test.lua"] = {ignore = {"542"}}
 files["test/replication/replica_quorum.lua"] = {globals = {"INSTANCE_URI", "nonexistent_uri"}}
 files["test/replication/replica_on_schema_init.lua"] = {globals = {"trig_local", "trig_engine"}}
