@@ -4,19 +4,31 @@ stages:
   - cleanup
 
 variables:
-  PACK_RULE: deploy
+  PACK_RULE: package
 
-.release_only_template:
+.develope_only_template:
   only:
-    - master
+    - branches
     - schedules
+    - external_pull_requests
+    - merge_requests
+
+.full_only_template:
+  only:
+    - /^.*-full-ci$/
+    - schedules
+    - external_pull_requests
+    - merge_requests
 
 .pack_only_template:
-  extends: .release_only_template
+  extends: .full_only_template
 
 .perf_only_template:
   only:
-    - master
+    - /^.*-full-ci-perf$/
+    - /^.*-perf$/
+    - external_pull_requests
+    - merge_requests
   except:
     - schedules
 
@@ -30,120 +42,120 @@ include:
 
 release:
   extends:
-    - .release_only_template
+    - .develope_only_template
     - .test_release_template
 
 debug:
   extends:
-    - .release_only_template
+    - .develope_only_template
     - .test_debug_template
 
 # Clang builds (Clang/Clang+LTO/Clang8+LTO/Clang8+ASAN)
 
 release_clang:
   extends:
-    - .release_only_template
+    - .develope_only_template
     - .test_release_clang_template
 
 release_lto:
   extends:
-    - .release_only_template
+    - .full_only_template
     - .test_release_lto_template
 
 release_lto_clang8:
   extends:
-    - .release_only_template
+    - .full_only_template
     - .test_release_lto_clang8_template
 
 release_asan_clang8:
   extends:
-    - .release_only_template
+    - .develope_only_template
     - .test_release_asan_clang8_template
 
 # Static builds w/ & w/o dockerfile
 
 static_build:
   extends:
-    - .release_only_template
+    - .develope_only_template
     - .test_static_build_template
 
 static_docker_build:
   extends:
-    - .release_only_template
+    - .full_only_template
     - .test_static_docker_build_template
 
 # OSX builds (14/15/15+LTO)
 
 osx_14_release:
   extends:
-    - .release_only_template
+    - .full_only_template
     - .test_osx_14_release_template
 
 osx_15_release:
   extends:
-    - .release_only_template
+    - .develope_only_template
     - .test_osx_15_release_template
 
 osx_15_release_lto:
   extends:
-    - .release_only_template
+    - .full_only_template
     - .test_osx_15_release_lto_template
 
 # FreeBSD build
 
 freebsd_12_release:
   extends:
-    - .release_only_template
+    - .develope_only_template
     - .test_freebsd_12_release_template
 
-# Build and deploy packages and sources
+# Build only packages and sources
 
-sources_deploy:
+sources:
   extends: .pack_template
   script:
-    - ${GITLAB_MAKE} source_deploy
+    - ${GITLAB_MAKE} source
 
-centos_6_deploy:
+centos_6:
   extends: .test_centos_6_template
 
-centos_7_deploy:
+centos_7:
   extends: .test_centos_7_template
 
-centos_8_deploy:
+centos_8:
   extends: .test_centos_8_template
 
-fedora_28_deploy:
+fedora_28:
   extends: .test_fedora_28_template
 
-fedora_29_deploy:
+fedora_29:
   extends: .test_fedora_29_template
 
-fedora_30_deploy:
+fedora_30:
   extends: .test_fedora_30_template
 
-fedora_31_deploy:
+fedora_31:
   extends: .test_fedora_31_template
 
-ubuntu_14_04_deploy:
+ubuntu_14_04:
   extends: .test_ubuntu_14_04_template
 
-ubuntu_16_04_deploy:
+ubuntu_16_04:
   extends: .test_ubuntu_16_04_template
 
-ubuntu_18_04_deploy:
+ubuntu_18_04:
   extends: .test_ubuntu_18_04_template
 
-ubuntu_19_10_deploy:
+ubuntu_19_10:
   extends: .test_ubuntu_19_10_template
 
-ubuntu_20_04_deploy:
+ubuntu_20_04:
   extends: .test_ubuntu_20_04_template
 
-debian_8_deploy:
+debian_8:
   extends: .test_debian_8_template
 
-debian_9_deploy:
+debian_9:
   extends: .test_debian_9_template
 
-debian_10_deploy:
+debian_10:
   extends: .test_debian_10_template

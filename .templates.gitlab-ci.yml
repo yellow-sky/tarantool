@@ -1,0 +1,227 @@
+variables:
+  GITLAB_MAKE: "make -f .gitlab.mk"
+
+# Jobs templates / helpers
+
+.docker_helper_test_template:
+  image: "${CI_REGISTRY}/${CI_PROJECT_PATH}/testing/debian-stretch:latest"
+  stage: test
+  tags:
+    - docker_test
+
+.docker_helper_test_clang8_template:
+  image: "${CI_REGISTRY}/${CI_PROJECT_PATH}/testing/debian-buster:latest"
+  stage: test
+  tags:
+    - docker_test
+
+.vbox_helper_template:
+  stage: test
+  before_script:
+    - ${GITLAB_MAKE} vms_start
+  after_script:
+    - ${GITLAB_MAKE} vms_shutdown
+
+.pack_helper_template:
+  extends: .pack_only_template
+  stage: test
+  script:
+    - ${GITLAB_MAKE} ${PACK_RULE}
+
+.pack_template:
+  extends: .pack_helper_template
+  tags:
+    - deploy
+
+.pack_test_template:
+  extends: .pack_helper_template
+  tags:
+    - deploy_test
+
+# Tests release and debug
+
+.test_release_template:
+  extends: .docker_helper_test_template
+  script:
+    - ${GITLAB_MAKE} test_debian_no_deps
+
+.test_debug_template:
+  extends: .docker_helper_test_template
+  script:
+    - ${GITLAB_MAKE} test_coverage_debian_no_deps
+
+# Clang builds (Clang/Clang+LTO/Clang8+LTO/Clang8+ASAN)
+
+.test_release_clang_template:
+  extends: .docker_helper_test_template
+  variables:
+    CC: clang
+    CXX: clang++
+  script:
+    - ${GITLAB_MAKE} test_debian_no_deps
+
+.test_release_lto_template:
+  extends: .docker_helper_test_clang8_template
+  variables:
+    CMAKE_EXTRA_PARAMS: -DENABLE_LTO=ON
+  script:
+    - ${GITLAB_MAKE} test_debian_no_deps
+
+.test_release_lto_clang8_template:
+  extends: .docker_helper_test_clang8_template
+  variables:
+    CC: clang-8
+    CXX: clang++-8
+    CMAKE_EXTRA_PARAMS: -DENABLE_LTO=ON
+  script:
+    - ${GITLAB_MAKE} test_debian_no_deps
+
+.test_release_asan_clang8_template:
+  extends: .docker_helper_test_clang8_template
+  script:
+    - ${GITLAB_MAKE} test_asan_debian_no_deps
+
+# Static builds w/ & w/o dockerfile
+
+.test_static_build_template:
+  extends: .docker_helper_test_template
+  script:
+    - ${GITLAB_MAKE} test_static_build
+
+.test_static_docker_build_template:
+  stage: test
+  tags:
+    - deploy_test
+  script:
+    - ${GITLAB_MAKE} test_static_docker_build
+
+# OSX builds (14/15/15+LTO)
+
+.test_osx_14_release_template:
+  stage: test
+  tags:
+    - osx_14
+  script:
+    - ${GITLAB_MAKE} test_osx
+
+.test_osx_15_release_template:
+  stage: test
+  tags:
+    - osx_15
+  script:
+    - ${GITLAB_MAKE} test_osx
+
+.test_osx_15_release_lto_template:
+  stage: test
+  tags:
+    - osx_15
+  variables:
+    EXTRA_ENV: 'export CMAKE_EXTRA_PARAMS=-DENABLE_LTO=ON ;'
+  script:
+    - ${GITLAB_MAKE} test_osx
+
+# FreeBSD build
+
+.test_freebsd_12_release_template:
+  extends: .vbox_helper_template
+  tags:
+    - vms_freebsd_12
+  variables:
+    VMS_NAME: 'freebsd_12'
+    VMS_USER: 'vagrant'
+    VMS_PORT: '2232'
+    MAKE: 'gmake'
+  script:
+    - ${GITLAB_MAKE} vms_test_freebsd
+
+# Packages/Deploy
+
+.test_centos_6_template:
+  extends: .pack_template
+  variables:
+    OS: 'el'
+    DIST: '6'
+
+.test_centos_7_template:
+  extends: .pack_test_template
+  variables:
+    OS: 'el'
+    DIST: '7'
+
+.test_centos_8_template:
+  extends: .pack_test_template
+  variables:
+    OS: 'el'
+    DIST: '8'
+
+.test_fedora_28_template:
+  extends: .pack_test_template
+  variables:
+    OS: 'fedora'
+    DIST: '28'
+
+.test_fedora_29_template:
+  extends: .pack_test_template
+  variables:
+    OS: 'fedora'
+    DIST: '29'
+
+.test_fedora_30_template:
+  extends: .pack_test_template
+  variables:
+    OS: 'fedora'
+    DIST: '30'
+
+.test_fedora_31_template:
+  extends: .pack_test_template
+  variables:
+    OS: 'fedora'
+    DIST: '31'
+
+.test_ubuntu_14_04_template:
+  extends: .pack_template
+  variables:
+    OS: 'ubuntu'
+    DIST: 'trusty'
+
+.test_ubuntu_16_04_template:
+  extends: .pack_template
+  variables:
+    OS: 'ubuntu'
+    DIST: 'xenial'
+
+.test_ubuntu_18_04_template:
+  extends: .pack_template
+  variables:
+    OS: 'ubuntu'
+    DIST: 'bionic'
+
+.test_ubuntu_19_10_template:
+  extends: .pack_template
+  variables:
+    OS: 'ubuntu'
+    DIST: 'eoan'
+
+.test_ubuntu_20_04_template:
+  extends: .pack_template
+  variables:
+    OS: 'ubuntu'
+    DIST: 'focal'
+
+.test_debian_8_template:
+  extends: .pack_template
+  variables:
+    OS: 'debian'
+    DIST: 'jessie'
+
+.test_debian_9_template:
+  extends: .pack_template
+  variables:
+    OS: 'debian'
+    DIST: 'stretch'
+
+.test_debian_10_template:
+  extends: .pack_template
+  variables:
+    OS: 'debian'
+    DIST: 'buster'

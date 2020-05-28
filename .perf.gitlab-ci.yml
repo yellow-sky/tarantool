@@ -1,0 +1,123 @@
+# ################
+# Performance only
+# ################
+
+# Jobs templates
+
+variables:
+  IMAGE_PERF: "${CI_REGISTRY}/${CI_PROJECT_PATH}/perf/ubuntu-bionic:perf_master"
+  IMAGE_PERF_BUILT: "${CI_REGISTRY}/${CI_PROJECT_PATH}/perf_tmp/ubuntu-bionic:perf_${CI_COMMIT_SHORT_SHA}"
+
+.perf_docker_test_template:
+  extends: .perf_only_template
+  image: ${IMAGE_PERF_BUILT}
+  stage: perf
+  artifacts:
+    when: always
+    paths:
+      - "*_result.txt"
+      - "*_t_version.txt"
+  script:
+    - ${GITLAB_MAKE} perf_run
+
+.perf_cleanup_definition:
+  extends: .perf_only_template
+  stage: cleanup
+  script:
+    - ${GITLAB_MAKE} perf_cleanup
+
+# Pre-testing part
+
+perf_bootstrap:
+  extends: .perf_only_template
+  stage: test
+  tags:
+    - deploy
+  script:
+    - ${GITLAB_MAKE} perf_prepare
+  after_script:
+    - ${GITLAB_MAKE} perf_cleanup_image
+
+# Testing part
+
+perf_sysbench:
+  extends: .perf_docker_test_template
+  tags:
+    - docker_sh3_perf
+  variables:
+    BENCH: 'sysbench'
+
+perf_tpcc:
+  extends: .perf_docker_test_template
+  tags:
+    - docker_sh3_perf
+  variables:
+    BENCH: 'tpcc'
+
+perf_ycsb_hash:
+  extends: .perf_docker_test_template
+  tags:
+    - docker_sh2_perf
+  variables:
+    BENCH: 'ycsb'
+    ARG: 'hash'
+
+perf_ycsb_tree:
+  extends: .perf_docker_test_template
+  tags:
+    - docker_sh2_perf
+  variables:
+    BENCH: 'ycsb'
+    ARG: 'tree'
+
+perf_nosqlbench_hash:
+  extends: .perf_docker_test_template
+  tags:
+    - docker_sh1_perf
+  variables:
+    BENCH: 'nosqlbench'
+    ARG: 'hash'
+
+perf_nosqlbench_tree:
+  extends: .perf_docker_test_template
+  tags:
+    - docker_sh1_perf
+  variables:
+    BENCH: 'nosqlbench'
+    ARG: 'tree'
+
+perf_cbench:
+  extends: .perf_docker_test_template
+  tags:
+    - docker_sh2_perf
+  variables:
+    BENCH: 'cbench'
+
+perf_linkbench_ssd:
+  extends: .perf_docker_test_template
+  tags:
+    - docker_perf_ssd
+  variables:
+    BENCH: 'linkbench'
+
+# Post-testing part
+
+remove_images_sh1:
+  extends: .perf_cleanup_definition
+  tags:
+    - sh1_shell
+
+remove_images_sh2:
+  extends: .perf_cleanup_definition
+  tags:
+    - sh2_shell
+
+remove_images_sh3:
+  extends: .perf_cleanup_definition
+  tags:
+    - sh3_shell
+
+remove_images_sh9:
+  extends: .perf_cleanup_definition
+  tags:
+    - sh9_shell
