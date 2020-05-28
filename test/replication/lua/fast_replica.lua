@@ -7,7 +7,8 @@ function join(inspector, n)
         os.execute('cp '..path..'/test/replication/replica.lua ./tmp/replica'..rid..'.lua')
         os.execute('chmod +x ./tmp/replica'..rid..'.lua')
         local out_dir = box.cfg.wal_dir
-        inspector:cmd("create server replica"..rid.." with rpl_master=default, script='"..out_dir.."/../tmp/replica"..rid..".lua'")
+        inspector:cmd("create server replica"..rid.." with rpl_master=default, script='"
+			..out_dir.."/../tmp/replica"..rid..".lua'")
         inspector:cmd("start server replica"..rid)
     end
 end

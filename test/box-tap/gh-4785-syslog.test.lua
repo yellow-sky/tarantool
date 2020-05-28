@@ -52,12 +52,12 @@ test:like(entry, pattern, 'log.info() log entry is in syslog format',
           {logs = {entry}})
 
 -- log.log_format('plain') is silently ignored.
-local ok = pcall(log.log_format, 'plain')
+ok = pcall(log.log_format, 'plain')
 test:ok(ok, "log.log_format('plain') is ignored with syslog")
 
 -- Verify log format again after log.log_format().
 log.info('world')
-local entry = unix_socket:recv(100)
+entry = unix_socket:recv(100)
 test:like(entry, pattern, 'log.info() log entry after log_format',
           {logs = {entry}})
 

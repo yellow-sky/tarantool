@@ -26,7 +26,7 @@ local function eqp(sql)
     return test:execsql("EXPLAIN QUERY PLAN"..sql)
 end
 
-local function alpha(blob)
+local function alpha()
     ret = ""
     for _, c in ipairs(X(37, "X!cmd", [=[["split",["blob"],""]]=])) do
         if X(39, "X!cmd", [=[["string","is","alpha",["c"]]]=])

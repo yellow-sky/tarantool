@@ -1,5 +1,5 @@
 #!/usr/bin/env tarantool
-test = require("sqltester")
+local test = require("sqltester")
 test:plan(59)
 
 --!./tcltestrunner.lua
@@ -18,7 +18,7 @@ test:plan(59)
 --
 -- ["set","testdir",[["file","dirname",["argv0"]]]]
 -- ["source",[["testdir"],"\/tester.tcl"]]
-testprefix = "with2"
+local testprefix = "with2"
 
 test:do_execsql_test(
     1.0,
@@ -386,22 +386,22 @@ genstmt(255), {
 -- Check that adding a WITH clause to an INSERT disables the xfer
 -- optimization.
 
-local function do_xfer_test(test, test_func, test_name, func, exp, opts)
-    local opts = opts or {}
+local function do_xfer_test(test_arg, test_func, test_name, func, exp, opts)
+    opts = opts or {}
     local exp_xfer_count = opts.exp_xfer_count
     local before = box.stat.sql().sql_xfer_count
-    test_func(test, test_name, func, exp)
+    test_func(test_arg, test_name, func, exp)
     local after = box.stat.sql().sql_xfer_count
     test:is(after - before, exp_xfer_count,
                    test_name .. '-xfer-count')
 end
 
-test.do_execsql_xfer_test = function(test, test_name, func, exp, opts)
-    do_xfer_test(test, test.do_execsql_test, test_name, func, exp, opts)
+test.do_execsql_xfer_test = function(test_arg, test_name, func, exp, opts)
+    do_xfer_test(test_arg, test_arg.do_execsql_test, test_name, func, exp, opts)
 end
 
-test.do_catchsql_xfer_test = function(test, test_name, func, exp, opts)
-    do_xfer_test(test, test.do_catchsql_test, test_name, func, exp, opts)
+test.do_catchsql_xfer_test = function(test_arg, test_name, func, exp, opts)
+    do_xfer_test(test_arg, test_arg.do_catchsql_test, test_name, func, exp, opts)
 end
 
 test:do_execsql_test(

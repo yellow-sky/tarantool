@@ -6,7 +6,7 @@ local tap = require('tap')
 local test = tap.test('cfg')
 test:plan(3)
 
-config = {
+local config = {
 	pid_file = '1.pid',
     log="tarantool.log"
 }

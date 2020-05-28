@@ -2,6 +2,7 @@
 test = require("sqltester")
 -- test:plan(1279)
 test:plan(0)
+local enable_broken_tests = false
 
 --!./tcltestrunner.lua
 -- 2003 October 31
@@ -29,7 +30,7 @@ test:plan(0)
 
 -- Disabled until #3694 is resolved.
 --
-if false then
+if enable_broken_tests then
 local function datetest(tnum, expr, result)
     test:do_test(
         "date-"..tnum,

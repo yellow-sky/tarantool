@@ -288,19 +288,19 @@ test:do_test(
 --
 -- gh-3929: sql: ANSI aliases for LENGTH().
 --
-suits = {}
-suits[1] = {str = '123456789', len = 9}
-suits[2] = {str = '\x80', len = 1}
-suits[3] = {str = '\x61\x62\x63', len = 3}
-suits[4] = {str = '\x7f\x80\x81', len = 3}
-suits[5] = {str = '\x61\xc0', len = 2}
-suits[6] = {str = '\x61\xc0\x80\x80\x80\x80\x80\x80\x80\x80\x80\x80', len = 12}
-suits[7] = {str = '\xc0\x80\x80\x80\x80\x80\x80\x80\x80\x80\x80', len = 11}
-suits[8] = {str = '\x80\x80\x80\x80\x80\x80\x80\x80\x80\x80', len = 10}
-suits[9] = {str = '\x80\x80\x80\x80\x80\xf0\x80\x80\x80\x80', len = 7}
-suits[10] = {str = '\x80\x80\x80\x80\x80\xf0\x80\x80\x80\xff', len = 7}
+local suites = {}
+suites[1] = {str = '123456789', len = 9}
+suites[2] = {str = '\x80', len = 1}
+suites[3] = {str = '\x61\x62\x63', len = 3}
+suites[4] = {str = '\x7f\x80\x81', len = 3}
+suites[5] = {str = '\x61\xc0', len = 2}
+suites[6] = {str = '\x61\xc0\x80\x80\x80\x80\x80\x80\x80\x80\x80\x80', len = 12}
+suites[7] = {str = '\xc0\x80\x80\x80\x80\x80\x80\x80\x80\x80\x80', len = 11}
+suites[8] = {str = '\x80\x80\x80\x80\x80\x80\x80\x80\x80\x80', len = 10}
+suites[9] = {str = '\x80\x80\x80\x80\x80\xf0\x80\x80\x80\x80', len = 7}
+suites[10] = {str = '\x80\x80\x80\x80\x80\xf0\x80\x80\x80\xff', len = 7}
 
-for k,v in pairs(suits) do
+for k,v in pairs(suites) do
     test:do_execsql_test(
         "func3-6."..k,
         "SELECT CHAR_LENGTH('"..v.str.."'), CHARACTER_LENGTH('"..v.str.."');",

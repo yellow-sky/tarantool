@@ -160,7 +160,7 @@ end
 box.internal.sql_create_function("lrange", "TEXT", lrange)
 
 generate_tens = function(n)
-    tens = {}
+    local tens = {}
     for i = 1, n do
         tens[i] = 10
     end
@@ -168,7 +168,7 @@ generate_tens = function(n)
 end
 
 generate_tens_str = function(n)
-    tens = {}
+    local tens = {}
     for i = 1, n do
         tens[i] = "10"
     end
@@ -239,7 +239,7 @@ test:do_execsql_test(
 insert_filler_rows_n = function(iStart, nCopy, nVal)
     for i = 0, nVal-1 do
         local iVal = iStart+i
-        for j = 0, nCopy-1 do
+        for _ = 0, nCopy-1 do
             box.execute(string.format("INSERT INTO t1 VALUES (null, %s, %s, '%s')", iVal, iVal, iVal))
         end
     end
@@ -416,7 +416,7 @@ local get_pk = function (space, record)
     return pkey
 end
 
-local inject_stat_error_func = function (space_name)
+local inject_stat_error_func1 = function (space_name)
     local space = box.space[space_name]
     local record = space:select({"T1", "I1", nil}, {limit = 1})[1]
     space:delete(get_pk(space, record))
@@ -427,7 +427,7 @@ local inject_stat_error_func = function (space_name)
     return 0
 end
 
-box.internal.sql_create_function("inject_stat_error", "INT", inject_stat_error_func)
+box.internal.sql_create_function("inject_stat_error", "INT", inject_stat_error_func1)
 
 test:do_execsql_test(
     7.1,
@@ -609,7 +609,7 @@ test:do_execsql_test(
 test:do_test(
     "10.1.2",
     function()
-        local a = 0
+        local a
         for i = 1, 100 do
             if i > 90 then
                 a = i
@@ -657,7 +657,7 @@ test:do_execsql_test(
 test:do_test(
     "10.2.2",
     function()
-        local a = 0
+        local a
         for i = 1, 100 do
             if i > 90 then
                 a = i
@@ -711,7 +711,7 @@ test:do_execsql_test(
 test:do_test(
     11.1,
     function()
-        local a = 0
+        local a
         for i = 0, 100 do
             if i % 10 == 0 then 
                 a = "\"ABC\""
@@ -762,7 +762,7 @@ test:do_execsql_test(
 test:do_test(
     11.5,
     function()
-        local a = 0
+        local a
         for i = 0, 100 do
             if i % 10 == 0 then 
                 a = "\"ABC\""
@@ -823,7 +823,7 @@ test:do_execsql_test(
 test:do_test(
     12.1,
     function()
-        local a = 0
+        local a
         for i = 0, 100 do
             if i % 10 == 0 then 
                 a = "\"ABC\""
@@ -874,7 +874,7 @@ test:do_execsql_test(
 test:do_test(
     12.5,
     function()
-        local a = 0
+        local a
         for i = 0, 100 do
             if i % 10 == 0 then 
                 a = "\"ABC\""
@@ -931,7 +931,7 @@ test:do_test(
         test:execsql("CREATE TABLE t1(id INTEGER PRIMARY KEY AUTOINCREMENT, a TEXT, b INT, c INT, d INT);")
         test:execsql("CREATE INDEX i1 ON t1(a);")
         test:execsql("CREATE INDEX i2 ON t1(b, c);")
-        local a = 0
+        local a
         for i = 0, 100 do
             if i % 2 == 1 then
                 a = "\"abc\""
@@ -1073,7 +1073,7 @@ test:do_execsql_test(
         -- </15.4>
     })
 
-local inject_stat_error_func = function (space_name)
+local inject_stat_error_func2 = function (space_name)
     local space = box.space[space_name]
     local stats = space:select()
     for _, stat in pairs(stats) do
@@ -1087,7 +1087,7 @@ local inject_stat_error_func = function (space_name)
     return 0
 end
 
-box.internal.sql_create_function("inject_stat_error", "INT", inject_stat_error_func)
+box.internal.sql_create_function("inject_stat_error", "INT", inject_stat_error_func2)
 
 
 test:do_execsql_test(
@@ -1161,7 +1161,7 @@ test:do_test(
             INSERT INTO t1 SELECT null, 2*a,2*b,2*c,d FROM t1;
             INSERT INTO t1 SELECT null, 2*a,2*b,2*c,d FROM t1;
         ]])
-        local b = 0
+        local b
         for i = 0, 31 do
             if (i < 8) then
                 b = 0

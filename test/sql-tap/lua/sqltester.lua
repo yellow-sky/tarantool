@@ -9,7 +9,7 @@ local sql_tokenizer = require('sql_tokenizer')
 local ok, test_run = pcall(require, 'test_run')
 test_run = ok and test_run.new() or nil
 
-local function flatten(arr)
+local function flatten_func(array)
     local result = { }
 
     local function flatten(arr)
@@ -23,7 +23,7 @@ local function flatten(arr)
             end
         end
     end
-    flatten(arr)
+    flatten(array)
     return result
 end
 
@@ -118,7 +118,8 @@ end
 test.is_deeply_regex = is_deeply_regex
 
 local function do_test(self, label, func, expect)
-    local ok, result = pcall(func)
+    local result
+    ok, result = pcall(func)
     if ok then
         if result == nil then result = { } end
 
@@ -166,7 +167,7 @@ local function execsql(self, sql)
     local result = execsql_one_by_one(sql)
     if type(result) ~= 'table' then return end
 
-    result = flatten(result)
+    result = flatten_func(result)
     for i, c in ipairs(result) do
         if c == nil then
             result[i] = ""
@@ -176,8 +177,8 @@ local function execsql(self, sql)
 end
 test.execsql = execsql
 
-local function catchsql(self, sql, expect)
-    r = {pcall(execsql, self, sql) }
+local function catchsql(self, sql)
+    local r = {pcall(execsql, self, sql) }
     if r[1] == true then
         r[1] = 0
     else
@@ -256,7 +257,7 @@ end
 test.sortsql = sortsql
 
 local function catchsql2(self, sql)
-    r = {pcall(execsql2, self, sql) }
+    local r = {pcall(execsql2, self, sql) }
     -- 0 means ok
     -- 1 means not ok
     r[1] = r[1] == true and 0 or 1
@@ -271,8 +272,8 @@ test.catchsql2 = catchsql2
 -- opcode at the beginning.  This procedure can be used to prove
 -- that different SQL statements generate exactly the same VDBE code.
 local function explain_no_trace(self, sql)
-    tr = execsql(self, "EXPLAIN "..sql)
-    for i=1,8 do
+    local tr = execsql(self, "EXPLAIN "..sql)
+    for _=1,8 do
         table.remove(tr,1)
     end
     return tr
@@ -378,7 +379,6 @@ function test.randstr(Length)
     for Loop = 0, 255 do
         Chars[Loop+1] = string.char(Loop)
     end
-    local String = table.concat(Chars)
     local Result = {}
     local Lookup = Chars
     local Range = #Lookup
@@ -394,11 +394,11 @@ test.do_eqp_test = function (self, label, sql, result)
     test:do_test(
         label,
         function()
-            local result = execsql_one_by_one("EXPLAIN QUERY PLAN "..sql)
-            for k,v in pairs(result) do
-                result[k] = v:totable()
+            local res = execsql_one_by_one("EXPLAIN QUERY PLAN "..sql)
+            for k,v in pairs(res) do
+                res[k] = v:totable()
             end
-            return result
+            return res
         end,
         result)
 end

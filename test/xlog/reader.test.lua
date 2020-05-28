@@ -21,7 +21,7 @@ pattern_ok_v13 = fio.pathjoin(pattern_prefix, "v13/")
 trun:cmd("setopt delimiter ';'")
 function collect_results(file)
     local val = {}
-    for k, v in xlog(file) do
+    for _, v in xlog(file) do
         table.insert(val, setmetatable(v, { __serialize = "map"}))
     end
     return val

@@ -5,7 +5,6 @@ local console = require('console')
 local socket = require('socket')
 local yaml = require('yaml')
 local fiber = require('fiber')
-local ffi = require('ffi')
 local log = require('log')
 local fio = require('fio')
 
@@ -19,7 +18,8 @@ os.remove(IPROTO_SOCKET)
 --
 local EOL = "\n...\n"
 
-test = tap.test("console")
+local test = tap.test("console")
+local _
 
 test:plan(80)
 
@@ -59,7 +59,8 @@ test:is(client:read(";"), 'true;', "pushed message")
 client:write('\\set output lua\n')
 client:read(";")
 
-long_func_f = nil
+local long_func_f
+-- luacheck: globals long_func (is called via client socket)
 function long_func()
     long_func_f = fiber.self()
     box.session.push('push')
@@ -95,12 +96,9 @@ test:is(#client:read(EOL) > 0, true, "_G")
 client:write("require('fiber').id()\n")
 local fid1 = yaml.decode(client:read(EOL))[1]
 local state = fiber.find(fid1).storage.console
-local server_info = state.client:peer()
 local client_info = state.client:name()
 test:is(client_info.host, client_info.host, "state.socker:peer().host")
 test:is(client_info.port, client_info.port, "state.socker:peer().port")
-server_info = nil
-client_info = nil
 
 -- Check console.delimiter()
 client:write("require('console').delimiter(';')\n")
@@ -233,13 +231,13 @@ box.cfg{listen = ''}
 os.remove(IPROTO_SOCKET)
 
 local s = console.listen('127.0.0.1:0')
-addr = s:name()
+local addr = s:name()
 test:is(addr.family, 'AF_INET', 'console.listen uri support')
 test:is(addr.host, '127.0.0.1', 'console.listen uri support')
 test:isnt(addr.port, 0, 'console.listen uri support')
 s:close()
 
-local s = console.listen('console://unix/:'..CONSOLE_SOCKET)
+s = console.listen('console://unix/:'..CONSOLE_SOCKET)
 addr = s:name()
 test:is(addr.family, 'AF_UNIX', 'console.listen uri support')
 test:is(addr.host, 'unix/', 'console.listen uri support')
@@ -279,7 +277,7 @@ box.session.on_disconnect(console_on_disconnect)
 box.session.on_auth(console_on_auth)
 
 -- check on_connect/on_disconnect/on_auth triggers
-local server = console.listen('console://unix/:'..CONSOLE_SOCKET)
+server = console.listen('console://unix/:'..CONSOLE_SOCKET)
 client = socket.tcp_connect("unix/", CONSOLE_SOCKET)
 _ = client:read(128)
 client:write("1\n")

@@ -39,7 +39,7 @@ end
 
 -- Get buffer with data encoded without last 'trunc' bytes.
 local function truncated_msgpack_buffer(data, trunc)
-    local data = msgpackffi.encode(data)
+    data = msgpackffi.encode(data)
     data = data:sub(1, data:len() - trunc)
     local len = data:len()
     local buf = buffer.ibuf()
@@ -370,7 +370,7 @@ local function fetch_source_iterator(input_type, tuples)
 end
 
 local function prepare_data(schema, tuple_count, source_count, opts)
-    local opts = opts or {}
+    opts = opts or {}
     local input_type = opts.input_type
     local use_table_as_tuple = opts.use_table_as_tuple
     local use_fetch_source = opts.use_fetch_source
@@ -471,7 +471,7 @@ end
 local function run_merger(test, schema, tuple_count, source_count, opts)
     fiber.yield()
 
-    local opts = opts or {}
+    opts = opts or {}
 
     -- Prepare data.
     local sources, exp_result = prepare_data(schema, tuple_count, source_count,
@@ -516,8 +516,8 @@ local function run_merger(test, schema, tuple_count, source_count, opts)
         :format(tuple_count, source_count, test_case_opts_str(opts)))
 end
 
-local function run_case(test, schema, opts)
-    local opts = opts or {}
+local function run_case(testcase, schema, opts)
+    opts = opts or {}
 
     local case_name = ('testing on schema %s%s'):format(
         schema.name, test_case_opts_str(opts))
@@ -535,7 +535,7 @@ local function run_case(test, schema, opts)
         return
     end
 
-    test:test(case_name, function(test)
+    testcase:test(case_name, function(test)
         test:plan(4)
 
         -- Check with small buffer count.
@@ -556,12 +556,12 @@ test:plan(#bad_source_new_calls + #bad_chunks + #bad_merger_new_calls +
 box.cfg{}
 
 for _, case in ipairs(bad_source_new_calls) do
-    test:test(case[1], function(test)
+    test:test(case[1], function(testcase)
         local funcs = case.funcs
-        test:plan(#funcs)
+        testcase:plan(#funcs)
         for _, func in ipairs(funcs) do
             local ok, err = pcall(merger[func], unpack(case.params))
-            test:ok(ok == false and err:match(case.exp_err), func)
+            testcase:ok(ok == false and err:match(case.exp_err), func)
         end
     end)
 end
@@ -602,8 +602,8 @@ for _, schema in ipairs(schemas) do
     schema.key_def = key_def_lib.new(schema.parts)
 end
 
-test:test('use a source in two mergers', function(test)
-    test:plan(5)
+test:test('use a source in two mergers', function(testcase)
+    testcase:plan(5)
 
     local data = {{'a'}, {'b'}, {'c'}}
     local source = merger.new_source_fromtable(data)
@@ -611,16 +611,16 @@ test:test('use a source in two mergers', function(test)
     local i2 = merger.new(key_def, {source}):pairs()
 
     local t1 = i1:head():totable()
-    test:is_deeply(t1, data[1], 'tuple 1 from merger 1')
+    testcase:is_deeply(t1, data[1], 'tuple 1 from merger 1')
 
     local t3 = i2:head():totable()
-    test:is_deeply(t3, data[3], 'tuple 3 from merger 2')
+    testcase:is_deeply(t3, data[3], 'tuple 3 from merger 2')
 
     local t2 = i1:head():totable()
-    test:is_deeply(t2, data[2], 'tuple 2 from merger 1')
+    testcase:is_deeply(t2, data[2], 'tuple 2 from merger 1')
 
-    test:ok(i1:is_null(), 'merger 1 ends')
-    test:ok(i2:is_null(), 'merger 2 ends')
+    testcase:ok(i1:is_null(), 'merger 1 ends')
+    testcase:ok(i2:is_null(), 'merger 2 ends')
 end)
 
 local function reusable_source_gen(param)
@@ -640,37 +640,37 @@ local function reusable_source_gen(param)
     return box.NULL, chunk
 end
 
-local function verify_reusable_source(test, source)
-    test:plan(3)
+local function verify_reusable_source(testcase, source)
+    testcase:plan(3)
 
     local exp = {{1}, {2}}
     local res = source:pairs():map(box.tuple.totable):totable()
-    test:is_deeply(res, exp, '1st use')
+    testcase:is_deeply(res, exp, '1st use')
 
-    local exp = {{3}, {4}, {5}}
-    local res = source:pairs():map(box.tuple.totable):totable()
-    test:is_deeply(res, exp, '2nd use')
+    exp = {{3}, {4}, {5}}
+    res = source:pairs():map(box.tuple.totable):totable()
+    testcase:is_deeply(res, exp, '2nd use')
 
-    local exp = {}
-    local res = source:pairs():map(box.tuple.totable):totable()
-    test:is_deeply(res, exp, 'end')
+    exp = {}
+    res = source:pairs():map(box.tuple.totable):totable()
+    testcase:is_deeply(res, exp, 'end')
 end
 
-test:test('reuse a tuple source', function(test)
+test:test('reuse a tuple source', function(testcase)
     local tuples = {{1}, {2}, nil, {3}, {4}, {5}}
     local source = merger.new_tuple_source(reusable_source_gen,
         {chunks = tuples})
-    verify_reusable_source(test, source)
+    verify_reusable_source(testcase, source)
 end)
 
-test:test('reuse a table source', function(test)
+test:test('reuse a table source', function(testcase)
     local chunks = {{{1}}, {{2}}, {}, nil, {{3}}, {{4}}, {}, {{5}}}
     local source = merger.new_table_source(reusable_source_gen,
         {chunks = chunks})
-    verify_reusable_source(test, source)
+    verify_reusable_source(testcase, source)
 end)
 
-test:test('reuse a buffer source', function(test)
+test:test('reuse a buffer source', function(testcase)
     local chunks_tbl = {{{1}}, {{2}}, {}, nil, {{3}}, {{4}}, {}, {{5}}}
     local chunks = {}
     for i = 1, table.maxn(chunks_tbl) do
@@ -683,43 +683,43 @@ test:test('reuse a buffer source', function(test)
     end
     local source = merger.new_buffer_source(reusable_source_gen,
         {chunks = chunks})
-    verify_reusable_source(test, source)
+    verify_reusable_source(testcase, source)
 end)
 
-test:test('use limit', function(test)
-    test:plan(6)
+test:test('use limit', function(testcase)
+    testcase:plan(6)
 
     local data = {{'a'}, {'b'}}
 
     local source = merger.new_source_fromtable(data)
     local m = merger.new(key_def, {source})
     local res = m:select({limit = 0})
-    test:is(#res, 0, 'table output with limit 0')
+    testcase:is(#res, 0, 'table output with limit 0')
 
-    local source = merger.new_source_fromtable(data)
-    local m = merger.new(key_def, {source})
-    local res = m:select({limit = 1})
-    test:is(#res, 1, 'table output with limit 1')
-    test:is_deeply(res[1]:totable(), data[1], 'tuple content')
+    source = merger.new_source_fromtable(data)
+    m = merger.new(key_def, {source})
+    res = m:select({limit = 1})
+    testcase:is(#res, 1, 'table output with limit 1')
+    testcase:is_deeply(res[1]:totable(), data[1], 'tuple content')
 
-    local source = merger.new_source_fromtable(data)
-    local m = merger.new(key_def, {source})
+    source = merger.new_source_fromtable(data)
+    m = merger.new(key_def, {source})
     local output_buffer = buffer.ibuf()
     m:select({buffer = output_buffer, limit = 0})
-    local res = msgpackffi.decode(output_buffer.rpos)
-    test:is(#res, 0, 'buffer output with limit 0')
+    res = msgpackffi.decode(output_buffer.rpos)
+    testcase:is(#res, 0, 'buffer output with limit 0')
 
-    local source = merger.new_source_fromtable(data)
-    local m = merger.new(key_def, {source})
+    source = merger.new_source_fromtable(data)
+    m = merger.new(key_def, {source})
     output_buffer:recycle()
     m:select({buffer = output_buffer, limit = 1})
-    local res = msgpackffi.decode(output_buffer.rpos)
-    test:is(#res, 1, 'buffer output with limit 1')
-    test:is_deeply(res[1], data[1], 'tuple content')
+    res = msgpackffi.decode(output_buffer.rpos)
+    testcase:is(#res, 1, 'buffer output with limit 1')
+    testcase:is_deeply(res[1], data[1], 'tuple content')
 end)
 
-test:test('cascade mergers', function(test)
-    test:plan(2)
+test:test('cascade mergers', function(testcase)
+    testcase:plan(2)
 
     local data = {{'a'}, {'b'}}
 
@@ -728,7 +728,7 @@ test:test('cascade mergers', function(test)
     local m2 = merger.new(key_def, {m1})
 
     local res = m2:pairs():map(box.tuple.totable):totable()
-    test:is_deeply(res, data, 'same key_def')
+    testcase:is_deeply(res, data, 'same key_def')
 
     local key_def_unicode = key_def_lib.new({{
         fieldno = 1,
@@ -736,12 +736,12 @@ test:test('cascade mergers', function(test)
         collation = 'unicode',
     }})
 
-    local source = merger.new_source_fromtable(data)
-    local m1 = merger.new(key_def, {source})
-    local m2 = merger.new(key_def_unicode, {m1})
+    source = merger.new_source_fromtable(data)
+    m1 = merger.new(key_def, {source})
+    m2 = merger.new(key_def_unicode, {m1})
 
-    local res = m2:pairs():map(box.tuple.totable):totable()
-    test:is_deeply(res, data, 'different key_defs')
+    res = m2:pairs():map(box.tuple.totable):totable()
+    testcase:is_deeply(res, data, 'different key_defs')
 end)
 
 -- Merging cases.

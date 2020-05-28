@@ -1,5 +1,5 @@
 #!/usr/bin/env tarantool
-os = require('os')
+local os = require('os')
 
 function test_before_replace_trig(old, new)
     -- return multiple values so that the stack fills earlier.

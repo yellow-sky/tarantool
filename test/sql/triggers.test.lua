@@ -4,7 +4,7 @@ engine = test_run:get_cfg('engine')
 _ = box.space._session_settings:update('sql_default_engine', {{'=', 2, engine}})
 
 -- Get invariant part of the tuple; name and opts don't change.
- function immutable_part(data) local r = {} for i, l in pairs(data) do table.insert(r, {l.name, l.opts}) end return r end
+ function immutable_part(data) local r = {} for _, l in pairs(data) do table.insert(r, {l.name, l.opts}) end return r end
 
 --
 -- gh-3273: Move Triggers to server

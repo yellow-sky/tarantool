@@ -49,7 +49,7 @@ for N=1, bitmask_size do
 end
 -- Joins with a comparison
 --
-local result = {}
+result = {}
 --for _ in X(0, "X!for", [=[["set N 1","$N<=$bitmask_size","incr N"]]=]) do
 for N=1, bitmask_size do
     table.insert(result,N)

@@ -12,8 +12,8 @@ box.cfg{}
 -- with encryption. Otherwise they can accidentally discover
 -- SWIM instances from other tests.
 --
-enc_key = box.info.uuid
-enc_algo = 'aes128'
+local enc_key = box.info.uuid
+local enc_algo = 'aes128'
 
 --
 -- Wrap swim.new with a codec to prevent test workers affecting

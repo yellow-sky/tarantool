@@ -13,7 +13,7 @@ local CONSOLE_SOCKET = 'console-lua.sock'
 --
 -- Set Lua output mode.
 local function set_lua_output(client, opts)
-    local opts = opts or {}
+    opts = opts or {}
     local mode = opts.block and 'lua,block' or 'lua'
     client:write(('\\set output %s\n'):format(mode))
     assert(client:read(EOL), 'true' .. EOL, 'set lua output mode')
@@ -57,8 +57,8 @@ end
 
 --
 -- Execute a list of statements, show requests and responses.
-local function execute_statements(test, client, statements, name)
-    test:test(name, function(test)
+local function execute_statements(testcase, client, statements, name)
+    testcase:test(name, function(test)
         test:plan(2 * #statements)
 
         for _, stmt in ipairs(statements) do
@@ -75,15 +75,15 @@ end
 
 --
 -- Execute a statement and verify its response.
-local function execute_and_verify(test, client, input, exp_output, name)
-    test:test(name, function(test)
+local function execute_and_verify(testcase, client, input, exp_output, name)
+    testcase:test(name, function(test)
         test:plan(2)
 
         local res = client:write(input .. '\n')
         test:ok(res ~= nil, ('-> [[%s]]'):format(input))
 
         local exp = exp_output .. EOL
-        local res = client:read(EOL)
+        res = client:read(EOL)
         test:is(res, exp, ('<- [[%s]]'):format(exp:gsub('\n', '\\n')))
     end)
 end
@@ -134,15 +134,15 @@ test:plan(#cases)
 local server, client = start_console()
 
 for _, case in ipairs(cases) do
-    test:test(case.name, function(test)
-        test:plan(3)
+    test:test(case.name, function(testcase)
+        testcase:plan(3)
 
-        execute_statements(test, client, totable(case.prepare), 'prepare')
+        execute_statements(testcase, client, totable(case.prepare), 'prepare')
 
         set_lua_output(client, case.opts)
-        execute_and_verify(test, client, case.input, case.expected, 'run')
+        execute_and_verify(testcase, client, case.input, case.expected, 'run')
 
-        execute_statements(test, client, totable(case.cleanup), 'cleanup')
+        execute_statements(testcase, client, totable(case.cleanup), 'cleanup')
     end)
 end
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env tarantool
-test = require("sqltester")
+local test = require("sqltester")
 test:plan(21157)
 -- it is bad idea to store 20k positive test results in git
 test.silent = true
@@ -60,10 +60,8 @@ function subrange(t, first, last)
 end
 
 local function test_compound_select(testname, sql, result)
-    local nCol = 1
     local A = box.execute(sql) --test.box(sql)
-    nCol = #A.metadata
-    A = A.rows
+    local nCol = #A.metadata
     local nRow = #result / nCol
     local compound_sql = sql
     test:do_execsql_test(
@@ -274,10 +272,8 @@ test:do_execsql_test(
         -- </select9-2.0>
     })
 
-local t1_space_id = ""
-local t2_space_id = ""
-t1_space_id = test:execsql([[SELECT * from "_space" where "name"='T1']])["id"]
-t2_space_id = test:execsql([[SELECT * from "_space" where "name"='T2']])["id"]
+local t1_space_id = test:execsql([[SELECT * from "_space" where "name"='T1']])["id"]
+local t2_space_id = test:execsql([[SELECT * from "_space" where "name"='T2']])["id"]
 --X(276, "X!cmd", [=[["db","eval","SELECT * from _space where name='t2'","data","\n  set t2_space_id $data(id)\n"]]=])
 --local function reverse(lhs, rhs)
 --    return X(283, "X!cmd", [=[["string","compare",["rhs"],["lhs"]]]=])

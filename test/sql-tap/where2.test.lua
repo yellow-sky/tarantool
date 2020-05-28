@@ -1,9 +1,6 @@
 #!/usr/bin/env tarantool
-test = require("sqltester")
-yaml = require("yaml")
-fio = require("fio")
-
-ffi = require("ffi")
+local test = require("sqltester")
+local ffi = require("ffi")
 test:plan(74)
 
 ffi.cdef[[
@@ -115,7 +112,7 @@ local function queryplan(sql)
                 table.insert(data, tab)
                 table.insert(data, idx)
             else
-                as, tab = string.match(v, "TABLE (%w+ AS) (%w+)")
+                _, tab = string.match(v, "TABLE (%w+ AS) (%w+)")
                 if tab == nil  then
                     tab = string.match(v, "TABLE (%w+)")
                 end

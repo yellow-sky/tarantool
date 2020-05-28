@@ -18,22 +18,24 @@ local test = tap.test("auth")
 test:plan(42)
 
 local space = box.schema.space.create('tweedledum')
-local index = space:create_index('primary', { type = 'hash' })
+space:create_index('primary', { type = 'hash' })
 box.schema.user.create('test', {password='pass'})
 box.schema.user.create('test2', {password=''})
 
 -- check how authentication trigger work
 local msg, counter, succeeded
-function auth_trigger(user_name)
+local function auth_trigger(user_name)
     counter = counter + 1
+    msg = 'user ' .. user_name .. ' is there'
 end
 -- get user name as argument
-function auth_trigger2(user_name)
+local function auth_trigger2(user_name)
     msg = 'user ' .. user_name .. ' is there'
 end
 -- get user name and result of authentication as arguments
-function auth_trigger3(user_name, success)
-        succeeded = success
+local function auth_trigger3(user_name, success)
+    succeeded = success
+    msg = 'user ' .. user_name .. ' is there'
 end
 -- set trigger
 local handle = session.on_auth(auth_trigger)
@@ -57,68 +59,61 @@ test:is(counter, 1, "on_auth has been fired once")
 test:is(msg, "user test is there", "on_auth username param")
 test:ok(succeeded, "on_auth success param")
 conn:close()
-conn = nil
 
 -- check failing authentication
 counter = 0
 succeeded = true
-local conn = netbox.connect('test:pas@' .. HOST .. ':' .. PORT)
+conn = netbox.connect('test:pas@' .. HOST .. ':' .. PORT)
 while counter < 1 do fiber.sleep(0.001) end
 test:is(counter, 1, "on_auth has been fired once")
 test:is(msg, "user test is there", "on_auth username param")
 test:ok(not succeeded, "on_auth success param")
 conn:close()
-conn = nil
 
 counter = 0
 succeeded = false
-local conn = netbox.connect('test2:@' .. HOST .. ':' .. PORT)
+conn = netbox.connect('test2:@' .. HOST .. ':' .. PORT)
 while counter < 1 do fiber.sleep(0.001) end
 test:is(counter, 1, "on_auth has been fired once")
 test:is(msg, "user test2 is there", "on_auth username param")
 test:ok(succeeded, "on_auth success param")
 conn:close()
-conn = nil
 
 counter = 0
 succeeded = false
-local conn = netbox.connect('test2@' .. HOST .. ':' .. PORT)
+conn = netbox.connect('test2@' .. HOST .. ':' .. PORT)
 while counter < 1 do fiber.sleep(0.001) end
 test:is(counter, 1, "on_auth has been fired once")
 test:is(msg, "user test2 is there", "on_auth username param")
 test:ok(succeeded, "on_auth success param")
 conn:close()
-conn = nil
 
 counter = 0
 succeeded = false
-local conn = netbox.connect(HOST, PORT, {user='test2'})
+conn = netbox.connect(HOST, PORT, {user='test2'})
 while counter < 1 do fiber.sleep(0.001) end
 test:is(counter, 1, "on_auth has been fired once")
 test:is(msg, "user test2 is there", "on_auth username param")
 test:ok(succeeded, "on_auth success param")
 conn:close()
-conn = nil
 
 counter = 0
 succeeded = false
-local conn = netbox.connect('guest@' .. HOST .. ':' .. PORT)
+conn = netbox.connect('guest@' .. HOST .. ':' .. PORT)
 while counter < 1 do fiber.sleep(0.001) end
 test:is(counter, 1, "on_auth has been fired once")
 test:is(msg, "user guest is there", "on_auth username param")
 test:ok(succeeded, "on_auth success param")
 conn:close()
-conn = nil
 
 counter = 0
 succeeded = false
-local conn = netbox.connect('guest:@' .. HOST .. ':' .. PORT)
+conn = netbox.connect('guest:@' .. HOST .. ':' .. PORT)
 while counter < 1 do fiber.sleep(0.001) end
 test:is(counter, 1, "on_auth has been fired once")
 test:is(msg, "user guest is there", "on_auth username param")
 test:ok(succeeded, "on_auth success param")
 conn:close()
-conn = nil
 
 counter = 0
 succeeded = false
@@ -128,17 +123,15 @@ test:is(counter, 1, "on_auth has been fired once")
 test:is(msg, "user guest is there", "on_auth username param")
 test:ok(succeeded, "on_auth success param")
 conn:close()
-conn = nil
 
 counter = 0
 succeeded = false
-local conn = netbox.connect(HOST, PORT, {user='guest'})
+conn = netbox.connect(HOST, PORT, {user='guest'})
 while counter < 1 do fiber.sleep(0.001) end
 test:is(counter, 1, "on_auth has been fired once")
 test:is(msg, "user guest is there", "on_auth username param")
 test:ok(succeeded, "on_auth success param")
 conn:close()
-conn = nil
 
 -- check guest connection without authentication(no increment)
 counter = 0
@@ -148,7 +141,6 @@ conn:ping()
 test:is(counter, 0, "on_auth hasn't been fired")
 test:ok(not succeeded, "on_auth not successed param")
 conn:close()
-conn = nil
 
 test:isnil(session.on_auth(nil, auth_trigger), "removal returns nil")
 test:isnil(session.on_auth(nil, auth_trigger2), "removal returns nil")
