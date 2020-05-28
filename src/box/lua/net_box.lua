@@ -916,7 +916,7 @@ end
 -- Now it is necessary to have a strong ref to callback somewhere or
 -- it is GC-ed prematurely. We wrap stop() method, stashing the
 -- ref in an upvalue (stop() performance doesn't matter much.)
-local create_transport = function(host, port, user, password, callback,
+local create_transport = function(host, port, user, password, callback, -- luacheck: ignore
                                   connection, greeting)
     local weak_refs = setmetatable({callback = callback}, {__mode = 'v'})
     local function weak_callback(...)
