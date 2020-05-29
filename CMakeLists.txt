@@ -336,23 +336,12 @@ if(BUILD_STATIC)
     set(OPENSSL_SSL_LIBRARY ${install_dir}/lib/libssl.a)
     set(OPENSSL_LIBRARIES ${OPENSSL_SSL_LIBRARY} ${OPENSSL_CRYPTO_LIBRARY} ${CMAKE_DL_LIBS})
 
-    # include_directories(${OPENSSL_INCLUDE_DIR})
     add_library(static-openssl STATIC IMPORTED GLOBAL)
     
     if(OPENSSL_USE_STATIC_LIBS)
         find_library(Z_LIBRARY z)
         set(OPENSSL_LIBRARIES ${OPENSSL_LIBRARIES} ${Z_LIBRARY})
-        set_target_properties(static-openssl PROPERTIES
-            IMPORTED_LOCATION ${Z_LIBRARY},
-        )
     endif()
-
-    set_target_properties(static-openssl PROPERTIES
-       IMPORTED_LOCATION ${OPENSSL_CRYPTO_LIBRARY},
-    )
-    set_target_properties(static-openssl PROPERTIES
-        IMPORTED_LOCATION ${OPENSSL_SSL_LIBRARY},
-    )
 
     add_dependencies(static-openssl openssl)
 else()
