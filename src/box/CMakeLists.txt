@@ -65,6 +65,9 @@ add_library(tuple STATIC
     field_def.c
     opt_def.c
 )
+if (BUILD_STATIC)
+    add_dependencies(tuple static-icu)
+endif()
 target_link_libraries(tuple json box_error core ${MSGPUCK_LIBRARIES} ${ICU_LIBRARIES} misc bit)
 
 add_library(xlog STATIC xlog.c)

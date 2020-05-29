@@ -1,2 +1,5 @@
 add_library(coll STATIC coll.c coll_def.c)
+if (BUILD_STATIC)
+    add_dependencies(coll static-icu)
+endif()
 target_link_libraries(coll core ${ICU_LIBRARIES})

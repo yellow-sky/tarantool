@@ -17,6 +17,7 @@ include(TestBigEndian)
 include(CheckFunctionExists)
 include(FindOptionalPackage)
 include(FindPackageMessage)
+include(ExternalProject)
 
 find_program(ECHO echo)
 find_program(CAT cat)
@@ -376,9 +377,42 @@ find_package(ICONV)
 #
 # ICU
 #
+if (BUILD_STATIC)
+    ExternalProject_Add(icu
+        URL https://github.com/unicode-org/icu/releases/download/release-62-1/icu4c-62_1-src.tgz
+        CONFIGURE_COMMAND 
+            <SOURCE_DIR>/source/configure --with-data-packaging=static --enable-static --enable-shared --prefix=<INSTALL_DIR>
+        BUILD_COMMAND cd <BINARY_DIR> && $(MAKE)
+        INSTALL_COMMAND cd <BINARY_DIR> && $(MAKE) install
+    )
+    ExternalProject_Get_Property(icu install_dir)
+    message(STATUS "ICU 62.1 added as ExternalProject")
 
-set(ICU_FIND_REQUIRED ON)
-find_package(ICU)
+    set(ICU_LIBRARY_I18N ${install_dir}/lib/libicui18n.a) # ${ICU_I18N_LIB_NAME})
+    set(ICU_LIBRARY_UC ${install_dir}/lib/libicuuc.a)
+    set(ICU_LIBRARY_DATA ${install_dir}/lib/libicudata.a)
+
+    set(ICU_INCLUDE_DIRS ${install_dir}/include)
+    set(ICU_LIBRARIES ${ICU_LIBRARY_I18N} ${ICU_LIBRARY_UC} ${ICU_LIBRARY_DATA} ${CMAKE_DL_LIBS})
+
+    # message($<TARGET_FILE:icu>)
+    # add_custom_target(genexdebug COMMAND ${CMAKE_COMMAND} -E echo "$<icu:INSTALL_DIR>" && echo "$<TARGET_FILE:static-icu>")
+
+    # message($<TARGET_FILE:static-icu>)
+    # message(<static-icu:>)
+    add_library(static-icu STATIC IMPORTED GLOBAL)
+    set_target_properties(static-icu PROPERTIES
+        IMPORTED_LOCATION ${ICU_LIBRARY_I18N}
+    # set_target_properties(static-icu PROPERTIES
+        IMPORTED_LOCATION ${ICU_LIBRARY_UC}
+    # )
+    # set_target_properties(static-icu PROPERTIES
+        IMPORTED_LOCATION ${ICU_LIBRARY_DATA}
+    )
+elseif()
+    set(ICU_FIND_REQUIRED ON)
+    find_package(ICU)
+endif()
 
 #
 # LuaJIT

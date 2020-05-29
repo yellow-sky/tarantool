@@ -17,6 +17,9 @@ include_directories(${ICU_INCLUDE_DIRS})
 include_directories(${CURL_INCLUDE_DIRS})
 
 add_library(unit STATIC unit.c)
+if (BUILD_STATIC)
+    add_dependencies(unit static-icu)
+endif()
 
 add_executable(heap.test heap.c)
 target_link_libraries(heap.test unit)
@@ -150,6 +153,11 @@ add_executable(csv.test csv.c)
 target_link_libraries(csv.test csv)
 
 add_executable(json.test json.c)
+# if (BUILD_STATIC)
+#     set_property(TARGET json.test PROPERTY LINK_DEPENDS ${ICU_LIBRARIES})  
+#     # add_dependencies(cmake_dependency_test conditioning mylib)
+#     add_dependencies(json.test static-icu icu)
+# endif()
 target_link_libraries(json.test json unit ${ICU_LIBRARIES})
 
 add_executable(rmean.test rmean.cc)

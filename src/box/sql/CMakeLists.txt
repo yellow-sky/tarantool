@@ -67,6 +67,10 @@ add_library(sql STATIC
 )
 set_target_properties(sql PROPERTIES COMPILE_DEFINITIONS
     "${TEST_DEFINITIONS}")
+if (BUILD_STATIC)
+    add_dependencies(sql static-icu)
+endif()
+
 target_link_libraries(sql ${ICU_LIBRARIES})
 
 add_custom_target(generate_sql_files DEPENDS

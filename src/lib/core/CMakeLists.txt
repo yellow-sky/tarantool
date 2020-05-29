@@ -38,7 +38,9 @@ if (TARGET_OS_NETBSD)
 endif()
 
 add_library(core STATIC ${core_sources})
-
+if (BUILD_STATIC)
+    add_dependencies(core static-icu)
+endif()
 target_link_libraries(core salad small uri decNumber ${LIBEV_LIBRARIES}
                       ${LIBEIO_LIBRARIES} ${LIBCORO_LIBRARIES}
                       ${MSGPUCK_LIBRARIES} ${ICU_LIBRARIES})
