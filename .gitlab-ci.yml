@@ -214,6 +214,7 @@ perf_bootstrap:
 
 perf_tpch:
   <<: *perf_docker_test_definition
+  image: ${IMAGE_PERF_TPCH_BUILT}
   artifacts:
     when: always
     paths:
