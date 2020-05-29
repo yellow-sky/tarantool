@@ -359,6 +359,10 @@ mem_apply_type(struct Mem *record, enum field_type type)
 		if ((record->flags & MEM_Real) != 0)
 			return 0;
 		return sqlVdbeMemRealify(record);
+	case FIELD_TYPE_DECIMAL:
+		if ((record->flags & MEM_Decimal) != 0)
+			return 0;
+		return mem_apply_decimal_type(record);
 	case FIELD_TYPE_STRING:
 		/*
 		 * Only attempt the conversion to TEXT if there is
@@ -550,6 +554,8 @@ memTracePrint(Mem *p)
 		printf(" u:%"PRIu64"", p->u.u);
 	} else if (p->flags & MEM_Real) {
 		printf(" r:%g", p->u.r);
+	} else if (p->flags & MEM_Decimal) {
+		printf(" d:%s", decimal_to_string(&p->u.d));
 	} else if (p->flags & MEM_Bool) {
 		printf(" bool:%s", SQL_TOKEN_BOOLEAN(p->u.b));
 	} else {
@@ -632,6 +638,8 @@ mem_type_to_str(const struct Mem *p)
 		return "integer";
 	case MEM_UInt:
 		return "unsigned";
+	case MEM_Decimal:
+		return "decimal";
 	case MEM_Real:
 		return "real";
 	case MEM_Blob:

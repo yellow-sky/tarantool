@@ -221,6 +221,7 @@ sql_value_type(sql_value *pVal)
 	case MEM_Blob: return MP_BIN;
 	case MEM_Bool: return MP_BOOL;
 	case MEM_Null: return MP_NIL;
+	case MEM_Decimal: return MP_EXT;
 	default: unreachable();
 	}
 }

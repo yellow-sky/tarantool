@@ -296,7 +296,7 @@ sqlVdbeMemStringify(Mem * pMem)
 
 	assert(!(fg & MEM_Zero));
 	assert((fg & (MEM_Int | MEM_UInt | MEM_Real | MEM_Bool |
-		      MEM_Blob)) != 0);
+		      MEM_Blob | MEM_Decimal)) != 0);
 	assert(EIGHT_BYTE_ALIGNMENT(pMem));
 
 	/*
@@ -320,6 +320,10 @@ sqlVdbeMemStringify(Mem * pMem)
 	} else if ((fg & MEM_UInt) != 0) {
 		sql_snprintf(nByte, pMem->z, "%llu", pMem->u.u);
 		pMem->flags &= ~MEM_UInt;
+	} else if ((fg & MEM_Decimal) != 0) {
+		sql_snprintf(nByte, pMem->z, "%s",
+			     decimal_to_string(&pMem->u.d));
+		pMem->flags &= ~MEM_Decimal;
 	} else if ((fg & MEM_Bool) != 0) {
 		sql_snprintf(nByte, pMem->z, "%s",
 			     SQL_TOKEN_BOOLEAN(pMem->u.b));
@@ -524,6 +528,28 @@ sqlVdbeRealValue(Mem * pMem, double *v)
 }
 
 int
+sqlVdbeDecimalValue(const struct Mem *pMem, decimal_t *decvalue)
+{
+	if ((pMem->flags & MEM_Decimal) != 0) {
+		*decvalue = pMem->u.d;
+		return 0;
+	}
+	decimal_t *res = NULL;
+	if ((pMem->flags & MEM_Int) != 0)
+		res = decimal_from_int64(decvalue, pMem->u.i);
+	else if ((pMem->flags & MEM_UInt) != 0)
+		res = decimal_from_uint64(decvalue, pMem->u.u);
+	else if ((pMem->flags & MEM_Real) != 0)
+		res = decimal_from_double(decvalue, pMem->u.r);
+	else if ((pMem->flags & MEM_Str) != 0)
+		res = decimal_from_string(decvalue, pMem->z);
+
+	if (res == NULL)
+		return -1;
+	return 0;
+}
+
+int
 mem_value_bool(const struct Mem *mem, bool *b)
 {
 	if ((mem->flags  & MEM_Bool) != 0) {
@@ -548,6 +574,19 @@ mem_apply_integer_type(Mem *pMem)
 	if ((rc = doubleToInt64(pMem->u.r, (int64_t *) &ix)) == 0)
 		mem_set_int(pMem, ix, pMem->u.r <= -1);
 	return rc;
+}
+
+int
+mem_apply_decimal_type(Mem *pMem)
+{
+	if ((pMem->flags & MEM_Decimal) != 0)
+		return 0;
+	if ((pMem->flags & (MEM_Int | MEM_UInt | MEM_Real | MEM_Str)) == 0)
+		return -1;
+	if (sqlVdbeDecimalValue(pMem, &pMem->u.d) != 0)
+		return -1;
+	MemSetTypeFlag(pMem, MEM_Decimal);
+	return 0;
 }
 
 /*
@@ -1788,6 +1827,8 @@ mpstream_encode_vdbe_mem(struct mpstream *stream, struct Mem *var)
 	} else if (var->flags & MEM_UInt) {
 		i = var->u.u;
 		mpstream_encode_uint(stream, i);
+	} else if (var->flags & MEM_Decimal) {
+		mpstream_encode_decimal(stream, &var->u.d);
 	} else if (var->flags & MEM_Str) {
 		mpstream_encode_strn(stream, var->z, var->n);
 	} else if (var->flags & MEM_Bool) {

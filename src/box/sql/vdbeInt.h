@@ -39,6 +39,8 @@
 #ifndef SQL_VDBEINT_H
 #define SQL_VDBEINT_H
 
+#include "decimal.h"
+
 /*
  * SQL is translated into a sequence of instructions to be
  * executed by a virtual machine.  Each instruction is an instance
@@ -168,6 +170,7 @@ struct Mem {
 		i64 i;		/* Integer value used when MEM_Int is set in flags */
 		uint64_t u;	/* Unsigned integer used when MEM_UInt is set. */
 		bool b;         /* Boolean value used when MEM_Bool is set in flags */
+		decimal_t d;	/* Decimal value used when MEM_Decimal is set in flags. */
 		int nZero;	/* Used when bit MEM_Zero is set in flags */
 		void *p;	/* Generic pointer */
 		/**
@@ -226,24 +229,25 @@ struct Mem {
 #define MEM_Blob      0x0010	/* Value is a BLOB */
 #define MEM_Bool      0x0020    /* Value is a bool */
 #define MEM_UInt      0x0040	/* Value is an unsigned integer */
-#define MEM_Frame     0x0080	/* Value is a VdbeFrame object */
-#define MEM_Undefined 0x0100	/* Value is undefined */
-#define MEM_Cleared   0x0200	/* NULL set by OP_Null, not from data */
-#define MEM_TypeMask  0x83ff	/* Mask of type bits */
+#define MEM_Decimal   0x0080	/* Value is decimal number */
+#define MEM_Frame     0x0100	/* Value is a VdbeFrame object */
+#define MEM_Undefined 0x0200	/* Value is undefined */
+#define MEM_Cleared   0x0400	/* NULL set by OP_Null, not from data */
+#define MEM_TypeMask  0x10fff	/* Mask of type bits */
 
 /* Whenever Mem contains a valid string or blob representation, one of
  * the following flags must be set to determine the memory management
  * policy for Mem.z.  The MEM_Term flag tells us whether or not the
  * string is \000 or \u0000 terminated
  */
-#define MEM_Term      0x0400	/* String rep is nul terminated */
-#define MEM_Dyn       0x0800	/* Need to call Mem.xDel() on Mem.z */
-#define MEM_Static    0x1000	/* Mem.z points to a static string */
-#define MEM_Ephem     0x2000	/* Mem.z points to an ephemeral string */
-#define MEM_Agg       0x4000	/* Mem.z points to an agg function context */
-#define MEM_Zero      0x8000	/* Mem.i contains count of 0s appended to blob */
-#define MEM_Subtype   0x10000	/* Mem.eSubtype is valid */
-#define MEM_Ptr       0x20000	/* Value is a generic pointer */
+#define MEM_Term      0x0800	/* String rep is nul terminated */
+#define MEM_Dyn       0x1000	/* Need to call Mem.xDel() on Mem.z */
+#define MEM_Static    0x2000	/* Mem.z points to a static string */
+#define MEM_Ephem     0x4000	/* Mem.z points to an ephemeral string */
+#define MEM_Agg       0x8000	/* Mem.z points to an agg function context */
+#define MEM_Zero      0x10000	/* Mem.i contains count of 0s appended to blob */
+#define MEM_Subtype   0x20000	/* Mem.eSubtype is valid */
+#define MEM_Ptr       0x40000	/* Value is a generic pointer */
 
 /**
  * In contrast to Mem_TypeMask, this one allows to get
@@ -251,11 +255,12 @@ struct Mem {
  * auxiliary flags.
  */
 enum {
-	MEM_PURE_TYPE_MASK = 0x7f
+	MEM_PURE_TYPE_MASK = 0xff
 };
 
 static_assert(MEM_PURE_TYPE_MASK == (MEM_Null | MEM_Str | MEM_Int | MEM_Real |
-				     MEM_Blob | MEM_Bool | MEM_UInt),
+				     MEM_Blob | MEM_Bool | MEM_UInt |
+				     MEM_Decimal),
 	      "value of type mask must consist of corresponding to memory "\
 	      "type bits");
 
@@ -528,10 +533,14 @@ int sqlVdbeIntValue(Mem *, int64_t *, bool *is_neg);
 int sqlVdbeRealValue(Mem *, double *);
 
 int
+sqlVdbeDecimalValue(const struct Mem *pMem, decimal_t *decvalue);
+
+int
 mem_value_bool(const struct Mem *mem, bool *b);
 
 int mem_apply_integer_type(Mem *);
 int sqlVdbeMemRealify(Mem *);
+int mem_apply_decimal_type(Mem *pMem);
 
 /**
  * Convert @a mem to NUMBER type, so that after conversion it has
