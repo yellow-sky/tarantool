@@ -273,7 +273,7 @@ remove_images:
   stage: cleanup
   when: always
   tags:
-    - docker_sh2_perf
+    - tarantool_sh2_pack
   script:
     - ${GITLAB_MAKE} perf_cleanup
 
