@@ -213,6 +213,8 @@ add_subdirectory(box)
 set(TARANTOOL_C_FLAGS ${CMAKE_C_FLAGS} PARENT_SCOPE)
 set(TARANTOOL_CXX_FLAGS ${CMAKE_CXX_FLAGS} PARENT_SCOPE)
 
+
+message("\n\n\nEXPORT_LIST")
 set(EXPORT_LIST)
 if(BUILD_STATIC)
     # for each static library we should find a corresponding shared library to
@@ -227,6 +229,8 @@ if(BUILD_STATIC)
             string(REGEX REPLACE "\\.a$" "" libname ${libname})
             string(REGEX REPLACE "^lib" "" libname ${libname})
             find_library(SYMBOLS_LIB NAMES ${libname})
+            message(${SYMBOLS_LIB})
+            message(${libname})
             # add found library to export list
             list(APPEND EXPORT_LIST ${SYMBOLS_LIB})
             # set variable to allow rescan (CMake depended)
