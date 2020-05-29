@@ -7,18 +7,22 @@ local doc = require('help.en_US')
 -- corresponds to a tarantool version a user runs.
 local DOCUMENTATION_VERSION = '2.1'
 
-help = { doc.help }
+help = rawget(_G, 'help') or {}
+help[help] = doc.help
 tutorial = {}
-tutorial[1] = help[1]
+tutorial[1] = help[help]
 
 local help_function_data = {};
 local help_object_data = {}
 
 local function help_call(table, param)
-    return help
+    return help[param or help]
 end
 
-setmetatable(help, { __call = help_call })
+setmetatable(help, {
+    __call = help_call,
+    __serialize = help_call,
+})
 
 local screen_id = 1;
 

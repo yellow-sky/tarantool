@@ -2194,61 +2194,60 @@ lbox_popen_info(struct lua_State *L)
 	return 1;
 }
 
-/**
- * Close a popen handle.
- *
- * @param handle  a handle to close
- *
- * Basically it kills a process using SIGKILL and releases all
- * resources assosiated with the popen handle.
- *
- * Details about signaling:
- *
- * - The signal is sent only when opts.keep_child is not set.
- * - The signal is sent only when a process is alive according
- *   to the information available on current even loop iteration.
- *   (There is a gap here: a zombie may be signaled; it is
- *   harmless.)
- * - The signal is sent to a process or a grocess group depending
- *   of opts.group_signal. (@see lbox_popen_new() for details of
- *   group signaling).
- * - There are peculiars in group signaling on Mac OS,
- *   @see lbox_popen_signal() for details.
- *
- * Resources are released disregarding of whether a signal
- * sending succeeds: fds are closed, memory is released,
- * the handle is marked as closed.
- *
- * No operation is possible on a closed handle except
- * :close(), which always successful on closed handle
- * (idempotence).
- *
- * Raise an error on incorrect parameters:
- *
- * - IllegalParams: an incorrect handle parameter.
- *
- * The function may return `true` or `nil, err`, but it always
- * frees the handle resources. So any return value usually
- * means success for a caller. The return values are purely
- * informational: it is for logging or same kind of reporting.
- *
- * Possible diagnostics (don't consider them as errors):
- *
- * - SystemError: no permission to send a signal to
- *                a process or a process group
- *
- *                This diagnostics may appear due to
- *                Mac OS behaviour on zombies when
- *                opts.group_signal is set,
- *                @see lbox_popen_signal().
- *
- *                Whether it may appear due to other
- *                reasons is unclear.
- *
- * Always return `true` when a process is known as dead (say,
- * after ph:wait()): no signal will be send, so no 'failure'
- * may appear.
- */
+static char *lbox_popen_close_help =
+"Close a popen handle.\n"
+"\n"
+"@param handle  a handle to close\n"
+"\n"
+"Basically it kills a process using SIGKILL and releases all\n"
+"resources assosiated with the popen handle.\n"
+"\n"
+"Details about signaling:\n"
+"\n"
+"- The signal is sent only when opts.keep_child is not set.\n"
+"- The signal is sent only when a process is alive according\n"
+"  to the information available on current even loop iteration.\n"
+"  (There is a gap here: a zombie may be signaled; it is\n"
+"  harmless.)\n"
+"- The signal is sent to a process or a grocess group depending\n"
+"  of opts.group_signal. (@see lbox_popen_new() for details of\n"
+"  group signaling).\n"
+"- There are peculiars in group signaling on Mac OS,\n"
+"  @see lbox_popen_signal() for details.\n"
+"\n"
+"Resources are released disregarding of whether a signal\n"
+"sending succeeds: fds are closed, memory is released,\n"
+"the handle is marked as closed.\n"
+"\n"
+"No operation is possible on a closed handle except\n"
+":close(), which always successful on closed handle\n"
+"(idempotence).\n"
+"\n"
+"Raise an error on incorrect parameters:\n"
+"\n"
+"- IllegalParams: an incorrect handle parameter.\n"
+"\n"
+"The function may return `true` or `nil, err`, but it always\n"
+"frees the handle resources. So any return value usually\n"
+"means success for a caller. The return values are purely\n"
+"informational: it is for logging or same kind of reporting.\n"
+"\n"
+"Possible diagnostics (don't consider them as errors):\n"
+"\n"
+"- SystemError: no permission to send a signal to\n"
+"               a process or a process group\n"
+"\n"
+"               This diagnostics may appear due to\n"
+"               Mac OS behaviour on zombies when\n"
+"               opts.group_signal is set,\n"
+"               @see lbox_popen_signal().\n"
+"\n"
+"               Whether it may appear due to other\n"
+"               reasons is unclear.\n"
+"\n"
+"Always return `true` when a process is known as dead (say,\n"
+"after ph:wait()): no signal will be send, so no 'failure'\n"
+"may appear.\n";
 static int
 lbox_popen_close(struct lua_State *L)
 {
@@ -2512,6 +2511,27 @@ tarantool_lua_popen_init(struct lua_State *L)
 	};
 	luaL_register_type(L, popen_handle_uname, popen_handle_methods);
 	luaL_register_type(L, popen_handle_closed_uname, popen_handle_methods);
+
+	/* Register help for functions. */
+
+	luaL_getmetatable(L, popen_handle_uname);
+
+	lua_getglobal(L, "help");
+	if (lua_type(L, -1) == LUA_TNIL) {
+		lua_pop(L, 1);
+		lua_newtable(L);
+		lua_pushvalue(L, -1);
+		lua_setglobal(L, "help");
+	}
+	assert(lua_type(L, -1) == LUA_TTABLE);
+
+	lua_getfield(L, -2, "close");             /* key */
+	lua_pushstring(L, lbox_popen_close_help); /* value */
+
+	lua_rawset(L, -3);
+
+	/* Pop _G.help and the metatable. */
+	lua_pop(L, 2);
 
 	/* Signals. */
 	lua_newtable(L);
