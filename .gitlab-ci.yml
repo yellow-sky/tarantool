@@ -95,7 +95,7 @@ variables:
   image: ${IMAGE_PERF_BUILT}
   stage: perf
   tags:
-    - docker_perf
+    - docker_sh2_perf
   artifacts:
     when: always
     paths:
@@ -194,7 +194,7 @@ perf_bootstrap:
   <<: *perf_only_definition
   stage: test
   tags:
-    - perf
+    - docker_sh2_perf
   script:
     - ${GITLAB_MAKE} perf_prepare
 
@@ -273,7 +273,7 @@ remove_images:
   stage: cleanup
   when: always
   tags:
-    - perf
+    - docker_sh2_perf
   script:
     - ${GITLAB_MAKE} perf_cleanup
 
