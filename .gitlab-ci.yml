@@ -194,7 +194,7 @@ perf_bootstrap:
   <<: *perf_only_definition
   stage: test
   tags:
-    - docker_sh2_perf
+    - tarantool_sh2_pack
   script:
     - ${GITLAB_MAKE} perf_prepare
 
