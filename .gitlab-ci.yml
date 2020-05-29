@@ -194,7 +194,7 @@ perf_bootstrap:
   <<: *perf_only_definition
   stage: test
   tags:
-    - tarantool_sh2_pack
+    - sh2_shell
   script:
     - ${GITLAB_MAKE} perf_prepare
 
@@ -273,7 +273,7 @@ remove_images:
   stage: cleanup
   when: always
   tags:
-    - tarantool_sh2_pack
+    - sh2_shell
   script:
     - ${GITLAB_MAKE} perf_cleanup
 
