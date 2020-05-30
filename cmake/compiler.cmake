@@ -269,7 +269,13 @@ macro(enable_tnt_compile_flags)
         if (NOT CMAKE_COMPILER_IS_CLANG)
             message(FATAL_ERROR "Undefined behaviour sanitizer only available for clang")
         else()
-            add_compile_flags("C;CXX" "-fsanitize=alignment -fno-sanitize-recover=alignment")
+            set(SANITIZE_FLAGS "-fsanitize=undefined -fno-sanitize-recover=undefined")
+            # Stailq data structure subtracts a positive value from NULL.
+            set(SANITIZE_FLAGS ${SANITIZE_FLAGS} -fno-sanitize=pointer-overflow)
+            # BPS tree accesses memory beyond array bounds.
+            set(SANITIZE_FLAGS ${SANITIZE_FLAGS} -fno-sanitize=bounds)
+
+            add_compile_flags("C;CXX" "${SANITIZE_FLAGS}")
         endif()
     endif()
 

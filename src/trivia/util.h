@@ -392,6 +392,16 @@ strnindex(const char **haystack, const char *needle, uint32_t len, uint32_t hmax
 
 /** \endcond public */
 
+#if __has_attribute(no_sanitize)
+#define NOSANITIZE_VPTR __attribute__((no_sanitize("vptr")))
+#define NOSANITIZE_INT_OVERFLOW __attribute__((no_sanitize("signed-integer-overflow")))
+#define NOSANITIZE_FLOAT_TRUNCATE __attribute__((no_sanitize("float-cast-overflow")))
+#else
+#define NOSANITIZE_VPTR
+#define NOSANITIZE_INT_OVERFLOW
+#define NOSANITIZE_FLOAT_TRUNCATE
+#endif
+
 void close_all_xcpt(int fdc, ...);
 
 void __gcov_flush();
