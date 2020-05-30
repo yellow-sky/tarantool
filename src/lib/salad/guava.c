@@ -30,7 +30,7 @@
  */
 
 #include "guava.h"
-
+#include "trivia/util.h"
 #include <stdint.h>
 
 /**
@@ -39,25 +39,13 @@
  * John Lamping, Eric Veach
  */
 
-static const int64_t K = 2862933555777941757;
-static const double  D = 0x1.0p31;
-
-static inline double lcg(int64_t *state)
-{
-	return (double )((int32_t)(((uint64_t )*state >> 33) + 1)) / D;
-}
-
 int32_t
-guava(int64_t state, int32_t buckets)
-{
-	int32_t candidate = 0;
-	int32_t next;
-	while (1) {
-		state = K * state + 1;
-		next = (int32_t)((candidate + 1) / lcg(&state));
-		if (next >= 0 && next < buckets)
-			candidate = next;
-		else
-			return candidate;
-	}
+guava(uint64_t key, int32_t num_buckets) {
+	int64_t b, j = 0;
+	do {
+		b = j;
+		key = key * 2862933555777941757ULL + 1;
+		j = (b + 1) * ((double)(1LL << 31) / (double)((key >> 33) + 1));
+	} while (j < num_buckets);
+	return b;
 }
