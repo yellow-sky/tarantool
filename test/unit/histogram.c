@@ -3,6 +3,7 @@
 
 #include "histogram.h"
 #include "memory.h"
+#include "random.h"
 #include "unit.h"
 #include "trivia/util.h"
 
@@ -49,8 +50,7 @@ gen_rand_data(size_t *p_len)
 static int64_t
 gen_rand_value(int64_t min, int64_t max)
 {
-	assert(max >= min);
-	return min + rand() % (max - min + 1);
+	return random_int64(min, max);
 }
 
 static void
@@ -177,8 +177,10 @@ test_percentile(void)
 int
 main()
 {
+	random_init();
 	srand(time(NULL));
 	test_counts();
 	test_discard();
 	test_percentile();
+	random_free();
 }

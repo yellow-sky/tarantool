@@ -39,6 +39,7 @@
 #include "sio.h"
 #include "trigger.h"
 #include "errinj.h"
+#include "random.h"
 #define HEAP_FORWARD_DECLARATION
 #include "salad/heap.h"
 
@@ -198,13 +199,10 @@ enum {
 static inline int
 swim_scaled_rand(int start, int end)
 {
-	assert(end >= start);
-	/*
-	 * RAND_MAX is likely to be INT_MAX - hardly SWIM will
-	 * ever be used in such a huge cluster.
-	 */
-	assert(end - start < RAND_MAX);
-	return rand() / (RAND_MAX / (end - start + 1) + 1);
+	assert(start >= 0 && end >= 0);
+	static_assert(sizeof(int) <= sizeof(uint32_t),
+		      "int is expected to be not bigger than 4 bytes");
+	return random_uint32(start, end);
 }
 
 /** Calculate UUID hash to use as a member table key. */

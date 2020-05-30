@@ -30,7 +30,7 @@
  * THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-
+#include <stdint.h>
 #include <stddef.h>
 
 #if defined(__cplusplus)
@@ -44,6 +44,12 @@ random_free(void);
 
 void
 random_bytes(char *buf, size_t size);
+
+int64_t
+random_int64(int64_t min, int64_t max);
+
+uint32_t
+random_uint32(uint32_t min, uint32_t max);
 
 #if defined(__cplusplus)
 }

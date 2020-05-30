@@ -97,3 +97,40 @@ rand:
 	while (generated < size)
 		buf[generated++] = rand();
 }
+
+int64_t
+random_int64(int64_t min, int64_t max)
+{
+	assert(max >= min);
+	uint64_t value;
+	random_bytes((char *)&value, sizeof(value));
+	int64_t l;
+	int64_t r;
+	if (min < 0) {
+		int64_t mid = min / 2 + max / 2;
+		if (value < UINT64_MAX / 2) {
+			l = min;
+			r = mid;
+		} else {
+			l = mid;
+			r = max;
+		}
+	} else {
+		l = min;
+		r = max;
+	}
+	int64_t res = l + (r - l) * ((double)value / UINT64_MAX);
+	assert(res >= min && res <= max);
+	return res;
+}
+
+uint32_t
+random_uint32(uint32_t min, uint32_t max)
+{
+	assert(max >= min);
+	uint32_t value;
+	random_bytes((char *)&value, sizeof(value));
+	uint32_t res = min + (max - min) * ((double)value / UINT32_MAX);
+	assert(res >= min && res <= max);
+	return res;
+}
