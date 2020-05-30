@@ -617,7 +617,16 @@ swim_register_event(struct swim *swim, struct swim_member *member)
 	 * Thirdly, logarithm is proved by the original
 	 * SWIM paper as the best option.
 	 */
-	member->status_ttd = ceil(log2(mh_size(swim->members))) + 1;
+	uint32_t size = mh_size(swim->members);
+	/*
+	 * Size can be 0, when the member table is empty and self
+	 * member is removed. Self removal may happen due to an
+	 * error during configuration.
+	 */
+	if (size == 0)
+		member->status_ttd = 1;
+	else
+		member->status_ttd = ceil(log2(size)) + 1;
 }
 
 /**
