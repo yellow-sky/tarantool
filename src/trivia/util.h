@@ -522,6 +522,12 @@ json_escape(char *buf, int size, const char *data);
 int
 double_compare_uint64(double lhs, uint64_t rhs, int k);
 
+int
+double_compare_nint64(double lhs, int64_t rhs, int k);
+
+int
+double_compare_int64(double lhs, int64_t rhs, int k);
+
 #if !defined(__cplusplus) && !defined(static_assert)
 # define static_assert _Static_assert
 #endif
