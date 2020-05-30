@@ -978,7 +978,7 @@ struct mh_i32_t *AlterSpaceLock::registry;
  * of the dropped indexes.
  * Replace the old space with a new one in the space cache.
  */
-static int
+NOSANITIZE_VPTR static int
 alter_space_commit(struct trigger *trigger, void *event)
 {
 	struct txn *txn = (struct txn *) event;
@@ -1023,7 +1023,7 @@ alter_space_commit(struct trigger *trigger, void *event)
  * Keep in mind that we may end up here in case of
  * alter_space_commit() failure (unlikely)
  */
-static int
+NOSANITIZE_VPTR static int
 alter_space_rollback(struct trigger *trigger, void * /* event */)
 {
 	struct alter_space *alter = (struct alter_space *) trigger->data;
@@ -1081,7 +1081,7 @@ alter_space_rollback(struct trigger *trigger, void * /* event */)
  * - at commit, the new space is coalesced with the old one.
  *   On rollback, the new space is deleted.
  */
-static void
+NOSANITIZE_VPTR static void
 alter_space_do(struct txn_stmt *stmt, struct alter_space *alter)
 {
 	/**
