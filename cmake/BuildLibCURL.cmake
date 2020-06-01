@@ -88,7 +88,8 @@ macro(curl_build)
 
                 --prefix <INSTALL_DIR>
                 --enable-static
-                --enable-shared
+                # --enable-shared=OFF
+                --disable-shared
 
                 --with-zlib
                 ${LIBCURL_OPENSSL_OPT}
