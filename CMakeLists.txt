@@ -348,12 +348,17 @@ else()
 endif()
 
 include_directories(${OPENSSL_INCLUDE_DIR})
+
 #
 # OpenSSL can require Z library (depending on build time options), so we add
 # it to libraries list in case of static openssl linking.
 #
 if(OPENSSL_USE_STATIC_LIBS)
-    find_library(Z_LIBRARY z)
+    if (BUILD_STATIC)
+        find_library(Z_LIBRARY libz.a)
+    elseif()
+        find_library(Z_LIBRARY z)
+    endif()
     set(OPENSSL_LIBRARIES ${OPENSSL_LIBRARIES} ${Z_LIBRARY})
 endif()
 
