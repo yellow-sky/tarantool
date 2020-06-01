@@ -220,10 +220,10 @@ perf_tpch:
     paths:
       - "bench-*.csv"
       - "*_t_version.txt"
+      - "*_result.txt"
   variables:
     <<: *perf_vars_definition
     BENCH: 'tpch'
-
 
 #perf_ycsb_hash:
 #  <<: *perf_docker_test_definition
