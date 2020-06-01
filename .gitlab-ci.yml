@@ -114,78 +114,78 @@ release:
   script:
     - ${GITLAB_MAKE} test_debian_no_deps
 
-debug:
-  <<: *docker_test_definition
-  script:
-    - ${GITLAB_MAKE} test_coverage_debian_no_deps
+#debug:
+#  <<: *docker_test_definition
+#  script:
+#    - ${GITLAB_MAKE} test_coverage_debian_no_deps
 
-release_clang:
-  <<: *docker_test_definition
-  variables:
-    CC: clang
-    CXX: clang++
-  script:
-    - ${GITLAB_MAKE} test_debian_no_deps
+#release_clang:
+#  <<: *docker_test_definition
+#  variables:
+#    CC: clang
+#    CXX: clang++
+#  script:
+#    - ${GITLAB_MAKE} test_debian_no_deps
 
-release_lto:
-  <<: *release_only_definition
-  <<: *docker_test_clang8_definition
-  variables:
-    CMAKE_EXTRA_PARAMS: -DENABLE_LTO=ON
-  script:
-    - ${GITLAB_MAKE} test_debian_no_deps
+#release_lto:
+#  <<: *release_only_definition
+#  <<: *docker_test_clang8_definition
+#  variables:
+#    CMAKE_EXTRA_PARAMS: -DENABLE_LTO=ON
+#  script:
+#    - ${GITLAB_MAKE} test_debian_no_deps
 
-release_lto_clang8:
-  <<: *release_only_definition
-  <<: *docker_test_clang8_definition
-  variables:
-    CC: clang-8
-    CXX: clang++-8
-    CMAKE_EXTRA_PARAMS: -DENABLE_LTO=ON
-  script:
-    - ${GITLAB_MAKE} test_debian_no_deps
+#release_lto_clang8:
+#  <<: *release_only_definition
+#  <<: *docker_test_clang8_definition
+#  variables:
+#    CC: clang-8
+#    CXX: clang++-8
+#    CMAKE_EXTRA_PARAMS: -DENABLE_LTO=ON
+#  script:
+#    - ${GITLAB_MAKE} test_debian_no_deps
 
-release_asan_clang8:
-  <<: *docker_test_clang8_definition
-  script:
-    - ${GITLAB_MAKE} test_asan_debian_no_deps
+#release_asan_clang8:
+#  <<: *docker_test_clang8_definition
+#  script:
+#    - ${GITLAB_MAKE} test_asan_debian_no_deps
 
-osx_14_release:
-  <<: *release_only_definition
-  stage: test
-  tags:
-    - osx_14
-  script:
-    - ${GITLAB_MAKE} test_osx
+#osx_14_release:
+#  <<: *release_only_definition
+#  stage: test
+#  tags:
+#    - osx_14
+#  script:
+#    - ${GITLAB_MAKE} test_osx
 
-osx_15_release:
-  stage: test
-  tags:
-    - osx_15
-  script:
-    - ${GITLAB_MAKE} test_osx
+#osx_15_release:
+#  stage: test
+#  tags:
+#    - osx_15
+#  script:
+#    - ${GITLAB_MAKE} test_osx
 
-osx_15_release_lto:
-  <<: *release_only_definition
-  stage: test
-  tags:
-    - osx_15
-  variables:
-    EXTRA_ENV: 'export CMAKE_EXTRA_PARAMS=-DENABLE_LTO=ON ;'
-  script:
-    - ${GITLAB_MAKE} test_osx
+#osx_15_release_lto:
+#  <<: *release_only_definition
+#  stage: test
+#  tags:
+#    - osx_15
+#  variables:
+#    EXTRA_ENV: 'export CMAKE_EXTRA_PARAMS=-DENABLE_LTO=ON ;'
+#  script:
+#    - ${GITLAB_MAKE} test_osx
 
-freebsd_12_release:
-  <<: *vbox_definition
-  tags:
-    - vms_freebsd_12
-  variables:
-    VMS_NAME: 'freebsd_12'
-    VMS_USER: 'vagrant'
-    VMS_PORT: '2232'
-    MAKE: 'gmake'
-  script:
-    - ${GITLAB_MAKE} vms_test_freebsd
+#freebsd_12_release:
+#  <<: *vbox_definition
+#  tags:
+#    - vms_freebsd_12
+#  variables:
+#    VMS_NAME: 'freebsd_12'
+#    VMS_USER: 'vagrant'
+#    VMS_PORT: '2232'
+#    MAKE: 'gmake'
+#  script:
+#    - ${GITLAB_MAKE} vms_test_freebsd
 
 # ####
 # Perf
@@ -272,6 +272,21 @@ perf_linkbench_ssd:
   variables:
     <<: *perf_vars_definition
     BENCH: 'linkbench'
+
+perf_tpch:
+  <<: *perf_docker_test_definition
+  image: ${IMAGE_PERF_TPCH_BUILT}
+  tags:
+    - docker_sh2_perf
+  artifacts:
+    when: always
+    paths:
+      - "bench-*.csv"
+      - "*_t_version.txt"
+      - "*_result.txt"
+  variables:
+    <<: *perf_vars_definition
+    BENCH: 'tpch'
 
 # Post-testing part
 
@@ -491,15 +506,15 @@ debian_10_deploy:
 
 # Static builds
 
-static_build:
-  <<: *docker_test_definition
-  script:
-    - ${GITLAB_MAKE} test_static_build
+#static_build:
+#  <<: *docker_test_definition
+#  script:
+#    - ${GITLAB_MAKE} test_static_build
 
-static_docker_build:
-  <<: *release_only_definition
-  stage: test
-  tags:
-    - deploy_test
-  script:
-    - ${GITLAB_MAKE} test_static_docker_build
+#static_docker_build:
+#  <<: *release_only_definition
+#  stage: test
+#  tags:
+#    - deploy_test
+#  script:
+#    - ${GITLAB_MAKE} test_static_docker_build
