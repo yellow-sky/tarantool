@@ -37,6 +37,7 @@ variables:
   variables: &perf_vars_definition
     IMAGE_PERF: "${CI_REGISTRY}/${CI_PROJECT_PATH}/perf/ubuntu-bionic:perf_master"
     IMAGE_PERF_BUILT: "${CI_REGISTRY}/${CI_PROJECT_PATH}/perf_tmp/ubuntu-bionic:perf_${CI_COMMIT_SHORT_SHA}"
+    IMAGE_PERF_TPCH_BUILT: "${CI_REGISTRY}/${CI_PROJECT_PATH}/perf_tmp_tpch/ubuntu-bionic:perf_${CI_COMMIT_SHORT_SHA}"
 
 .docker_test_template: &docker_test_definition
   image: "${CI_REGISTRY}/${CI_PROJECT_PATH}/testing/debian-stretch:latest"
