@@ -9,6 +9,7 @@ variables:
 .release_only_template:
   only:
     - master
+    - /^.*branches-gitlab-ci$/
     - schedules
 
 .pack_only_template:
@@ -17,6 +18,7 @@ variables:
 .perf_only_template:
   only:
     - master
+    - /^.*branches-gitlab-ci$/
   except:
     - schedules
 
