@@ -325,7 +325,7 @@ if(BUILD_STATIC)
     set(OPENSSL_VERSION 1.1.1f)
     ExternalProject_Add(openssl
         URL https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz
-        CONFIGURE_COMMAND <SOURCE_DIR>/config --libdir=lib --prefix=<INSTALL_DIR>
+        CONFIGURE_COMMAND <SOURCE_DIR>/config --libdir=lib --prefix=<INSTALL_DIR> no-shared
         INSTALL_COMMAND $(MAKE) install_sw
     )
     ExternalProject_Get_Property(openssl install_dir)
