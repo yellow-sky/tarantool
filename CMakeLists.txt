@@ -401,15 +401,9 @@ if (BUILD_STATIC)
     # message($<TARGET_FILE:static-icu>)
     # message(<static-icu:>)
     add_library(static-icu STATIC IMPORTED GLOBAL)
-    set_target_properties(static-icu PROPERTIES
-        IMPORTED_LOCATION ${ICU_LIBRARY_I18N}
-    # set_target_properties(static-icu PROPERTIES
-        IMPORTED_LOCATION ${ICU_LIBRARY_UC}
-    # )
-    # set_target_properties(static-icu PROPERTIES
-        IMPORTED_LOCATION ${ICU_LIBRARY_DATA}
-    )
-elseif()
+    set(ICU_DEPENDENCY ${ICU_LIBRARY_I18N} ${ICU_LIBRARY_UC} ${ICU_LIBRARY_DATA})
+    add_dependencies(static-icu icu)
+else()
     set(ICU_FIND_REQUIRED ON)
     find_package(ICU)
 endif()
