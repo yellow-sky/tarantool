@@ -30,122 +30,122 @@ include:
 
 # Tests release and debug
 
-release:
+builds:release:
   extends:
     - .release_only_template
     - .test_release_template
 
-debug:
+builds:debug:
   extends:
     - .release_only_template
     - .test_debug_template
 
 # Clang builds (Clang/Clang+LTO/Clang8+LTO/Clang8+ASAN)
 
-release_clang:
+clang:release:
   extends:
     - .release_only_template
     - .test_release_clang_template
 
-release_lto:
+clang:release_lto:
   extends:
     - .release_only_template
     - .test_release_lto_template
 
-release_lto_clang8:
+clang:v8_release_lto:
   extends:
     - .release_only_template
     - .test_release_lto_clang8_template
 
-release_asan_clang8:
+clang:v8_release_asan:
   extends:
     - .release_only_template
     - .test_release_asan_clang8_template
 
 # Static builds w/ & w/o dockerfile
 
-static_build:
+builds:static:
   extends:
     - .release_only_template
     - .test_static_build_template
 
-static_docker_build:
+builds:static_docker:
   extends:
     - .release_only_template
     - .test_static_docker_build_template
 
 # OSX builds (14/15/15+LTO)
 
-osx_14_release:
+osx:14_release:
   extends:
     - .release_only_template
     - .test_osx_14_release_template
 
-osx_15_release:
+osx:15_release:
   extends:
     - .release_only_template
     - .test_osx_15_release_template
 
-osx_15_release_lto:
+osx:15_release_lto:
   extends:
     - .release_only_template
     - .test_osx_15_release_lto_template
 
 # FreeBSD build
 
-freebsd_12_release:
+freebsd:12_release:
   extends:
     - .release_only_template
     - .test_freebsd_12_release_template
 
 # Build and deploy packages and sources
 
-sources_deploy:
+deploy:sources:
   extends: .pack_template
   script:
     - ${GITLAB_MAKE} source_deploy
 
-centos_6_deploy:
+deploy:centos_6:
   extends: .test_centos_6_template
 
-centos_7_deploy:
+deploy:centos_7:
   extends: .test_centos_7_template
 
-centos_8_deploy:
+deploy:centos_8:
   extends: .test_centos_8_template
 
-fedora_28_deploy:
+deploy:fedora_28:
   extends: .test_fedora_28_template
 
-fedora_29_deploy:
+deploy:fedora_29:
   extends: .test_fedora_29_template
 
-fedora_30_deploy:
+deploy:fedora_30:
   extends: .test_fedora_30_template
 
-fedora_31_deploy:
+deploy:fedora_31:
   extends: .test_fedora_31_template
 
-ubuntu_14_04_deploy:
+deploy:ubuntu_14_04:
   extends: .test_ubuntu_14_04_template
 
-ubuntu_16_04_deploy:
+deploy:ubuntu_16_04:
   extends: .test_ubuntu_16_04_template
 
-ubuntu_18_04_deploy:
+deploy:ubuntu_18_04:
   extends: .test_ubuntu_18_04_template
 
-ubuntu_19_10_deploy:
+deploy:ubuntu_19_10:
   extends: .test_ubuntu_19_10_template
 
-ubuntu_20_04_deploy:
+deploy:ubuntu_20_04:
   extends: .test_ubuntu_20_04_template
 
-debian_8_deploy:
+deploy:debian_8:
   extends: .test_debian_8_template
 
-debian_9_deploy:
+deploy:debian_9:
   extends: .test_debian_9_template
 
-debian_10_deploy:
+deploy:debian_10:
   extends: .test_debian_10_template
