@@ -39,7 +39,7 @@ macro(libmisc_build)
         else()
             set(GOMP_LIBRARY gomp)
         endif()
-        target_link_libraries(misc ${GOMP_LIBRARY} pthread ${CMAKE_DL_LIBS})
+        target_link_libraries(misc ${GOMP_LIBRARY} pthread)
     endif()
 
     unset(misc_src)
