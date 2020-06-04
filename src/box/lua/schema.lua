@@ -1360,6 +1360,43 @@ end
 
 internal.check_iterator_type = check_iterator_type -- export for net.box
 
+-- append necessary key parts from opts.key_extension (if present) to key
+-- works only if key is full
+local function append_key_extension(index, key, opts)
+    if not opts or not opts.key_extension then return end
+    if index.unique then
+        box.error(box.error.ILLEGAL_PARAMS,
+                  "key_extension is acceptable only for non-unique indexes")
+    end
+    if type(opts.key_extension) ~= 'table' then
+        box.error(box.error.ILLEGAL_PARAMS,
+                  "key_extension must be a table with key")
+    end
+    local s = box.space[index.space_id]
+    local pk = s.index[0]
+    if #opts.key_extension > #pk.parts then
+        box.error(box.error.ILLEGAL_PARAMS,
+                  "key_extension is expected to be partial/full primary key")
+    end
+    if #key ~= #index.parts then
+        box.error(box.error.ILLEGAL_PARAMS,
+                  "key_extension requires key to be full")
+    end
+    key = keify(key)
+    if is_tuple(key) then
+        key = key:totable()
+    end
+    local is_secondary_part = { }
+    for _,part in ipairs(index.parts) do
+        is_secondary_part[part.fieldno] = true
+    end
+    for k,v in ipairs(opts.key_extension) do
+        if not is_secondary_part[pk.parts[k].fieldno] then
+            table.insert(key, v)
+        end
+    end
+end
+
 local base_index_mt = {}
 base_index_mt.__index = base_index_mt
 --
@@ -1455,6 +1492,7 @@ end
 -- iteration
 base_index_mt.pairs_ffi = function(index, key, opts)
     check_index_arg(index, 'pairs')
+    append_key_extension(index, key, opts)
     local pkey, pkey_end = tuple_encode(key)
     local itype = check_iterator_type(opts, pkey + 1 >= pkey_end);
 
@@ -1470,6 +1508,7 @@ base_index_mt.pairs_ffi = function(index, key, opts)
 end
 base_index_mt.pairs_luac = function(index, key, opts)
     check_index_arg(index, 'pairs')
+    append_key_extension(index, key, opts)
     key = keify(key)
     local itype = check_iterator_type(opts, #key == 0);
     local keymp = msgpack.encode(key)
@@ -1533,6 +1572,7 @@ end
 
 base_index_mt.select_ffi = function(index, key, opts)
     check_index_arg(index, 'select')
+    append_key_extension(index, key, opts)
     local key, key_end = tuple_encode(key)
     local iterator, offset, limit = check_select_opts(opts, key + 1 >= key_end)
 
@@ -1555,6 +1595,7 @@ end
 
 base_index_mt.select_luac = function(index, key, opts)
     check_index_arg(index, 'select')
+    append_key_extension(index, key, opts)
     local key = keify(key)
     local iterator, offset, limit = check_select_opts(opts, #key == 0)
     return internal.select(index.space_id, index.id, iterator,

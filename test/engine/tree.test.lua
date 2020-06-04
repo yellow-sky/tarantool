@@ -603,6 +603,21 @@ i2:select{3, 15}
 get_pairs(i2, {3, 15})
 i2:select({3, 15}, {iterator='GE', limit=3})
 get_pairs(i2, {3, 15}, {iterator='GE', limit=3})
+
+i2:select({3}, {key_extension="wtf"})
+i2:select({3}, {key_extension={15, 16, 17}})
+i2:select({}, {key_extension={15}})
+i1:select({3}, {key_extension={15}})
+i2:select({3}, {key_extension={15}})
+i2:select({3}, {key_extension={15}, iterator='GE', limit=3})
+
+get_pairs(i2, {3}, {key_extension="wtf"})
+get_pairs(i2, {3}, {key_extension={15, 16, 17}})
+get_pairs(i2, {}, {key_extension={15}})
+get_pairs(i1, {3}, {key_extension={15}})
+get_pairs(i2, {3}, {key_extension={15}})
+get_pairs(i2, {3}, {key_extension={15}, iterator='GE', limit=3})
+
 order = nil
 s:drop()
 
@@ -617,6 +632,19 @@ i2:select{1, 2}
 get_pairs(i2, {1, 2})
 i2:select{1, 2, 2}
 get_pairs(i2, {1, 2, 2})
+
+i2:select({1, 2}, {key_extension="wtf"})
+i2:select({1, 2}, {key_extension={1, 2, 2}})
+i2:select({}, {key_extension={1, 2}})
+i1:select({1, 2}, {key_extension={1, 2}})
+i2:select({1, 2}, {key_extension={1, 2}})
+
+get_pairs(i2, {1, 2}, {key_extension="wtf"})
+get_pairs(i2, {1, 2}, {key_extension={1, 2, 2}})
+get_pairs(i2, {}, {key_extension={1, 2}})
+get_pairs(i1, {1, 2}, {key_extension={1, 2}})
+get_pairs(i2, {1, 2}, {key_extension={1, 2}})
+
 s:drop()
 
 -------------------------------------------------------------------------------

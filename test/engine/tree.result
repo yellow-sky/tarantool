@@ -3099,6 +3099,60 @@ get_pairs(i2, {3, 15}, {iterator='GE', limit=3})
   - [20, 3]
   - [25, 3]
 ...
+i2:select({3}, {key_extension="wtf"})
+---
+- error: Illegal parameters, key_extension must be a table with key
+...
+i2:select({3}, {key_extension={15, 16, 17}})
+---
+- error: Illegal parameters, key_extension is expected to be partial/full primary
+    key
+...
+i2:select({}, {key_extension={15}})
+---
+- error: Illegal parameters, key_extension requires key to be full
+...
+i1:select({3}, {key_extension={15}})
+---
+- error: Illegal parameters, key_extension is acceptable only for non-unique indexes
+...
+i2:select({3}, {key_extension={15}})
+---
+- - [15, 3]
+...
+i2:select({3}, {key_extension={15}, iterator='GE', limit=3})
+---
+- - [15, 3]
+  - [20, 3]
+  - [25, 3]
+...
+get_pairs(i2, {3}, {key_extension="wtf"})
+---
+- error: Illegal parameters, key_extension must be a table with key
+...
+get_pairs(i2, {3}, {key_extension={15, 16, 17}})
+---
+- error: Illegal parameters, key_extension is expected to be partial/full primary
+    key
+...
+get_pairs(i2, {}, {key_extension={15}})
+---
+- error: Illegal parameters, key_extension requires key to be full
+...
+get_pairs(i1, {3}, {key_extension={15}})
+---
+- error: Illegal parameters, key_extension is acceptable only for non-unique indexes
+...
+get_pairs(i2, {3}, {key_extension={15}})
+---
+- - [15, 3]
+...
+get_pairs(i2, {3}, {key_extension={15}, iterator='GE', limit=3})
+---
+- - [15, 3]
+  - [20, 3]
+  - [25, 3]
+...
 order = nil
 ---
 ...
@@ -3145,6 +3199,48 @@ i2:select{1, 2, 2}
 - - [1, 2, 2]
 ...
 get_pairs(i2, {1, 2, 2})
+---
+- - [1, 2, 2]
+...
+i2:select({1, 2}, {key_extension="wtf"})
+---
+- error: Illegal parameters, key_extension must be a table with key
+...
+i2:select({1, 2}, {key_extension={1, 2, 2}})
+---
+- error: Illegal parameters, key_extension is expected to be partial/full primary
+    key
+...
+i2:select({}, {key_extension={1, 2}})
+---
+- error: Illegal parameters, key_extension requires key to be full
+...
+i1:select({1, 2}, {key_extension={1, 2}})
+---
+- error: Illegal parameters, key_extension is acceptable only for non-unique indexes
+...
+i2:select({1, 2}, {key_extension={1, 2}})
+---
+- - [1, 2, 2]
+...
+get_pairs(i2, {1, 2}, {key_extension="wtf"})
+---
+- error: Illegal parameters, key_extension must be a table with key
+...
+get_pairs(i2, {1, 2}, {key_extension={1, 2, 2}})
+---
+- error: Illegal parameters, key_extension is expected to be partial/full primary
+    key
+...
+get_pairs(i2, {}, {key_extension={1, 2}})
+---
+- error: Illegal parameters, key_extension requires key to be full
+...
+get_pairs(i1, {1, 2}, {key_extension={1, 2}})
+---
+- error: Illegal parameters, key_extension is acceptable only for non-unique indexes
+...
+get_pairs(i2, {1, 2}, {key_extension={1, 2}})
 ---
 - - [1, 2, 2]
 ...
