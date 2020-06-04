@@ -125,7 +125,7 @@ if(BUILD_STATIC)
     include(ExternalProject)
     ExternalProject_add(unwind
         URL http://download.savannah.nongnu.org/releases/libunwind/libunwind-${UNWIND_VERSION}.tar.gz
-        CONFIGURE_COMMAND <SOURCE_DIR>/configure --enable-static --enable-shared --prefix=<INSTALL_DIR>
+        CONFIGURE_COMMAND <SOURCE_DIR>/configure --enable-static --disable-shared --prefix=<INSTALL_DIR>
         INSTALL_COMMAND $(MAKE) install
     )
     message("Libunwind added as ExternalProject")
