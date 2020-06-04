@@ -121,9 +121,10 @@ set (CMAKE_CXX_FLAGS_RELWITHDEBINFO
 unset(CC_DEBUG_OPT)
 
 if(BUILD_STATIC)
+    set(UNWIND_VERSION 1.3-rc1)
     include(ExternalProject)
     ExternalProject_add(unwind
-        URL http://download.savannah.nongnu.org/releases/libunwind/libunwind-1.3-rc1.tar.gz
+        URL http://download.savannah.nongnu.org/releases/libunwind/libunwind-${UNWIND_VERSION}.tar.gz
         CONFIGURE_COMMAND <SOURCE_DIR>/configure --enable-static --enable-shared --prefix=<INSTALL_DIR>
         INSTALL_COMMAND $(MAKE) install
     )
