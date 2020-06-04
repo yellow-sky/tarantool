@@ -54,14 +54,6 @@ RUN set -x && \
     ./configure --with-data-packaging=static --enable-static --enable-shared && \
     make -j && make install
 
-RUN set -x && \
-    cd / && \
-    curl -O -L http://download.savannah.nongnu.org/releases/libunwind/libunwind-1.3-rc1.tar.gz && \
-    tar -xvf libunwind-1.3-rc1.tar.gz && \
-    cd libunwind-1.3-rc1 && \
-    ./configure --enable-static --enable-shared && \
-    make -j && make install
-
 COPY . /tarantool
 
 WORKDIR /tarantool
