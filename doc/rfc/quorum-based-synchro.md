@@ -137,6 +137,35 @@ human intervention, since failure means either technical problem (such
 as not enough space for WAL) that has to be resolved or an inconsistent
 state that requires rejoin.
 
+Currently Tarantool provides no protection from dirty read from the
+memtx during the TXN write into the WAL. So, there is a chance of TXN
+can fail to be written to the WAL, while some read requests can report
+success of TXN. In this RFC we make no attempt to resolve the dirty
+read, so it should be addressed by user code. Although we plan to
+introduce an MVCC machinery similar to available in vinyl engnie which
+will resolve the dirty read problem.
+
+### Connection liveness
+
+There is a timeout-based mechanism in Tarantool that controls the
+asynchronous replication, which uses the following config:
+```
+* replication_connect_timeout  = 4
+* replication_sync_lag         = 10
+* replication_sync_timeout     = 300
+* replication_timeout          = 1
+```
+For backward compatibility and to differentiate the async replication
+we should augment the configuration with the following:
+```
+* synchro_replication_heartbeat = 4
+* synchro_replication_read_timeout = 1
+* synchro_replication_write_timeout = 1
+```
+Leader should send a heartbeat every synchro_replication_heartbeat if
+there were no messages sent. Replicas should respond to the heartbeat
+just the same way as they do it now. As soon as Leader has no response
+for another heartbeat interval, it should consider the replica is lost.
 As soon as leader appears in a situation it has not enough replicas
 to achieve quorum, it should stop accepting write requests. There's an
 option for leader to rollback to the latest transaction that has quorum:
@@ -375,5 +404,4 @@ There is an implementation of synchronous replication as part of gh-980
 activities, still it is not in a state to get into the product. More
 than that it intentionally breaks backward compatibility which is a
 prerequisite for this proposal.
-
 
