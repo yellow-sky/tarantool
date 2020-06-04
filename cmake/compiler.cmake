@@ -120,13 +120,20 @@ set (CMAKE_CXX_FLAGS_RELWITHDEBINFO
 
 unset(CC_DEBUG_OPT)
 
-check_include_file(libunwind.h HAVE_LIBUNWIND_H)
 if(BUILD_STATIC)
-    set(UNWIND_LIB_NAME libunwind.a)
+    include(ExternalProject)
+    ExternalProject_add(unwind
+        URL http://download.savannah.nongnu.org/releases/libunwind/libunwind-1.3-rc1.tar.gz
+        CONFIGURE_COMMAND <SOURCE_DIR>/configure --enable-static --enable-shared --prefix=<INSTALL_DIR>
+        INSTALL_COMMAND $(MAKE) install
+    )
+    ExternalProject_Get_Property(unwind install_dir)
+    set(UNWIND_LIBRARY ${install_dir}/lib/libunwind.a)
+    set(HAVE_LIBUNWIND_H TRUE)
 else()
-    set(UNWIND_LIB_NAME unwind)
+    check_include_file(libunwind.h HAVE_LIBUNWIND_H)
+    find_library(UNWIND_LIBRARY PATH_SUFFIXES system NAMES unwind)
 endif()
-find_library(UNWIND_LIBRARY PATH_SUFFIXES system NAMES ${UNWIND_LIB_NAME})
 
 # Disabled backtraces support on FreeBSD by default, because of
 # gh-4278.
@@ -148,27 +155,22 @@ if (ENABLE_BACKTRACE)
         set (UNWIND_LIBRARIES ${UNWIND_LIBRARY})
     else()
         if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" OR
-            CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
-            if(BUILD_STATIC)
-                set(UNWIND_PLATFORM_LIB_NAME "libunwind-${CMAKE_SYSTEM_PROCESSOR}.a")
-            else()
-                set(UNWIND_PLATFORM_LIB_NAME "unwind-${CMAKE_SYSTEM_PROCESSOR}")
-            endif()
+            CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64"
+        )
+            set(UNWIND_PLATFORM_LIB_NAME "unwind-${CMAKE_SYSTEM_PROCESSOR}")
         elseif (CMAKE_SYSTEM_PROCESSOR STREQUAL "i686")
-            if(BUILD_STATIC)
-                set(UNWIND_PLATFORM_LIB_NAME "libunwind-x86.a")
-            else()
-                set(UNWIND_PLATFORM_LIB_NAME "unwind-x86")
-            endif()
+            set(UNWIND_PLATFORM_LIB_NAME "unwind-x86")
         elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "arm*")
-            if(BUILD_STATIC)
-                set(UNWIND_PLATFORM_LIB_NAME "libunwind-arm.a")
-            else()
-                set(UNWIND_PLATFORM_LIB_NAME "unwind-arm")
-            endif()
+            set(UNWIND_PLATFORM_LIB_NAME "unwind-arm")
         endif()
-        find_library(UNWIND_PLATFORM_LIBRARY PATH_SUFFIXES system
-            NAMES ${UNWIND_PLATFORM_LIB_NAME})
+
+        if (BUILD_STATIC)
+            set(UNWIND_PLATFORM_LIBRARY ${install_dir}/lib/lib${UNWIND_PLATFORM_LIB_NAME}.a)
+        else()
+            find_library(UNWIND_PLATFORM_LIBRARY PATH_SUFFIXES system
+                NAMES ${UNWIND_PLATFORM_LIB_NAME}
+            )
+        endif()
         set(UNWIND_LIBRARIES ${UNWIND_PLATFORM_LIBRARY} ${UNWIND_LIBRARY})
     endif()
     if (BUILD_STATIC)

@@ -44,6 +44,9 @@ target_link_libraries(core salad small uri decNumber ${LIBEV_LIBRARIES}
                       ${MSGPUCK_LIBRARIES} ${ICU_LIBRARIES})
 
 if (ENABLE_BACKTRACE AND NOT TARGET_OS_DARWIN)
+    if (BUILD_STATIC)
+        add_dependencies(core unwind)
+    endif()
     target_link_libraries(core gcc_s ${UNWIND_LIBRARIES})
 endif()
 
