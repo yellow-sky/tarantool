@@ -128,7 +128,7 @@ if(BUILD_STATIC)
         CONFIGURE_COMMAND <SOURCE_DIR>/configure --enable-static --disable-shared --prefix=<INSTALL_DIR>
         INSTALL_COMMAND $(MAKE) install
     )
-    message("Libunwind added as ExternalProject")
+    message(STATUS "Unwind ${UNWIND_VERSION} added as ExternalProject")
     ExternalProject_Get_Property(unwind install_dir)
     include_directories(${install_dir}/include)
     set(HAVE_LIBUNWIND_H TRUE)
