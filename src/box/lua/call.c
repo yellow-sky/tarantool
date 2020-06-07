@@ -436,6 +436,7 @@ port_lua_do_dump(struct port *base, struct mpstream *stream,
 	int top = lua_gettop(L);
 	if (lua_cpcall(L, handler, &ctx) != 0) {
 		luaT_toerror(port->L);
+		lua_pop(L, 1); 
 		return -1;
 	}
 	lua_settop(L, top);
