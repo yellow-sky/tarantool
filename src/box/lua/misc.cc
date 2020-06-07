@@ -80,6 +80,19 @@ port_c_dump_lua(struct port *base, struct lua_State *L, bool is_flat)
 	}
 }
 
+/**
+ * Third parameter (is_flat) should always be considered
+ * false because there is no way to detect whether dumped
+ * result is tuple or multireturn. That ensures behavior
+ * that is consistent with msgpack_dump which encodes
+ * returned tuple as an array.
+ */
+extern "C" void
+port_c_dump_lua_not_flat(struct port *base, struct lua_State *L, bool)
+{
+	port_c_dump_lua(base, L, false);
+}
+
 extern "C" void
 port_msgpack_dump_lua(struct port *base, struct lua_State *L, bool is_flat)
 {

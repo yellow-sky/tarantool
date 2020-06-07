@@ -203,6 +203,9 @@ port_c_dump_msgpack(struct port *base, struct obuf *out)
 extern void
 port_c_dump_lua(struct port *port, struct lua_State *L, bool is_flat);
 
+extern void
+port_c_dump_lua_not_flat(struct port *port, struct lua_State *L, bool is_flat);
+
 extern struct sql_value *
 port_c_get_vdbemem(struct port *base, uint32_t *size);
 
@@ -215,6 +218,26 @@ const struct port_vtab port_c_vtab = {
 	.get_vdbemem = port_c_get_vdbemem,
 	.destroy = port_c_destroy,
 };
+
+const struct port_vtab port_c_not_flat_vtab = {
+	.dump_msgpack = port_c_dump_msgpack,
+	.dump_msgpack_16 = port_c_dump_msgpack_16,
+	.dump_lua = port_c_dump_lua_not_flat,
+	.dump_plain = NULL,
+	.get_msgpack = NULL,
+	.get_vdbemem = port_c_get_vdbemem,
+	.destroy = port_c_destroy,
+};
+
+void
+port_c_not_flat_create(struct port *base)
+{
+	struct port_c *port = (struct port_c *)base;
+	port->vtab = &port_c_not_flat_vtab;
+	port->first = NULL;
+	port->last = NULL;
+	port->size = 0;
+}
 
 void
 port_c_create(struct port *base)

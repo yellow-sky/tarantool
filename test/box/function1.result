@@ -114,7 +114,7 @@ box.func["function1.args"]:call({ "xx" })
 ...
 box.func["function1.args"]:call({ 15 })
 ---
-- [15, 'hello']
+- - [15, 'hello']
 ...
 box.schema.func.drop("function1.args")
 ---
@@ -645,11 +645,11 @@ func:call({4})
 ...
 func:call({4, 2})
 ---
-- [2]
+- - [2]
 ...
 func:call({4, 2, 1})
 ---
-- [2]
+- - [2]
 ...
 func:drop()
 ---
@@ -802,11 +802,11 @@ box.schema.func.create(name, {language = "C", exports = {'LUA'}})
 ...
 box.func[name]:call()
 ---
-- 1
-- -1
-- 18446744073709551615
-- '123456789101112131415'
-- [2]
+- - 1
+  - -1
+  - 18446744073709551615
+  - '123456789101112131415'
+  - [2]
 ...
 box.schema.user.grant('guest', 'super')
 ---

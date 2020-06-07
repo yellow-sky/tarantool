@@ -140,6 +140,10 @@ static_assert(sizeof(struct port_c) <= sizeof(struct port),
 void
 port_c_create(struct port *base);
 
+/** Create a C port object. (always not flat) */
+void
+port_c_not_flat_create(struct port *base);
+
 /** Append a tuple to the port. Tuple is referenced. */
 int
 port_c_add_tuple(struct port *port, struct tuple *tuple);

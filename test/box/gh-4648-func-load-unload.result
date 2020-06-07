@@ -59,6 +59,7 @@ check_module_count_diff(0)
  | ...
 box.func.function1:call()
  | ---
+ | - []
  | ...
 check_module_count_diff(1)
  | ---
@@ -100,6 +101,7 @@ end)
  | ...
 box.func.function1:call()
  | ---
+ | - []
  | ...
 check_module_count_diff(1)
  | ---
