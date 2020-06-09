@@ -135,11 +135,81 @@ txn_limbo_wait_complete(struct txn_limbo *limbo, struct txn_limbo_entry *entry)
 	fiber_set_cancellable(cancellable);
 complete:
 	// TODO: implement rollback.
-	// TODO: implement confirm.
 	assert(!entry->is_rollback);
+	assert(entry->is_commit);
 	txn_limbo_remove(limbo, entry);
 	txn_clear_flag(txn, TXN_WAIT_SYNC);
 	txn_clear_flag(txn, TXN_WAIT_ACK);
+}
+
+/**
+ * Write a confirmation entry to WAL. After it's written all the
+ * transactions waiting for confirmation may be finished.
+ */
+static int
+txn_limbo_write_confirm(struct txn_limbo *limbo, struct txn_limbo_entry *entry)
+{
+	struct xrow_header row;
+	struct request request = {
+		.header = &row,
+	};
+
+	if (xrow_encode_confirm(&row, limbo->instance_id, entry->lsn) < 0)
+		return -1;
+
+	struct txn *txn = txn_begin();
+	if (txn == NULL)
+		return -1;
+	/*
+	 * This is not really a transaction. It just uses txn API
+	 * to put the data into WAL. And obviously it should not
+	 * go to the limbo and block on the very same sync
+	 * transaction which it tries to confirm now.
+	 */
+	txn_set_flag(txn, TXN_FORCE_ASYNC);
+
+	if (txn_begin_stmt(txn, NULL) != 0)
+		goto rollback;
+	if (txn_commit_stmt(txn, &request) != 0)
+		goto rollback;
+
+	return txn_commit(txn);
+rollback:
+	txn_rollback(txn);
+	return -1;
+}
+
+void
+txn_limbo_read_confirm(struct txn_limbo *limbo, int64_t lsn)
+{
+	assert(limbo->instance_id != REPLICA_ID_NIL &&
+	       limbo->instance_id != instance_id);
+	struct txn_limbo_entry *e, *tmp;
+	rlist_foreach_entry_safe(e, &limbo->queue, in_queue, tmp) {
+		/*
+		 * Confirm a transaction if
+		 * - it is a sync transaction covered by the
+		 *   confirmation LSN;
+		 * - it is an async transaction, and it is the
+		 *   last in the queue. So it does not depend on
+		 *   a not finished sync transaction anymore and
+		 *   can be confirmed too.
+		 */
+		if (e->lsn > lsn && txn_has_flag(e->txn, TXN_WAIT_ACK))
+			break;
+		e->is_commit = true;
+		txn_limbo_remove(limbo, e);
+		txn_clear_flag(e->txn, TXN_WAIT_SYNC);
+		txn_clear_flag(e->txn, TXN_WAIT_ACK);
+		/*
+		 * If  txn_complete_async() was already called,
+		 * finish tx processing. Otherwise just clear the
+		 * "WAIT_ACK" flag. Tx procesing will finish once
+		 * the tx is written to WAL.
+		 */
+		if (e->txn->signature >= 0)
+			txn_complete(e->txn);
+	}
 }
 
 void
@@ -175,7 +245,14 @@ txn_limbo_ack(struct txn_limbo *limbo, uint32_t replica_id, int64_t lsn)
 	}
 	if (last_quorum == NULL)
 		return;
-	// TODO: implement confirmation message.
+	if (txn_limbo_write_confirm(limbo, last_quorum) != 0) {
+		// TODO: rollback.
+		return;
+	}
+	/*
+	 * Wakeup all the entries in direct order as soon
+	 * as confirmation message is written to WAL.
+	 */
 	rlist_foreach_entry(e, &limbo->queue, in_queue) {
 		if (e->txn->fiber != fiber())
 			fiber_wakeup(e->txn->fiber);
