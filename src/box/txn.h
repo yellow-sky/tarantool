@@ -275,6 +275,11 @@ struct txn {
 	 * Transactions are committed in that order.
 	 */
 	int64_t psn;
+	/**
+	 * Read view of that TX. The TX can see only changes with ps < rv_psn.
+	 * Is nonzero if and only if status = TXN_IN_READ_VIEW.
+	 */
+	int64_t rv_psn;
 	/** Status of the TX */
 	enum txn_status status;
 	/** List of statements in a transaction. */
@@ -336,6 +341,22 @@ struct txn {
 	uint32_t fk_deferred_count;
 	/** List of savepoints to find savepoint by name. */
 	struct rlist savepoints;
+	/**
+	 * List of tx_conflict_tracker records where .breaker is the current
+	 * transaction and .victim is the transactions that must be aborted
+	 * if the current transaction is committed.
+	 */
+	struct rlist conflict_list;
+	/**
+	 * List of tx_conflict_tracker records where .victim is the current
+	 * transaction and .breaker is the transactions that, if committed,
+	 * will abort the current transaction.
+	 */
+	struct rlist conflicted_by_list;
+	/**
+	 * Link in tx_manager::read_view_txs.
+	 */
+	struct rlist in_read_view_txs;
 };
 
 static inline bool
@@ -716,6 +737,17 @@ tx_manager_init();
 
 void
 tx_manager_free();
+
+/**
+ * Notify TX manager that if transaction @breaker is committed then the
+ * transactions @victim must be aborted due to conflict.
+ * For example: there's two rw transaction in progress, one have read
+ * some value while the second is about to overwrite it. If the second
+ * is committed first, the first must be aborted.
+ * @return 0 on success, -1 on memory error.
+ */
+int
+txm_cause_conflict(struct txn *breaker, struct txn *victim);
 
 #if defined(__cplusplus)
 } /* extern "C" */
