@@ -159,8 +159,7 @@ For backward compatibility and to differentiate the async replication
 we should augment the configuration with the following:
 ```
 * synchro_replication_heartbeat = 4
-* synchro_replication_read_timeout = 1
-* synchro_replication_write_timeout = 1
+* synchro_replication_quorum_timeout = 4
 ```
 Leader should send a heartbeat every synchro_replication_heartbeat if
 there were no messages sent. Replicas should respond to the heartbeat
@@ -176,6 +175,11 @@ consistent state. After that configuration of the cluster can be
 updated to a new available quorum and leader can be switched back to
 write mode.
 
+During the quorum collection it can happen that some of replicas become
+unavailable due to some reason, so leader should wait at most for
+synchro_replication_quorum_timeout after which it issues a Rollback
+pointing to the oldest TXN in the waiting list.
+
 ### Leader role assignment.
 
 Be it a user-initiated assignment or an algorithmic one, it should use
@@ -187,7 +191,7 @@ A system space \_voting can be used to replicate the voting among the
 cluster, this space should be writable even for a read-only instance.
 This space should contain a CURRENT_LEADER_ID at any time - means the
 current leader, can be a zero value at the start. This is needed to
-compare the  appropriate vclock component below.
+compare the appropriate vclock component below.
 
 All replicas should be subscribed to changes in the space and react as
 described below.
