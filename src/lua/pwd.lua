@@ -237,14 +237,6 @@ end
 
 -- }}}
 
--- Workaround pwd.getpwall() issue on Fedora 29: successful
--- getgrent() call that should normally return NULL and preserve
--- errno, set it to ENOENT due to systemd-nss issue [1] when a
--- password database is traversed first time.
---
--- [1]: https://github.com/systemd/systemd/issues/9585
-pcall(getpwall)
-
 return {
     getpw = getpw,
     getgr = getgr,
