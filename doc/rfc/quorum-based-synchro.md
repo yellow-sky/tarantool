@@ -83,9 +83,10 @@ Customer        Leader          WAL(L)        Replica        WAL(R)
 
 To introduce the 'quorum' we have to receive confirmation from replicas
 to make a decision on whether the quorum is actually present. Leader
-collects necessary amount of replicas confirmation plus its own WAL
-success. This state is named 'quorum' and gives leader the right to
-complete the customers' request. So the picture will change to:
+collects replication_synchro_quorum-1 of replicas confirmation and its
+own WAL success. This state is named 'quorum' and gives leader the
+right to complete the customers' request. So the picture will change
+to:
 ```
 Customer        Leader          WAL(L)        Replica        WAL(R)
    |------TXN----->|              |             |              |
@@ -158,26 +159,21 @@ asynchronous replication, which uses the following config:
 For backward compatibility and to differentiate the async replication
 we should augment the configuration with the following:
 ```
-* synchro_replication_heartbeat = 4
-* synchro_replication_quorum_timeout = 4
+* replication_synchro_quorum_timeout = 4
+* replication_synchro_quorum = 4
 ```
-Leader should send a heartbeat every synchro_replication_heartbeat if
-there were no messages sent. Replicas should respond to the heartbeat
-just the same way as they do it now. As soon as Leader has no response
-for another heartbeat interval, it should consider the replica is lost.
-As soon as leader appears in a situation it has not enough replicas
-to achieve quorum, it should stop accepting write requests. There's an
-option for leader to rollback to the latest transaction that has quorum:
-leader issues a 'rollback' message referring to the [LEADER_ID, LSN]
-where LSN is of the first transaction in the leader's undo log. The
-rollback message replicated to the available cluster will put it in a
-consistent state. After that configuration of the cluster can be
-updated to a new available quorum and leader can be switched back to
-write mode.
+Leader should send a heartbeat every replication_timeout if there were
+no messages sent. Replicas should respond to the heartbeat just the
+same way as they do it now. As soon as Leader has no response for
+another heartbeat interval, it should consider the replica is lost. As
+soon as leader appears in a situation it has not enough replicas to
+achieve quorum, it should stop accepting write requests. After that
+configuration of the cluster can be updated to a new available quorum
+and leader can be switched back to write mode.
 
 During the quorum collection it can happen that some of replicas become
 unavailable due to some reason, so leader should wait at most for
-synchro_replication_quorum_timeout after which it issues a Rollback
+replication_synchro_quorum_timeout after which it issues a Rollback
 pointing to the oldest TXN in the waiting list.
 
 ### Leader role assignment.
@@ -274,9 +270,9 @@ Leader role and the cluster had 2 replicas with quorum set to 2.
 +---------------------+---------------------+---------------------+
 | ID1 Conf [ID1, Tx2] |                     |                     |
 +---------------------+---------------------+---------------------+
-| Tx6                 |                     |                     |
+| ID1 Tx              |                     |                     |
 +---------------------+---------------------+---------------------+
-| Tx7                 |                     |                     |
+| ID1 Tx              |                     |                     |
 +---------------------+---------------------+---------------------+
 ```
 Suppose at this moment the ID1 instance crashes. Then the ID2 instance
