@@ -132,8 +132,7 @@ replicas through the existing replication mechanism.
 Replica should report a TXN application success to the leader via the
 IPROTO explicitly to allow leader to collect the quorum for the TXN.
 In case of application failure the replica has to disconnect from the
-replication the same way as it is done now. The replica also has to
-report its disconnection to the orchestrator. Further actions require
+replication the same way as it is done now. Further actions require
 human intervention, since failure means either technical problem (such
 as not enough space for WAL) that has to be resolved or an inconsistent
 state that requires rejoin.
