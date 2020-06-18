@@ -128,13 +128,14 @@ txn_limbo_wait_complete(struct txn_limbo *limbo, struct txn_limbo_entry *entry)
 	if (txn_limbo_check_complete(limbo, entry))
 		goto complete;
 	bool cancellable = fiber_set_cancellable(false);
-	while (!txn_limbo_entry_is_complete(entry))
-		fiber_yield();
+	bool timed_out = fiber_yield_timeout(txn_limbo_confirm_timeout(limbo));
 	fiber_set_cancellable(cancellable);
+	if (timed_out) {
+		// TODO: implement rollback.
+		entry->is_rollback = true;
+	}
 complete:
-	// TODO: implement rollback.
-	assert(!entry->is_rollback);
-	assert(entry->is_commit);
+	assert(txn_limbo_entry_is_complete(entry));
 	txn_limbo_remove(limbo, entry);
 	txn_clear_flag(txn, TXN_WAIT_SYNC);
 	txn_clear_flag(txn, TXN_WAIT_ACK);
