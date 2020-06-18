@@ -84,6 +84,16 @@ txn_limbo_remove(struct txn_limbo *limbo, struct txn_limbo_entry *entry)
 	rlist_del_entry(entry, in_queue);
 }
 
+static inline void
+txn_limbo_pop(struct txn_limbo *limbo, struct txn_limbo_entry *entry)
+{
+	assert(!rlist_empty(&entry->in_queue));
+	assert(rlist_last_entry(&limbo->queue, struct txn_limbo_entry,
+				 in_queue) == entry);
+	(void) limbo;
+	rlist_del_entry(entry, in_queue);
+}
+
 void
 txn_limbo_abort(struct txn_limbo *limbo, struct txn_limbo_entry *entry)
 {
@@ -119,7 +129,11 @@ txn_limbo_check_complete(struct txn_limbo *limbo, struct txn_limbo_entry *entry)
 	return entry->is_commit;
 }
 
-void
+static int
+txn_limbo_write_rollback(struct txn_limbo *limbo,
+			 struct txn_limbo_entry *entry);
+
+int
 txn_limbo_wait_complete(struct txn_limbo *limbo, struct txn_limbo_entry *entry)
 {
 	struct txn *txn = entry->txn;
@@ -133,29 +147,61 @@ txn_limbo_wait_complete(struct txn_limbo *limbo, struct txn_limbo_entry *entry)
 	bool timed_out = fiber_yield_timeout(txn_limbo_confirm_timeout(limbo));
 	fiber_set_cancellable(cancellable);
 	if (timed_out) {
-		// TODO: implement rollback.
-		entry->is_rollback = true;
+		txn_limbo_write_rollback(limbo, entry);
+		struct txn_limbo_entry *e, *tmp;
+		rlist_foreach_entry_safe_reverse(e, &limbo->queue,
+						 in_queue, tmp) {
+			e->is_rollback = true;
+			e->txn->signature = TXN_SIGNATURE_QUORUM_TIMEOUT;
+			txn_limbo_pop(limbo, e);
+			txn_clear_flag(e->txn, TXN_WAIT_SYNC);
+			txn_clear_flag(e->txn, TXN_WAIT_ACK);
+			txn_complete(e->txn);
+			if (e == entry)
+				break;
+			fiber_wakeup(e->txn->fiber);
+		}
+		diag_set(ClientError, ER_SYNC_QUORUM_TIMEOUT);
+		return -1;
 	}
 complete:
 	assert(txn_limbo_entry_is_complete(entry));
+	/*
+	 * The first tx to be rolled back already performed all
+	 * the necessary cleanups for us.
+	 */
+	if (entry->is_rollback) {
+		diag_set(ClientError, ER_SYNC_ROLLBACK);
+		return -1;
+	}
 	txn_limbo_remove(limbo, entry);
 	txn_clear_flag(txn, TXN_WAIT_SYNC);
 	txn_clear_flag(txn, TXN_WAIT_ACK);
+	return 0;
 }
 
-/**
- * Write a confirmation entry to WAL. After it's written all the
- * transactions waiting for confirmation may be finished.
- */
 static int
-txn_limbo_write_confirm(struct txn_limbo *limbo, struct txn_limbo_entry *entry)
+txn_limbo_write_confirm_rollback(struct txn_limbo *limbo,
+				 struct txn_limbo_entry *entry,
+				 bool is_confirm)
 {
 	struct xrow_header row;
 	struct request request = {
 		.header = &row,
 	};
 
-	if (xrow_encode_confirm(&row, limbo->instance_id, entry->lsn) < 0)
+	int res = 0;
+	if (is_confirm) {
+		res = xrow_encode_confirm(&row, limbo->instance_id, entry->lsn);
+	} else {
+		/*
+		 * This entry is the first to be rolled back, so
+		 * the last "safe" lsn is entry->lsn - 1.
+		 */
+		res = xrow_encode_rollback(&row, limbo->instance_id,
+					   entry->lsn - 1);
+	}
+	if (res == -1)
 		return -1;
 
 	struct txn *txn = txn_begin();
@@ -178,6 +224,17 @@ txn_limbo_write_confirm(struct txn_limbo *limbo, struct txn_limbo_entry *entry)
 rollback:
 	txn_rollback(txn);
 	return -1;
+}
+
+/**
+ * Write a confirmation entry to WAL. After it's written all the
+ * transactions waiting for confirmation may be finished.
+ */
+static int
+txn_limbo_write_confirm(struct txn_limbo *limbo,
+			struct txn_limbo_entry *entry)
+{
+	return txn_limbo_write_confirm_rollback(limbo, entry, true);
 }
 
 void
@@ -210,6 +267,50 @@ txn_limbo_read_confirm(struct txn_limbo *limbo, int64_t lsn)
 		 */
 		if (e->txn->signature >= 0)
 			txn_complete(e->txn);
+	}
+}
+
+/**
+ * Write a rollback message to WAL. After it's written
+ * all the tarnsactions following the current one and waiting
+ * for confirmation must be rolled back.
+ */
+static int
+txn_limbo_write_rollback(struct txn_limbo *limbo,
+			 struct txn_limbo_entry *entry)
+{
+	return txn_limbo_write_confirm_rollback(limbo, entry, false);
+}
+
+void
+txn_limbo_read_rollback(struct txn_limbo *limbo, int64_t lsn)
+{
+	assert(limbo->instance_id != REPLICA_ID_NIL &&
+	       limbo->instance_id != instance_id);
+	struct txn_limbo_entry *e, *tmp;
+	rlist_foreach_entry_safe_reverse(e, &limbo->queue, in_queue, tmp) {
+		if (e->lsn <= lsn)
+			break;
+		e->is_rollback = true;
+		txn_limbo_pop(limbo, e);
+		txn_clear_flag(e->txn, TXN_WAIT_SYNC);
+		txn_clear_flag(e->txn, TXN_WAIT_ACK);
+		if (e->txn->signature >= 0) {
+			/* Rollback the transaction. */
+			e->txn->signature = TXN_SIGNATURE_SYNC_ROLLBACK;
+			txn_complete(e->txn);
+		} else {
+			/*
+			 * Rollback the transaction, but don't
+			 * free it yet. txn_complete_async() will
+			 * free it.
+			 */
+			e->txn->signature = TXN_SIGNATURE_SYNC_ROLLBACK;
+			struct fiber *fiber = e->txn->fiber;
+			e->txn->fiber = fiber();
+			txn_complete(e->txn);
+			e->txn->fiber = fiber;
+		}
 	}
 }
 
@@ -247,7 +348,10 @@ txn_limbo_ack(struct txn_limbo *limbo, uint32_t replica_id, int64_t lsn)
 	if (last_quorum == NULL)
 		return;
 	if (txn_limbo_write_confirm(limbo, last_quorum) != 0) {
-		// TODO: rollback.
+		// TODO: what to do here?.
+		// We already failed writing the CONFIRM
+		// message. What are the chances we'll be
+		// able to write ROLLBACK?
 		return;
 	}
 	/*
