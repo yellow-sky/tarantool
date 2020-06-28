@@ -83,6 +83,8 @@ cfg_filter(box.cfg)
  |     - true
  |   - - too_long_threshold
  |     - 0.5
+ |   - - use_mvcc_engine
+ |     - false
  |   - - vinyl_bloom_fpr
  |     - 0.05
  |   - - vinyl_cache
@@ -190,6 +192,8 @@ cfg_filter(box.cfg)
  |     - true
  |   - - too_long_threshold
  |     - 0.5
+ |   - - use_mvcc_engine
+ |     - false
  |   - - vinyl_bloom_fpr
  |     - 0.05
  |   - - vinyl_cache
