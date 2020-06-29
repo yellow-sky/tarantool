@@ -117,6 +117,13 @@ struct txn_limbo {
 	 * transactions, created on the limbo's owner node.
 	 */
 	struct vclock vclock;
+	/** Set to true when limbo records rollback occurrence. */
+	bool is_recording;
+	/**
+	 * Whether any rollbacks happened during the recording
+	 * period.
+	 */
+	bool got_rollback;
 };
 
 /**
@@ -130,6 +137,34 @@ static inline bool
 txn_limbo_is_empty(struct txn_limbo *limbo)
 {
 	return rlist_empty(&limbo->queue);
+}
+
+/**
+ * Make limbo remember the occurrence of rollbacks due to failed
+ * quorum collection.
+ */
+static inline void
+txn_limbo_start_recording(struct txn_limbo *limbo)
+{
+	limbo->is_recording = true;
+}
+
+/** Stop the recording of failed quorum collection events. */
+static inline void
+txn_limbo_stop_recording(struct txn_limbo *limbo)
+{
+	limbo->is_recording = false;
+	limbo->got_rollback = false;
+}
+
+/**
+ * Returns true in case the limbo rolled back any tx since the
+ * moment txn_limbo_start_recording() was called.
+ */
+static inline bool
+txn_limbo_got_rollback(struct txn_limbo *limbo)
+{
+	return limbo->got_rollback;
 }
 
 /**
