@@ -158,7 +158,7 @@ asynchronous replication, which uses the following config:
 For backward compatibility and to differentiate the async replication
 we should augment the configuration with the following:
 ```
-* replication_synchro_quorum_timeout = 4
+* replication_synchro_timeout = 4
 * replication_synchro_quorum = 4
 ```
 Leader should send a heartbeat every replication_timeout if there were
@@ -172,7 +172,7 @@ and leader can be switched back to write mode.
 
 During the quorum collection it can happen that some of replicas become
 unavailable due to some reason, so leader should wait at most for
-replication_synchro_quorum_timeout after which it issues a Rollback
+replication_synchro_timeout after which it issues a Rollback
 pointing to the oldest TXN in the waiting list.
 
 ### Leader role assignment.
@@ -182,48 +182,21 @@ a common interface to assign the leader role. By now we implement a
 simplified machinery, still it should be feasible in the future to fit
 the algorithms, such as RAFT or proposed before box.ctl.promote.
 
-A system space \_voting can be used to replicate the voting among the
-cluster, this space should be writable even for a read-only instance.
-This space should contain a CURRENT_LEADER_ID at any time - means the
-current leader, can be a zero value at the start. This is needed to
-compare the appropriate vclock component below.
+ promote(ID) - should be called from a replica with its own ID.
+ Prior to switch to rw mode, the node has to assure:
+ - all Confirm/Rollback messages from the leader are arrived - it has
+   to wait for two periods of replication_synchro_timeout
+ - in case there are transactions waiting for a quorum the node has to
+   check all relicas vclock[former_leader_ID] and issue a Confirm
+   message for the biggest synchronous transaction in the waiting list
+   that is present on at least replication_synchro_quorum number of
+   nodes
+ - if any transaction is still in the waiting list, the node has to
+   issue a Rollback message referring to this transaction
 
-All replicas should be subscribed to changes in the space and react as
-described below.
-
- promote(ID) - should be called from a replica with it's own ID.
-   Writes an entry in the voting space about this ID is waiting for
-   votes from cluster. The entry should also contain the current
-   vclock[CURRENT_LEADER_ID] of the nominee.
-
-Upon changes in the space each replica should compare its appropriate
-vclock component with submitted one and append its vote to the space:
-AYE in case nominee's vclock is bigger or equal to the replica's one,
-NAY otherwise.
-
-As soon as nominee collects the quorum for being elected, it claims
-himself a Leader by switching in rw mode, writes CURRENT_LEADER_ID as
-a FORMER_LEADER_ID in the \_voting space and put its ID as a
-CURRENT_LEADER_ID. In case a NAY is appeared in the \_voting or a
-timeout predefined in box.cfg is reached, the nominee should remove
-it's entry from the space.
-
-The leader should assure that number of available instances in the
-cluster is enough to achieve the quorum and proceed to step 3, otherwise
-the leader should report the situation of incomplete quorum, as
-described in the last paragraph of previous section.
-
-The new Leader has to take the responsibility to replicate former Leader's
-entries from its WAL, obtain quorum and commit confirm messages referring
-to [FORMER_LEADER_ID, LSN] in its WAL, replicating to the cluster, after
-that it can start adding its own entries into the WAL.
-
- demote(ID) - should be called from the Leader instance.
-   The Leader has to switch in ro mode and wait for its' undo log is
-   empty. This effectively means all transactions are committed in the
-   cluster and it is safe pass the leadership. Then it should write
-   CURRENT_LEADER_ID as a FORMER_LEADER_ID and put CURRENT_LEADER_ID
-   into 0.
+ demote(ID) - should be called from the Leader instance with its own ID.
+   The Leader has to switch in ro mode. Later the procedure will be
+   augmented with reporting its resign.
 
 ### Recovery and failover.
 
@@ -237,10 +210,9 @@ that have no corresponding confirm message should be confirmed (see the
 leader role assignment).
 
 In case there's not enough replicas to set up a quorum the cluster can
-be switched into a read-only mode. Note, this can't be done by default
-since some of transactions can have confirmed state. It is up to human
-intervention to force rollback of all transactions that have no confirm
-and to put the cluster into a consistent state.
+be switched into a read-only mode. It is up to human intervention to
+force rollback of all transactions that have no confirm and to put the
+cluster into a consistent state.
 
 In case the instance will be assigned a replica role, it may appear in
 a state that it has conflicting WAL entries, in case it recovered from a
