@@ -120,6 +120,7 @@ txn_limbo_assign_lsn(struct txn_limbo *limbo, struct txn_limbo_entry *entry,
 	assert(limbo->instance_id != REPLICA_ID_NIL);
 	assert(entry->lsn == -1);
 	assert(lsn > 0);
+	(void) limbo;
 	entry->lsn = lsn;
 }
 
