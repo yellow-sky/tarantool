@@ -44,6 +44,13 @@ txn_limbo_create(struct txn_limbo *limbo)
 	limbo->got_rollback = false;
 }
 
+static inline struct txn_limbo_entry *
+txn_limbo_first_entry(struct txn_limbo *limbo)
+{
+	return rlist_first_entry(&limbo->queue, struct txn_limbo_entry,
+				 in_queue);
+}
+
 struct txn_limbo_entry *
 txn_limbo_append(struct txn_limbo *limbo, uint32_t id, struct txn *txn)
 {
@@ -150,6 +157,24 @@ txn_limbo_wait_complete(struct txn_limbo *limbo, struct txn_limbo_entry *entry)
 	bool timed_out = fiber_yield_timeout(txn_limbo_confirm_timeout(limbo));
 	fiber_set_cancellable(cancellable);
 	if (timed_out) {
+		assert(!txn_limbo_is_empty(limbo));
+		if (txn_limbo_first_entry(limbo) != entry) {
+			/*
+			 * If this is not a first entry in the
+			 * limbo, it is definitely not a first
+			 * timed out entry. And since it managed
+			 * to time out too, it means there is
+			 * currently another fiber writing
+			 * rollback. Wait when it will finish and
+			 * wake us up.
+			 */
+			bool cancellable = fiber_set_cancellable(false);
+			fiber_yield();
+			fiber_set_cancellable(cancellable);
+			assert(txn_limbo_entry_is_complete(entry));
+			goto complete;
+		}
+
 		txn_limbo_write_rollback(limbo, entry);
 		struct txn_limbo_entry *e, *tmp;
 		rlist_foreach_entry_safe_reverse(e, &limbo->queue,
