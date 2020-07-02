@@ -806,7 +806,6 @@ applier_txn_commit_cb(struct trigger *trigger, void *event)
 	(void) trigger;
 	struct txn *txn = (struct txn *)event;
 	assert(txn->fiber != NULL);
-	assert(strncmp(txn->fiber->name, "applierw", 8) == 0);
 	/*
 	 * Let the txn module free the transaction object. It is
 	 * not needed for anything else.
