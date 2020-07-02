@@ -272,7 +272,7 @@ box.cfg{replication_synchro_timeout = 0.001, replication_synchro_quorum = 3}
  | ...
 f = fiber.create(box.space.sync.replace, box.space.sync, {6}) s:replace{6}
  | ---
- | - error: Quorum collection for a synchronous transaction is timed out
+ | - error: A rollback for a synchronous transaction is received
  | ...
 f:status()
  | ---
