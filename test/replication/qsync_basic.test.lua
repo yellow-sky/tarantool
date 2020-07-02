@@ -164,6 +164,26 @@ box.space.locallocal:select{9}
 box.space.test:select{9}
 
 --
+-- gh-4928: test that a sync transaction works fine with local
+-- rows in the end.
+--
+
+-- test_run:switch('default')
+-- box.cfg{replication_synchro_timeout = 1000, replication_synchro_quorum = 2}
+-- do                                                                              \
+--     box.begin()                                                                 \
+--     box.space.sync:replace{10}                                                  \
+--     box.space.locallocal:replace({10})                                          \
+--     box.commit()                                                                \
+-- end
+-- box.space.sync:select{10}
+-- box.space.locallocal:select{10}
+
+-- test_run:switch('replica')
+-- box.space.sync:select{10}
+-- box.space.locallocal:select{10}
+
+--
 -- gh-5123: quorum 1 still should write CONFIRM.
 --
 test_run:switch('default')
