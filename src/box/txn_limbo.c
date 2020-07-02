@@ -120,6 +120,7 @@ txn_limbo_assign_lsn(struct txn_limbo *limbo, struct txn_limbo_entry *entry,
 	assert(limbo->instance_id != REPLICA_ID_NIL);
 	assert(entry->lsn == -1);
 	assert(lsn > 0);
+	assert(txn_has_flag(entry->txn, TXN_WAIT_ACK));
 	(void) limbo;
 	entry->lsn = lsn;
 }
@@ -129,6 +130,12 @@ txn_limbo_check_complete(struct txn_limbo *limbo, struct txn_limbo_entry *entry)
 {
 	if (txn_limbo_entry_is_complete(entry))
 		return true;
+	/*
+	 * Async transaction can't complete itself. It is always
+	 * completed by a previous sync transaction.
+	 */
+	if (!txn_has_flag(entry->txn, TXN_WAIT_ACK))
+		return false;
 	struct vclock_iterator iter;
 	vclock_iterator_init(&iter, &limbo->vclock);
 	int ack_count = 0;
@@ -142,14 +149,13 @@ txn_limbo_check_complete(struct txn_limbo *limbo, struct txn_limbo_entry *entry)
 }
 
 static int
-txn_limbo_write_rollback(struct txn_limbo *limbo,
-			 struct txn_limbo_entry *entry);
+txn_limbo_write_rollback(struct txn_limbo *limbo, int64_t lsn);
 
 int
 txn_limbo_wait_complete(struct txn_limbo *limbo, struct txn_limbo_entry *entry)
 {
 	struct txn *txn = entry->txn;
-	assert(entry->lsn > 0);
+	assert(entry->lsn > 0 || !txn_has_flag(entry->txn, TXN_WAIT_ACK));
 	assert(!txn_has_flag(txn, TXN_IS_DONE));
 	assert(txn_has_flag(txn, TXN_WAIT_SYNC));
 	if (txn_limbo_check_complete(limbo, entry))
@@ -176,7 +182,7 @@ txn_limbo_wait_complete(struct txn_limbo *limbo, struct txn_limbo_entry *entry)
 			goto complete;
 		}
 
-		txn_limbo_write_rollback(limbo, entry);
+		txn_limbo_write_rollback(limbo, entry->lsn);
 		struct txn_limbo_entry *e, *tmp;
 		rlist_foreach_entry_safe_reverse(e, &limbo->queue,
 						 in_queue, tmp) {
@@ -210,10 +216,11 @@ complete:
 }
 
 static int
-txn_limbo_write_confirm_rollback(struct txn_limbo *limbo,
-				 struct txn_limbo_entry *entry,
+txn_limbo_write_confirm_rollback(struct txn_limbo *limbo, int64_t lsn,
 				 bool is_confirm)
 {
+	assert(lsn > 0);
+
 	struct xrow_header row;
 	struct request request = {
 		.header = &row,
@@ -221,14 +228,13 @@ txn_limbo_write_confirm_rollback(struct txn_limbo *limbo,
 
 	int res = 0;
 	if (is_confirm) {
-		res = xrow_encode_confirm(&row, limbo->instance_id, entry->lsn);
+		res = xrow_encode_confirm(&row, limbo->instance_id, lsn);
 	} else {
 		/*
 		 * This entry is the first to be rolled back, so
-		 * the last "safe" lsn is entry->lsn - 1.
+		 * the last "safe" lsn is lsn - 1.
 		 */
-		res = xrow_encode_rollback(&row, limbo->instance_id,
-					   entry->lsn - 1);
+		res = xrow_encode_rollback(&row, limbo->instance_id, lsn - 1);
 	}
 	if (res == -1)
 		return -1;
@@ -260,10 +266,9 @@ rollback:
  * transactions waiting for confirmation may be finished.
  */
 static int
-txn_limbo_write_confirm(struct txn_limbo *limbo,
-			struct txn_limbo_entry *entry)
+txn_limbo_write_confirm(struct txn_limbo *limbo, int64_t lsn)
 {
-	return txn_limbo_write_confirm_rollback(limbo, entry, true);
+	return txn_limbo_write_confirm_rollback(limbo, lsn, true);
 }
 
 void
@@ -300,14 +305,13 @@ txn_limbo_read_confirm(struct txn_limbo *limbo, int64_t lsn)
 
 /**
  * Write a rollback message to WAL. After it's written
- * all the tarnsactions following the current one and waiting
+ * all the transactions following the current one and waiting
  * for confirmation must be rolled back.
  */
 static int
-txn_limbo_write_rollback(struct txn_limbo *limbo,
-			 struct txn_limbo_entry *entry)
+txn_limbo_write_rollback(struct txn_limbo *limbo, int64_t lsn)
 {
-	return txn_limbo_write_confirm_rollback(limbo, entry, false);
+	return txn_limbo_write_confirm_rollback(limbo, lsn, false);
 }
 
 void
@@ -316,7 +320,7 @@ txn_limbo_read_rollback(struct txn_limbo *limbo, int64_t lsn)
 	assert(limbo->instance_id != REPLICA_ID_NIL);
 	struct txn_limbo_entry *e, *tmp;
 	rlist_foreach_entry_safe_reverse(e, &limbo->queue, in_queue, tmp) {
-		if (e->lsn <= lsn)
+		if (e->lsn <= lsn && txn_has_flag(e->txn, TXN_WAIT_ACK))
 			break;
 		e->is_rollback = true;
 		txn_limbo_pop(limbo, e);
@@ -350,31 +354,33 @@ txn_limbo_ack(struct txn_limbo *limbo, uint32_t replica_id, int64_t lsn)
 	int64_t prev_lsn = vclock_get(&limbo->vclock, replica_id);
 	vclock_follow(&limbo->vclock, replica_id, lsn);
 	struct txn_limbo_entry *e, *last_quorum = NULL;
+	int64_t confirm_lsn = -1;
 	rlist_foreach_entry(e, &limbo->queue, in_queue) {
+		assert(e->ack_count <= VCLOCK_MAX);
 		if (e->lsn > lsn)
 			break;
-		if (e->lsn <= prev_lsn)
-			continue;
-		assert(e->ack_count <= VCLOCK_MAX);
 		/*
 		 * Sync transactions need to collect acks. Async
 		 * transactions are automatically committed right
 		 * after all the previous sync transactions are.
 		 */
-		if (txn_has_flag(e->txn, TXN_WAIT_ACK)) {
-			if (++e->ack_count < replication_synchro_quorum)
-				continue;
-		} else {
-			assert(txn_has_flag(e->txn, TXN_WAIT_SYNC));
+		if (!txn_has_flag(e->txn, TXN_WAIT_ACK)) {
+			assert(e->lsn == -1);
 			if (last_quorum == NULL)
 				continue;
+		} else if (e->lsn <= prev_lsn) {
+			continue;
+		} else if (++e->ack_count < replication_synchro_quorum) {
+			continue;
+		} else {
+			confirm_lsn = e->lsn;
 		}
 		e->is_commit = true;
 		last_quorum = e;
 	}
 	if (last_quorum == NULL)
 		return;
-	if (txn_limbo_write_confirm(limbo, last_quorum) != 0) {
+	if (txn_limbo_write_confirm(limbo, confirm_lsn) != 0) {
 		// TODO: what to do here?.
 		// We already failed writing the CONFIRM
 		// message. What are the chances we'll be

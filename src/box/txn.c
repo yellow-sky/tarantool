@@ -688,15 +688,15 @@ txn_commit_async(struct txn *txn)
 
 		/* See txn_commit(). */
 		uint32_t origin_id = req->rows[0]->replica_id;
-		int64_t lsn = req->rows[txn->n_applier_rows - 1]->lsn;
 		limbo_entry = txn_limbo_append(&txn_limbo, origin_id, txn);
 		if (limbo_entry == NULL) {
 			txn_rollback(txn);
 			return -1;
 		}
-		assert(lsn > 0);
-		txn_limbo_assign_lsn(&txn_limbo, limbo_entry, lsn);
-
+		if (txn_has_flag(txn, TXN_WAIT_ACK)) {
+			int64_t lsn = req->rows[txn->n_applier_rows - 1]->lsn;
+			txn_limbo_assign_lsn(&txn_limbo, limbo_entry, lsn);
+		}
 		/*
 		 * Set a trigger to abort waiting for confirm on
 		 * WAL write failure.
@@ -779,10 +779,12 @@ txn_commit(struct txn *txn)
 		return -1;
 	}
 	if (is_sync) {
-		int64_t lsn = req->rows[req->n_rows - 1]->lsn;
-		txn_limbo_assign_lsn(&txn_limbo, limbo_entry, lsn);
-		/* Local WAL write is a first 'ACK'. */
-		txn_limbo_ack(&txn_limbo, txn_limbo.instance_id, lsn);
+		if (txn_has_flag(txn, TXN_WAIT_ACK)) {
+			int64_t lsn = req->rows[req->n_rows - 1]->lsn;
+			txn_limbo_assign_lsn(&txn_limbo, limbo_entry, lsn);
+			/* Local WAL write is a first 'ACK'. */
+			txn_limbo_ack(&txn_limbo, txn_limbo.instance_id, lsn);
+		}
 		if (txn_limbo_wait_complete(&txn_limbo, limbo_entry) < 0) {
 			txn_free(txn);
 			return -1;
