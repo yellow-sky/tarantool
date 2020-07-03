@@ -38,6 +38,7 @@
 
 #include "box.h"
 #include "gc.h"
+#include "errinj.h"
 #include "error.h"
 #include "relay.h"
 #include "vclock.h" /* VCLOCK_MAX */
@@ -866,6 +867,9 @@ replicaset_sync(void)
 	       replicaset.applier.loading >= quorum) {
 		if (fiber_cond_wait_deadline(&replicaset.applier.cond,
 					     deadline) != 0)
+			ERROR_INJECT(ERRINJ_SYNC_TIMEOUT, {
+				continue;
+			});
 			break;
 	}
 
