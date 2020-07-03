@@ -58,15 +58,15 @@ test_run:switch('default')
 _ = box.schema.space.create('sync', {is_sync=true, engine=engine})
 _ = box.space.sync:create_index('pk')
 -- Testcase body.
-OP_TIMEOUT = 5
-box.cfg{replication_synchro_quorum=BROKEN_QUORUM, replication_synchro_timeout=OP_TIMEOUT}
+box.cfg{replication_synchro_quorum=BROKEN_QUORUM, replication_synchro_timeout=0.0001}
+box.error.injection.set('ERRINJ_SYNC_TIMEOUT', true)
 test_run:cmd("setopt delimiter ';'")
 _ = fiber.create(function()
     box.space.sync:insert{1}
 end);
 test_run:cmd("setopt delimiter ''");
 box.cfg{replication_synchro_quorum=NUM_INSTANCES}
-fiber.sleep(OP_TIMEOUT) -- to make sure replication_synchro_timeout is exceeded
+box.error.injection.set('ERRINJ_SYNC_TIMEOUT', false)
 box.space.sync:select{} -- none
 test_run:switch('replica')
 box.space.sync:select{} -- none
@@ -169,7 +169,7 @@ box.space.sync:select{} -- 1, 2, 3, 4, 5
 test_run:switch('default')
 box.space.sync:drop()
 
--- (FLAKY) [RFC, Synchronous replication enabling] "As soon as last operation of
+-- [RFC, Synchronous replication enabling] "As soon as last operation of
 -- synchronous transaction appeared in leader's WAL, it will cause all
 -- following transactions - no matter if they are synchronous or not - wait for
 -- the quorum. In case quorum is not achieved the 'rollback' operation will
@@ -185,10 +185,8 @@ box.space.sync:select{} -- 1
 test_run:switch('replica')
 box.space.sync:select{} -- 1
 test_run:switch('default')
--- OP_TIMEOUT should be enough to make sync operation, disable
--- sync mode and make an async operation
-OP_TIMEOUT = 10
-box.cfg{replication_synchro_quorum=BROKEN_QUORUM, replication_synchro_timeout=OP_TIMEOUT}
+box.cfg{replication_synchro_quorum=BROKEN_QUORUM, replication_synchro_timeout=0.1}
+box.error.injection.set('ERRINJ_SYNC_TIMEOUT', true)
 test_run:cmd("setopt delimiter ';'")
 _ = fiber.create(function()
     box.space.sync:insert{2}
@@ -198,7 +196,7 @@ test_run:cmd("setopt delimiter ''");
 disable_sync_mode()
 -- Space is in async mode now.
 box.space.sync:insert{3} -- async operation must wait sync one
-fiber.sleep(OP_TIMEOUT + 1)
+box.error.injection.set('ERRINJ_SYNC_TIMEOUT', false)
 box.space.sync:select{} -- 1
 test_run:cmd('switch replica')
 box.space.sync:select{} -- 1
