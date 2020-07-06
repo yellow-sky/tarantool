@@ -260,6 +260,20 @@ memtx_space_replace_all_keys(struct space *space, struct tuple *old_tuple,
 	if (pk == NULL)
 		return -1;
 	assert(pk->def->opts.is_unique);
+
+	if (tx_manager_use_mvcc_engine) {
+		struct txn *txn = in_txn();
+		struct txn_stmt *stmt =
+			txn == NULL ? NULL : txn_current_stmt(txn);
+		if (stmt != NULL) {
+			return txm_history_add_stmt(stmt, old_tuple, new_tuple,
+						    mode, result);
+		} else {
+			/** Ephemeral space */
+			assert(space->def->id == 0);
+		}
+	}
+
 	/*
 	 * If old_tuple is not NULL, the index has to
 	 * find and delete it, or return an error.
@@ -896,7 +910,9 @@ memtx_space_check_format(struct space *space, struct tuple_format *format)
 	if (txn_check_singlestatement(txn, "space format check") != 0)
 		return -1;
 
-	txn_can_yield(txn, true);
+	bool could_yield = txn_has_flag(txn, TXN_CAN_YIELD);
+	if (!could_yield)
+		txn_can_yield(txn, true);
 
 	struct memtx_engine *memtx = (struct memtx_engine *)space->engine;
 	struct memtx_ddl_state state;
@@ -940,7 +956,8 @@ memtx_space_check_format(struct space *space, struct tuple_format *format)
 	iterator_delete(it);
 	diag_destroy(&state.diag);
 	trigger_clear(&on_replace);
-	txn_can_yield(txn, false);
+	if (!could_yield)
+		txn_can_yield(txn, false);
 	return rc;
 }
 
@@ -1054,7 +1071,9 @@ memtx_space_build_index(struct space *src_space, struct index *new_index,
 	if (txn_check_singlestatement(txn, "index build") != 0)
 		return -1;
 
-	txn_can_yield(txn, true);
+	bool could_yield = txn_has_flag(txn, TXN_CAN_YIELD);
+	if (!could_yield)
+		txn_can_yield(txn, true);
 
 	struct memtx_engine *memtx = (struct memtx_engine *)src_space->engine;
 	struct memtx_ddl_state state;
@@ -1132,7 +1151,8 @@ memtx_space_build_index(struct space *src_space, struct index *new_index,
 	iterator_delete(it);
 	diag_destroy(&state.diag);
 	trigger_clear(&on_replace);
-	txn_can_yield(txn, false);
+	if (!could_yield)
+		txn_can_yield(txn, false);
 	return rc;
 }
 
