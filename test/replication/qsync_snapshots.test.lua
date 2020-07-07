@@ -29,6 +29,8 @@ box.space.sync:select{} -- 1
 box.snapshot()
 box.space.sync:select{} -- 1
 -- Testcase cleanup.
+test_run:switch('default')
+box.cfg{replication_synchro_quorum=orig_synchro_quorum, replication_synchro_timeout=orig_synchro_timeout}
 box.space.sync:drop()
 
 -- [RFC, Snapshot generation] all txns confirmed, then snapshot on replica,
@@ -47,6 +49,7 @@ box.snapshot()
 box.space.sync:select{} -- 1
 -- Testcase cleanup.
 test_run:switch('default')
+box.cfg{replication_synchro_quorum=orig_synchro_quorum, replication_synchro_timeout=orig_synchro_timeout}
 box.space.sync:drop()
 
 -- [RFC, Snapshot generation] rolled back operations are not snapshotted.
@@ -67,6 +70,7 @@ test_run:switch('replica')
 box.space.sync:select{} -- 1
 -- Testcase cleanup.
 test_run:switch('default')
+box.cfg{replication_synchro_quorum=orig_synchro_quorum, replication_synchro_timeout=orig_synchro_timeout}
 box.space.sync:drop()
 
 -- [RFC, Snapshot generation] snapshot started on master, then rollback
@@ -91,6 +95,7 @@ test_run:switch('replica')
 box.space.sync:select{} -- 1
 -- Testcase cleanup.
 test_run:switch('default')
+box.cfg{replication_synchro_quorum=orig_synchro_quorum, replication_synchro_timeout=orig_synchro_timeout}
 box.space.sync:drop()
 
 -- [RFC, Snapshot generation] snapshot started on replica, then rollback
@@ -118,6 +123,7 @@ test_run:switch('default')
 box.space.sync:select{} -- 1
 -- Testcase cleanup.
 test_run:switch('default')
+box.cfg{replication_synchro_quorum=orig_synchro_quorum, replication_synchro_timeout=orig_synchro_timeout}
 box.space.sync:drop()
 
 -- Teardown.

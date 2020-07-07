@@ -75,6 +75,13 @@ box.space.sync:select{} -- 1
  | - - [1]
  | ...
 -- Testcase cleanup.
+test_run:switch('default')
+ | ---
+ | - true
+ | ...
+box.cfg{replication_synchro_quorum=orig_synchro_quorum, replication_synchro_timeout=orig_synchro_timeout}
+ | ---
+ | ...
 box.space.sync:drop()
  | ---
  | ...
@@ -86,7 +93,7 @@ test_run:switch('default')
  | ---
  | - true
  | ...
-box.cfg{replication_synchro_quorum=NUM_INSTANCES, replication_synchro_timeout=0.1}
+box.cfg{replication_synchro_quorum=NUM_INSTANCES, replication_synchro_timeout=0.5}
  | ---
  | ...
 _ = box.schema.space.create('sync', {is_sync=true, engine=engine})
@@ -124,6 +131,9 @@ box.space.sync:select{} -- 1
 test_run:switch('default')
  | ---
  | - true
+ | ...
+box.cfg{replication_synchro_quorum=orig_synchro_quorum, replication_synchro_timeout=orig_synchro_timeout}
+ | ---
  | ...
 box.space.sync:drop()
  | ---
@@ -184,6 +194,9 @@ box.space.sync:select{} -- 1
 test_run:switch('default')
  | ---
  | - true
+ | ...
+box.cfg{replication_synchro_quorum=orig_synchro_quorum, replication_synchro_timeout=orig_synchro_timeout}
+ | ---
  | ...
 box.space.sync:drop()
  | ---
@@ -251,6 +264,9 @@ box.space.sync:select{} -- 1
 test_run:switch('default')
  | ---
  | - true
+ | ...
+box.cfg{replication_synchro_quorum=orig_synchro_quorum, replication_synchro_timeout=orig_synchro_timeout}
+ | ---
  | ...
 box.space.sync:drop()
  | ---
@@ -330,6 +346,9 @@ box.space.sync:select{} -- 1
 test_run:switch('default')
  | ---
  | - true
+ | ...
+box.cfg{replication_synchro_quorum=orig_synchro_quorum, replication_synchro_timeout=orig_synchro_timeout}
+ | ---
  | ...
 box.space.sync:drop()
  | ---
