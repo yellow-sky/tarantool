@@ -20,38 +20,10 @@ test_run:cmd("setopt delimiter ''");
 
 box.schema.user.grant('guest', 'replication')
 
--- Setup an async cluster with two instances.
+-- Setup an cluster with two instances.
 test_run:cmd('create server replica with rpl_master=default,\
                                          script="replication/replica.lua"')
 test_run:cmd('start server replica with wait=True, wait_load=True')
-
--- Successful write.
--- Testcase setup.
-test_run:switch('default')
-box.cfg{replication_synchro_quorum=NUM_INSTANCES, replication_synchro_timeout=0.1}
-_ = box.schema.space.create('sync', {is_sync=true, engine=engine})
-_ = box.space.sync:create_index('pk')
--- Testcase body.
-box.space.sync:insert{1} -- success
-test_run:cmd('switch replica')
-box.space.sync:select{} -- 1
--- Testcase cleanup.
-test_run:switch('default')
-box.space.sync:drop()
-
--- Unsuccessfull write.
--- Testcase setup.
-test_run:switch('default')
-box.cfg{replication_synchro_quorum=BROKEN_QUORUM, replication_synchro_timeout=0.1}
-_ = box.schema.space.create('sync', {is_sync=true, engine=engine})
-_ = box.space.sync:create_index('pk')
--- Testcase body.
-box.space.sync:insert{1}
-test_run:switch('replica')
-box.space.sync:select{} -- none
--- Testcase cleanup.
-test_run:switch('default')
-box.space.sync:drop()
 
 -- [RFC, quorum commit] Attempt to write multiple transactions, expected the
 -- same order as on client in case of achieved quorum.
@@ -106,20 +78,7 @@ box.cfg.replication_synchro_timeout -- old value
 box.cfg{replication_synchro_timeout=0} -- error
 box.cfg.replication_synchro_timeout -- old value
 
--- TX is in synchronous replication.
--- Testcase setup.
-test_run:switch('default')
-box.cfg{replication_synchro_quorum=NUM_INSTANCES, replication_synchro_timeout=0.1}
-_ = box.schema.space.create('sync', {is_sync=true, engine=engine})
-_ = box.space.sync:create_index('pk')
--- Testcase body.
-box.begin() box.space.sync:insert({1}) box.commit()
-box.begin() box.space.sync:insert({2}) box.commit()
-box.space.sync:select{} -- 1, 2
--- Testcase cleanup.
-box.space.sync:drop()
-
--- [RFC, summary] switch sync replicas into async ones, expected success and
+-- [RFC, summary] switch sync into async mode in space, expected success and
 -- data consistency on a leader and replicas.
 -- Testcase setup.
 test_run:switch('default')
@@ -178,46 +137,6 @@ test_run:switch('default')
 box.cfg{read_only=false}
 test_run:switch('replica')
 box.cfg{read_only=true}
--- Testcase cleanup.
-test_run:switch('default')
-box.space.sync:drop()
-
--- Teardown.
-test_run:cmd('switch default')
-test_run:cmd('stop server replica')
-test_run:cmd('delete server replica')
-test_run:cleanup_cluster()
-box.schema.user.revoke('guest', 'replication')
-box.cfg{                                                                        \
-    replication_synchro_quorum = orig_synchro_quorum,                           \
-    replication_synchro_timeout = orig_synchro_timeout,                         \
-}
-
--- Setup an async cluster.
-box.schema.user.grant('guest', 'replication')
-test_run:cmd('create server replica with rpl_master=default,\
-                                         script="replication/replica.lua"')
-test_run:cmd('start server replica with wait=True, wait_load=True')
-
--- [RFC, summary] switch async replica into sync one, expected
--- success and data consistency on a leader and replica.
--- Testcase setup.
-_ = box.schema.space.create('sync', {engine=engine})
-_ = box.space.sync:create_index('pk')
-box.space.sync:insert{1} -- success
-test_run:cmd('switch replica')
-box.space.sync:select{} -- 1
-test_run:switch('default')
--- Enable synchronous mode.
-disable_sync_mode()
--- Space is in sync mode now.
-box.cfg{replication_synchro_quorum=NUM_INSTANCES, replication_synchro_timeout=0.1}
-box.space.sync:insert{2} -- success
-box.cfg{replication_synchro_quorum=BROKEN_QUORUM, replication_synchro_timeout=0.1}
-box.space.sync:insert{3} -- success
-box.space.sync:select{} -- 1, 2, 3
-test_run:cmd('switch replica')
-box.space.sync:select{} -- 1, 2, 3
 -- Testcase cleanup.
 test_run:switch('default')
 box.space.sync:drop()
