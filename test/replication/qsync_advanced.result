@@ -8,9 +8,6 @@ test_run = env.new()
 engine = test_run:get_cfg('engine')
  | ---
  | ...
-fiber = require('fiber')
- | ---
- | ...
 
 orig_synchro_quorum = box.cfg.replication_synchro_quorum
  | ---

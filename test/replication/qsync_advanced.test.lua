@@ -1,7 +1,6 @@
 env = require('test_run')
 test_run = env.new()
 engine = test_run:get_cfg('engine')
-fiber = require('fiber')
 
 orig_synchro_quorum = box.cfg.replication_synchro_quorum
 orig_synchro_timeout = box.cfg.replication_synchro_timeout
