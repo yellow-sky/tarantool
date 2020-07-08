@@ -43,7 +43,7 @@ box.space.sync:select{} -- 1, 2, 3
 test_run:switch('default')
 box.space.sync:drop()
 
--- Synchro timeout is not bigger than replication_synchro_timeout value.
+-- Synchro timeout is not less than replication_synchro_timeout value.
 -- Testcase setup.
 test_run:switch('default')
 box.cfg{replication_synchro_quorum=BROKEN_QUORUM, replication_synchro_timeout=orig_synchro_timeout}
@@ -52,7 +52,7 @@ _ = box.space.sync:create_index('pk')
 -- Testcase body.
 start = os.time()
 box.space.sync:insert{1}
-(os.time() - start) == box.cfg.replication_synchro_timeout -- true
+(os.time() - start) >= box.cfg.replication_synchro_timeout -- true
 -- Testcase cleanup.
 test_run:switch('default')
 box.space.sync:drop()
@@ -87,9 +87,10 @@ box.space.sync:select{} -- 1, 2, 3, 4, 5
 test_run:switch('default')
 box.space.sync:drop()
 
--- Warn user when setting `replication_synchro_quorum` to a value
--- greater than number of instances in a cluster, see gh-5122.
-box.cfg{replication_synchro_quorum=BROKEN_QUORUM} -- warning
+-- should be greater than number of instances in a cluster, see gh-5122.
+box.cfg{replication_synchro_quorum=BROKEN_QUORUM}
+-- expected warning, to be add in gh-5122
+--while test_run:grep_log('default', 'warning: .*') == nil do fiber.sleep(0.01) end
 
 -- [RFC, summary] switch from leader to replica and vice versa, expected
 -- success and data consistency on a leader and replicas (gh-5124).
