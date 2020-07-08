@@ -57,27 +57,6 @@ box.space.sync:insert{1}
 test_run:switch('default')
 box.space.sync:drop()
 
--- replication_synchro_quorum
-test_run:switch('default')
-INT_MIN = -2147483648
-INT_MAX = 2147483648
-box.cfg{replication_synchro_quorum=INT_MAX} -- error
-box.cfg.replication_synchro_quorum -- old value
-box.cfg{replication_synchro_quorum=INT_MIN} -- error
-box.cfg.replication_synchro_quorum -- old value
-
--- replication_synchro_timeout
-test_run:switch('default')
-DOUBLE_MAX = 9007199254740992
-box.cfg{replication_synchro_timeout=DOUBLE_MAX}
-box.cfg.replication_synchro_timeout -- DOUBLE_MAX
-box.cfg{replication_synchro_timeout=DOUBLE_MAX+1}
-box.cfg.replication_synchro_timeout -- DOUBLE_MAX
-box.cfg{replication_synchro_timeout=-1} -- error
-box.cfg.replication_synchro_timeout -- old value
-box.cfg{replication_synchro_timeout=0} -- error
-box.cfg.replication_synchro_timeout -- old value
-
 -- [RFC, summary] switch sync into async mode in space, expected success and
 -- data consistency on a leader and replicas.
 -- Testcase setup.

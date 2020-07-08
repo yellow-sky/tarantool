@@ -96,6 +96,84 @@ old_synchro_quorum = box.cfg.replication_synchro_quorum
 old_synchro_timeout = box.cfg.replication_synchro_timeout
  | ---
  | ...
+
+-- replication_synchro_quorum
+INT_MIN = -2147483648
+ | ---
+ | ...
+INT_MAX = 2147483648
+ | ---
+ | ...
+box.cfg.replication_synchro_quorum
+ | ---
+ | - 1
+ | ...
+box.cfg{replication_synchro_quorum = INT_MAX} -- error
+ | ---
+ | - error: 'Incorrect value for option ''replication_synchro_quorum'': the value must
+ |     be greater than zero and less than maximal number of replicas'
+ | ...
+box.cfg.replication_synchro_quorum -- old value
+ | ---
+ | - 1
+ | ...
+box.cfg{replication_synchro_quorum = INT_MIN} -- error
+ | ---
+ | - error: 'Incorrect value for option ''replication_synchro_quorum'': the value must
+ |     be greater than zero and less than maximal number of replicas'
+ | ...
+box.cfg.replication_synchro_quorum -- old value
+ | ---
+ | - 1
+ | ...
+box.cfg{replication_synchro_quorum = old_synchro_quorum}
+ | ---
+ | ...
+
+-- replication_synchro_timeout
+DOUBLE_MAX = 9007199254740992
+ | ---
+ | ...
+box.cfg.replication_synchro_timeout
+ | ---
+ | - 5
+ | ...
+box.cfg{replication_synchro_timeout = DOUBLE_MAX}
+ | ---
+ | ...
+box.cfg.replication_synchro_timeout -- DOUBLE_MAX
+ | ---
+ | - 9007199254740992
+ | ...
+box.cfg{replication_synchro_timeout=DOUBLE_MAX+1}
+ | ---
+ | ...
+box.cfg.replication_synchro_timeout -- DOUBLE_MAX
+ | ---
+ | - 9007199254740992
+ | ...
+box.cfg{replication_synchro_timeout = -1} -- error
+ | ---
+ | - error: 'Incorrect value for option ''replication_synchro_timeout'': the value must
+ |     be greater than zero'
+ | ...
+box.cfg.replication_synchro_timeout -- old value
+ | ---
+ | - 9007199254740992
+ | ...
+box.cfg{replication_synchro_timeout = 0} -- error
+ | ---
+ | - error: 'Incorrect value for option ''replication_synchro_timeout'': the value must
+ |     be greater than zero'
+ | ...
+box.cfg.replication_synchro_timeout -- old value
+ | ---
+ | - 9007199254740992
+ | ...
+box.cfg{replication_synchro_quorum = old_synchro_timeout}
+ | ---
+ | ...
+
 box.cfg{replication_synchro_quorum=2, replication_synchro_timeout=0.1}
  | ---
  | ...

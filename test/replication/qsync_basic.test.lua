@@ -40,6 +40,30 @@ box.schema.user.grant('guest', 'replication')
 -- Set up synchronous replication options.
 old_synchro_quorum = box.cfg.replication_synchro_quorum
 old_synchro_timeout = box.cfg.replication_synchro_timeout
+
+-- replication_synchro_quorum
+INT_MIN = -2147483648
+INT_MAX = 2147483648
+box.cfg.replication_synchro_quorum
+box.cfg{replication_synchro_quorum = INT_MAX} -- error
+box.cfg.replication_synchro_quorum -- old value
+box.cfg{replication_synchro_quorum = INT_MIN} -- error
+box.cfg.replication_synchro_quorum -- old value
+box.cfg{replication_synchro_quorum = old_synchro_quorum}
+
+-- replication_synchro_timeout
+DOUBLE_MAX = 9007199254740992
+box.cfg.replication_synchro_timeout
+box.cfg{replication_synchro_timeout = DOUBLE_MAX}
+box.cfg.replication_synchro_timeout -- DOUBLE_MAX
+box.cfg{replication_synchro_timeout=DOUBLE_MAX+1}
+box.cfg.replication_synchro_timeout -- DOUBLE_MAX
+box.cfg{replication_synchro_timeout = -1} -- error
+box.cfg.replication_synchro_timeout -- old value
+box.cfg{replication_synchro_timeout = 0} -- error
+box.cfg.replication_synchro_timeout -- old value
+box.cfg{replication_synchro_quorum = old_synchro_timeout}
+
 box.cfg{replication_synchro_quorum=2, replication_synchro_timeout=0.1}
 
 test_run:cmd('create server replica with rpl_master=default,\
