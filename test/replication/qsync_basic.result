@@ -32,6 +32,14 @@ s2.is_sync
  | - false
  | ...
 
+--
+-- gh-4849: clear synchro queue with unconfigured box
+--
+box.ctl.clear_synchro_queue()
+ | ---
+ | - -1
+ | ...
+
 -- Net.box takes sync into account.
 box.schema.user.grant('guest', 'super')
  | ---
@@ -553,6 +561,82 @@ box.space.sync:select{7}
  | - - [7]
  | ...
 
+--
+-- gh-4849: clear synchro queue on a replica
+--
+test_run:switch('default')
+ | ---
+ | - true
+ | ...
+box.cfg{replication_synchro_quorum = 3, replication_synchro_timeout = 2}
+ | ---
+ | ...
+f1 = fiber.create(box.space.sync.replace, box.space.sync, {9})
+ | ---
+ | ...
+f1:status()
+ | ---
+ | - suspended
+ | ...
+test_run:switch('replica')
+ | ---
+ | - true
+ | ...
+box.ctl.clear_synchro_queue()
+ | ---
+ | - 0
+ | ...
+box.space.sync:select{9}
+ | ---
+ | - []
+ | ...
+test_run:switch('default')
+ | ---
+ | - true
+ | ...
+box.space.sync:select{9}
+ | ---
+ | - []
+ | ...
+f1:status()
+ | ---
+ | - dead
+ | ...
+
+--
+-- gh-4849: clear synchro queue on a master
+--
+test_run:switch('default')
+ | ---
+ | - true
+ | ...
+box.cfg{replication_synchro_quorum = 3, replication_synchro_timeout = 2}
+ | ---
+ | ...
+f1 = fiber.create(box.space.sync.replace, box.space.sync, {10})
+ | ---
+ | ...
+f1:status()
+ | ---
+ | - suspended
+ | ...
+box.ctl.clear_synchro_queue()
+ | ---
+ | - -2
+ | ...
+box.space.sync:select{10}
+ | ---
+ | - - [10]
+ | ...
+test_run:switch('replica')
+ | ---
+ | - true
+ | ...
+box.space.sync:select{10}
+ | ---
+ | - - [10]
+ | ...
+
 -- Cleanup.
 test_run:cmd('switch default')
  | ---
@@ -576,6 +660,7 @@ test_run:cmd('delete server replica')
  | ...
 box.space.test:drop()
  | ---
+ | - error: A rollback for a synchronous transaction is received
  | ...
 box.space.sync:drop()
  | ---

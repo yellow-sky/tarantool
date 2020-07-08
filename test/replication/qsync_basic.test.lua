@@ -13,6 +13,11 @@ s1:select{}
 s2 = box.schema.create_space('test2')
 s2.is_sync
 
+--
+-- gh-4849: clear synchro queue with unconfigured box
+--
+box.ctl.clear_synchro_queue()
+
 -- Net.box takes sync into account.
 box.schema.user.grant('guest', 'super')
 netbox = require('net.box')
@@ -221,6 +226,32 @@ newlsn = box.info.lsn
 assert(newlsn >= oldlsn + 2)
 test_run:switch('replica')
 box.space.sync:select{7}
+
+--
+-- gh-4849: clear synchro queue on a replica
+--
+test_run:switch('default')
+box.cfg{replication_synchro_quorum = 3, replication_synchro_timeout = 2}
+f1 = fiber.create(box.space.sync.replace, box.space.sync, {9})
+f1:status()
+test_run:switch('replica')
+box.ctl.clear_synchro_queue()
+box.space.sync:select{9}
+test_run:switch('default')
+box.space.sync:select{9}
+f1:status()
+
+--
+-- gh-4849: clear synchro queue on a master
+--
+test_run:switch('default')
+box.cfg{replication_synchro_quorum = 3, replication_synchro_timeout = 2}
+f1 = fiber.create(box.space.sync.replace, box.space.sync, {10})
+f1:status()
+box.ctl.clear_synchro_queue()
+box.space.sync:select{10}
+test_run:switch('replica')
+box.space.sync:select{10}
 
 -- Cleanup.
 test_run:cmd('switch default')
