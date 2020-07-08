@@ -946,15 +946,15 @@ box_set_replication_anon(void)
 
 }
 
-void
+int
 box_clear_synchro_queue(void)
 {
 	if (!is_box_configured || txn_limbo_is_empty(&txn_limbo))
-		return;
+		return -1;
 	uint32_t former_leader_id = txn_limbo.instance_id;
 	assert(former_leader_id != REPLICA_ID_NIL);
 	if (former_leader_id == instance_id)
-		return;
+		return -2;
 
 	/* Wait until pending confirmations/rollbacks reach us. */
 	double timeout = 2 * txn_limbo_confirm_timeout(&txn_limbo);
@@ -965,9 +965,9 @@ box_clear_synchro_queue(void)
 		fiber_sleep(0.001);
 	}
 
+	int len = 0;
 	if (!txn_limbo_is_empty(&txn_limbo)) {
 		int64_t lsns[VCLOCK_MAX];
-		int len = 0;
 		const struct vclock  *vclock;
 		replicaset_foreach(replica) {
 			if (replica->relay != NULL &&
@@ -993,6 +993,8 @@ box_clear_synchro_queue(void)
 		txn_limbo_force_empty(&txn_limbo, confirm_lsn);
 		assert(txn_limbo_is_empty(&txn_limbo));
 	}
+
+	return len;
 }
 
 void

@@ -82,8 +82,9 @@ static int
 lbox_ctl_clear_synchro_queue(struct lua_State *L)
 {
 	(void) L;
-	box_clear_synchro_queue();
-	return 0;
+	int len = box_clear_synchro_queue();
+	lua_pushinteger(L, len);
+	return 1;
 }
 
 static const struct luaL_Reg lbox_ctl_lib[] = {
