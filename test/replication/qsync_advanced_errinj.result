@@ -8,9 +8,6 @@ test_run = env.new()
 engine = test_run:get_cfg('engine')
  | ---
  | ...
-fiber = require('fiber')
- | ---
- | ...
 
 orig_synchro_quorum = box.cfg.replication_synchro_quorum
  | ---
@@ -117,7 +114,7 @@ box.space.sync:drop()
  | ---
  | ...
 
--- [RFC, connection liveness] When Leader has no response for another heartbeat
+-- (WIP) [RFC, connection liveness] When Leader has no response for another heartbeat
 -- interval, it should consider the replica is lost.
 test_run:switch('default')
  | ---
