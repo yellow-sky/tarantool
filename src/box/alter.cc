@@ -58,6 +58,7 @@
 #include "sequence.h"
 #include "sql.h"
 #include "constraint_id.h"
+#include "box/box.h"
 
 /* {{{ Auxiliary functions and methods. */
 
@@ -4205,7 +4206,10 @@ unregister_replica(struct trigger *trigger, void * /* event */)
 
 	struct replica *replica = replica_by_uuid(&old_uuid);
 	assert(replica != NULL);
+	unsigned replica_id = replica->id;
 	replica_clear_id(replica);
+	if (boxk(IPROTO_DELETE, BOX_CLUSTER_INFO_ID, "[%u]", replica_id) != 0)
+		return -1;
 	return 0;
 }
 

@@ -264,6 +264,7 @@ static void
 sc_space_new(uint32_t id, const char *name,
 	     struct key_part_def *key_parts,
 	     uint32_t key_part_count,
+	     const struct space_opts *opts,
 	     struct trigger *replace_trigger)
 {
 	struct key_def *key_def = key_def_new(key_parts, key_part_count, false);
@@ -284,7 +285,7 @@ sc_space_new(uint32_t id, const char *name,
 		make_scoped_guard([=] { index_def_delete(index_def); });
 	struct space_def *def =
 		space_def_new_xc(id, ADMIN, 0, name, strlen(name), "memtx",
-				 strlen("memtx"), &space_opts_default, NULL, 0);
+				 strlen("memtx"), opts, NULL, 0);
 	auto def_guard = make_scoped_guard([=] { space_def_delete(def); });
 	struct rlist key_list;
 	rlist_create(&key_list);
@@ -386,56 +387,69 @@ schema_init()
 	key_parts[0].fieldno = 0;
 	key_parts[0].type = FIELD_TYPE_STRING;
 	sc_space_new(BOX_SCHEMA_ID, "_schema", key_parts, 1,
-		     &on_replace_schema);
+		     &space_opts_default, &on_replace_schema);
 
 	/* _collation - collation description. */
 	key_parts[0].fieldno = 0;
 	key_parts[0].type = FIELD_TYPE_UNSIGNED;
 	sc_space_new(BOX_COLLATION_ID, "_collation", key_parts, 1,
-		     &on_replace_collation);
+		     &space_opts_default, &on_replace_collation);
 
 	/* _space - home for all spaces. */
 	sc_space_new(BOX_SPACE_ID, "_space", key_parts, 1,
-		     &alter_space_on_replace_space);
+		     &space_opts_default, &alter_space_on_replace_space);
 
 	/* _truncate - auxiliary space for triggering space truncation. */
 	sc_space_new(BOX_TRUNCATE_ID, "_truncate", key_parts, 1,
-		     &on_replace_truncate);
+		     &space_opts_default, &on_replace_truncate);
 
 	/* _sequence - definition of all sequence objects. */
 	sc_space_new(BOX_SEQUENCE_ID, "_sequence", key_parts, 1,
-		     &on_replace_sequence);
+		     &space_opts_default, &on_replace_sequence);
 
 	/* _sequence_data - current sequence value. */
 	sc_space_new(BOX_SEQUENCE_DATA_ID, "_sequence_data", key_parts, 1,
-		     &on_replace_sequence_data);
+		     &space_opts_default, &on_replace_sequence_data);
 
 	/* _space_seq - association space <-> sequence. */
 	sc_space_new(BOX_SPACE_SEQUENCE_ID, "_space_sequence", key_parts, 1,
-		     &on_replace_space_sequence);
+		     &space_opts_default, &on_replace_space_sequence);
 
 	/* _user - all existing users */
-	sc_space_new(BOX_USER_ID, "_user", key_parts, 1, &on_replace_user);
+	sc_space_new(BOX_USER_ID, "_user", key_parts, 1,
+		     &space_opts_default, &on_replace_user);
 
 	/* _func - all executable objects on which one can have grants */
-	sc_space_new(BOX_FUNC_ID, "_func", key_parts, 1, &on_replace_func);
+	sc_space_new(BOX_FUNC_ID, "_func", key_parts, 1,
+		     &space_opts_default, &on_replace_func);
 	/*
 	 * _priv - association user <-> object
 	 * The real index is defined in the snapshot.
 	 */
-	sc_space_new(BOX_PRIV_ID, "_priv", key_parts, 1, &on_replace_priv);
+	sc_space_new(BOX_PRIV_ID, "_priv", key_parts, 1,
+		     &space_opts_default, &on_replace_priv);
 	/*
 	 * _cluster - association instance uuid <-> instance id
 	 * The real index is defined in the snapshot.
 	 */
 	sc_space_new(BOX_CLUSTER_ID, "_cluster", key_parts, 1,
-		     &on_replace_cluster);
+		     &space_opts_default, &on_replace_cluster);
+	/*
+	 * _cluster_info - providing additional info
+	 * about members of cluster.
+	 */
+	{
+		struct space_opts opts = space_opts_default;
+		opts.group_id = GROUP_LOCAL;
+		sc_space_new(BOX_CLUSTER_INFO_ID, "_cluster_info", key_parts, 1,
+			     &opts, NULL);
+	}
 
 	/* _trigger - all existing SQL triggers. */
 	key_parts[0].fieldno = 0;
 	key_parts[0].type = FIELD_TYPE_STRING;
 	sc_space_new(BOX_TRIGGER_ID, "_trigger", key_parts, 1,
-		     &on_replace_trigger);
+		     &space_opts_default, &on_replace_trigger);
 
 	/* _index - definition of all space indexes. */
 	key_parts[0].fieldno = 0; /* space id */
@@ -443,7 +457,7 @@ schema_init()
 	key_parts[1].fieldno = 1; /* index id */
 	key_parts[1].type = FIELD_TYPE_UNSIGNED;
 	sc_space_new(BOX_INDEX_ID, "_index", key_parts, 2,
-		     &alter_space_on_replace_index);
+		     &space_opts_default, &alter_space_on_replace_index);
 
 	/* _fk_сonstraint - foreign keys constraints. */
 	key_parts[0].fieldno = 0; /* constraint name */
@@ -451,7 +465,7 @@ schema_init()
 	key_parts[1].fieldno = 1; /* child space */
 	key_parts[1].type = FIELD_TYPE_UNSIGNED;
 	sc_space_new(BOX_FK_CONSTRAINT_ID, "_fk_constraint", key_parts, 2,
-		     &on_replace_fk_constraint);
+		     &space_opts_default, &on_replace_fk_constraint);
 
 	/* _ck_сonstraint - check constraints. */
 	key_parts[0].fieldno = 0; /* space id */
@@ -459,7 +473,7 @@ schema_init()
 	key_parts[1].fieldno = 1; /* constraint name */
 	key_parts[1].type = FIELD_TYPE_STRING;
 	sc_space_new(BOX_CK_CONSTRAINT_ID, "_ck_constraint", key_parts, 2,
-		     &on_replace_ck_constraint);
+		     &space_opts_default, &on_replace_ck_constraint);
 
 	/* _func_index - check constraints. */
 	key_parts[0].fieldno = 0; /* space id */
@@ -467,7 +481,7 @@ schema_init()
 	key_parts[1].fieldno = 1; /* index id */
 	key_parts[1].type = FIELD_TYPE_UNSIGNED;
 	sc_space_new(BOX_FUNC_INDEX_ID, "_func_index", key_parts, 2,
-		     &on_replace_func_index);
+		     &space_opts_default, &on_replace_func_index);
 
 	/*
 	 * _vinyl_deferred_delete - blackhole that is needed

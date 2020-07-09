@@ -69,18 +69,18 @@ s:auto_increment{}
 box.snapshot()
 s:auto_increment{}
 
-check_wal_count(5)
+check_wal_count(4)
 check_snap_count(2)
 gc = box.info.gc()
 #gc.consumers -- 3
 #gc.checkpoints -- 2
-gc.signature == gc.consumers[1].signature
+gc.vclock[1] == gc.consumers[1].vclock[1]
 
 --
 -- Inject a ENOSPC error and check that the WAL thread deletes
 -- old WAL files to prevent the user from seeing the error.
 --
-errinj.set('ERRINJ_WAL_FALLOCATE', 2)
+errinj.set('ERRINJ_WAL_FALLOCATE', 1)
 s:auto_increment{} -- success
 errinj.info()['ERRINJ_WAL_FALLOCATE'].state -- 0
 
@@ -89,7 +89,7 @@ check_snap_count(2)
 gc = box.info.gc()
 #gc.consumers -- 1
 #gc.checkpoints -- 2
-gc.signature == gc.consumers[1].signature
+gc.vclock[1] == gc.consumers[1].vclock[1]
 
 --
 -- Check that the WAL thread never deletes WAL files that are

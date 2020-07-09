@@ -973,6 +973,48 @@ local function upgrade_to_2_3_1()
 end
 
 --------------------------------------------------------------------------------
+-- Tarantool 2.5.1
+--------------------------------------------------------------------------------
+
+local function create_cluster_info_space()
+    local _space = box.space[box.schema.SPACE_ID]
+    local _index = box.space[box.schema.INDEX_ID]
+    local _priv = box.space[box.schema.PRIV_ID]
+    local _cluster_info_id = box.space[box.schema.CLUSTER_INFO_ID].id
+
+    log.info("create space _cluster_info")
+    local format = {}
+    format[1] = {name='id', type='unsigned'}
+    format[2] = {name='uuid', type='string'}
+    -- Additional fields have to be nullable because they are useless
+    -- for instance itself.
+    format[3] = {name='host_port', type='string', is_nullable = true}
+    format[4] = {name='relay_timestamp', type='double', is_nullable = true}
+    format[5] = {name='relay_vclock', type='string', is_nullable = true}
+    format[6] = {name='relay_state', type='string', is_nullable = true}
+    -- Sets only if state is RELAY_STOPPED.
+    format[7] = {name='relay_err', type='string', is_nullable = true}
+    _space:insert{_cluster_info_id, ADMIN, '_cluster_info',
+                  'memtx', 0, setmap{group_id = 1}, format}
+    -- Primary key: node id.
+    log.info("create index primary on _cluster_info")
+    _index:insert{_cluster_info_id, 0, 'primary', 'tree',
+                  {unique = true}, {{0, 'unsigned'}}}
+    -- Node uuid key: node uuid.
+    log.info("create index uuid on _cluster_info")
+    _index:insert{_cluster_info_id, 1, 'uuid', 'tree',
+                  {unique = true}, {{1, 'string'}}}
+
+    -- Replication can append to '_cluster_info' system space.
+    log.info("grant write on space _cluster_info to replication")
+    _priv:replace{ADMIN, REPLICATION, 'space', _cluster_info_id, box.priv.W}
+end
+
+local function upgrade_to_2_5_1()
+    create_cluster_info_space()
+end
+
+--------------------------------------------------------------------------------
 
 local function get_version()
     local version = box.space._schema:get{'version'}
@@ -1008,6 +1050,7 @@ local function upgrade(options)
         {version = mkversion(2, 2, 1), func = upgrade_to_2_2_1, auto = true},
         {version = mkversion(2, 3, 0), func = upgrade_to_2_3_0, auto = true},
         {version = mkversion(2, 3, 1), func = upgrade_to_2_3_1, auto = true},
+        {version = mkversion(2, 5, 1), func = upgrade_to_2_5_1, auto = true},
     }
 
     for _, handler in ipairs(handlers) do

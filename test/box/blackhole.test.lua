@@ -72,6 +72,7 @@ test_run:cmd('switch default')
 s = box.space.test
 for i = 1, 5 do s:replace{i} end
 vclock = test_run:get_vclock('default')
+vclock[0] = nil
 test_run:wait_vclock('replica', vclock)
 test_run:cmd("switch replica")
 t

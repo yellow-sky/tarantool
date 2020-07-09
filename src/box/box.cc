@@ -1476,13 +1476,24 @@ box_session_push(const char *data, const char *data_end)
 	return rc;
 }
 
-static inline void
-box_register_replica(uint32_t id, const struct tt_uuid *uuid)
+static void
+box_register_replica_xc(uint32_t id, const struct tt_uuid *uuid)
 {
 	if (boxk(IPROTO_INSERT, BOX_CLUSTER_ID, "[%u%s]",
 		 (unsigned) id, tt_uuid_str(uuid)) != 0)
 		diag_raise();
 	assert(replica_by_uuid(uuid)->id == id);
+	if (boxk(IPROTO_INSERT, BOX_CLUSTER_INFO_ID, "["
+		 "%u" /* replica id */
+		 "%s" /* uuid */
+		 "NIL" /* ip+port */
+		 "NIL" /* timestamp */
+		 "NIL" /* vclock */
+		 "NIL" /* relay status */
+		 "NIL" /* err str if exists */
+		 "]",
+		 (unsigned) id, tt_uuid_str(uuid)) != 0)
+		diag_raise();
 }
 
 /**
@@ -1516,7 +1527,7 @@ box_on_join(const tt_uuid *instance_uuid)
 			break;
 		replica_id++;
 	}
-	box_register_replica(replica_id, instance_uuid);
+	box_register_replica_xc(replica_id, instance_uuid);
 }
 
 void
@@ -1593,8 +1604,10 @@ box_process_register(struct ev_io *io, struct xrow_header *header)
 	}
 	/* See box_process_join() */
 	box_check_writable_xc();
-	struct space *space = space_cache_find_xc(BOX_CLUSTER_ID);
-	access_check_space_xc(space, PRIV_W);
+	struct space *cluster = space_cache_find_xc(BOX_CLUSTER_ID);
+	access_check_space_xc(cluster, PRIV_W);
+	struct space *cluster_info = space_cache_find_xc(BOX_CLUSTER_INFO_ID);
+	access_check_space_xc(cluster_info, PRIV_W);
 
 	/* Forbid replication with disabled WAL */
 	if (wal_mode() == WAL_NONE) {
@@ -1724,8 +1737,11 @@ box_process_join(struct ev_io *io, struct xrow_header *header)
 	struct replica *replica = replica_by_uuid(&instance_uuid);
 	if (replica == NULL || replica->id == REPLICA_ID_NIL) {
 		box_check_writable_xc();
-		struct space *space = space_cache_find_xc(BOX_CLUSTER_ID);
-		access_check_space_xc(space, PRIV_W);
+		struct space *cluster = space_cache_find_xc(BOX_CLUSTER_ID);
+		access_check_space_xc(cluster, PRIV_W);
+		struct space *cluster_info =
+			space_cache_find_xc(BOX_CLUSTER_INFO_ID);
+		access_check_space_xc(cluster_info, PRIV_W);
 	}
 
 	/* Forbid replication with disabled WAL */
@@ -2032,7 +2048,7 @@ bootstrap_master(const struct tt_uuid *replicaset_uuid)
 	uint32_t replica_id = 1;
 
 	/* Register the first replica in the replica set */
-	box_register_replica(replica_id, &INSTANCE_UUID);
+	box_register_replica_xc(replica_id, &INSTANCE_UUID);
 	assert(replica_by_uuid(&INSTANCE_UUID)->id == 1);
 
 	/* Register other cluster members */
@@ -2040,7 +2056,7 @@ bootstrap_master(const struct tt_uuid *replicaset_uuid)
 		if (tt_uuid_is_equal(&replica->uuid, &INSTANCE_UUID))
 			continue;
 		assert(replica->applier != NULL);
-		box_register_replica(++replica_id, &replica->uuid);
+		box_register_replica_xc(++replica_id, &replica->uuid);
 		assert(replica->id == replica_id);
 	}
 

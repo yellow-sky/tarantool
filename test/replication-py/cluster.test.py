@@ -37,7 +37,8 @@ server.admin("box.schema.user.grant('guest', 'read', 'universe')")
 server.iproto.reconnect() # re-connect with new permissions
 rows = list(server.iproto.py_con.join(replica_uuid))
 print len(rows) == 1 and rows[0].return_message.find('Write access') >= 0 and \
-    'ok' or 'not ok', '-', 'join without write permissions to _cluster'
+    'ok' or 'not ok', '-', 'join without write permissions to _cluster', \
+    'or _cluster_info'
 
 def check_join(msg):
     ok = True
@@ -59,6 +60,7 @@ def check_join(msg):
 
 ## JOIN with permissions
 server.admin("box.schema.user.grant('guest', 'write', 'space', '_cluster')")
+server.admin("box.schema.user.grant('guest', 'write', 'space', '_cluster_info')")
 server.iproto.reconnect() # re-connect with new permissions
 server_id = check_join('join with granted permissions')
 server.iproto.py_con.space('_cluster').delete(server_id)
@@ -66,6 +68,7 @@ server.iproto.py_con.space('_cluster').delete(server_id)
 # JOIN with granted role
 server.admin("box.schema.user.revoke('guest', 'read', 'universe')")
 server.admin("box.schema.user.revoke('guest', 'write', 'space', '_cluster')")
+server.admin("box.schema.user.revoke('guest', 'write', 'space', '_cluster_info')")
 server.admin("box.schema.user.grant('guest', 'replication')")
 server.iproto.reconnect() # re-connect with new permissions
 server_id = check_join('join with granted role')

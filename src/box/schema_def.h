@@ -102,6 +102,8 @@ enum {
 	BOX_VPRIV_ID = 313,
 	/** Space id of _cluster. */
 	BOX_CLUSTER_ID = 320,
+	/** Space id of _cluster_info. */
+	BOX_CLUSTER_INFO_ID = 321,
 	/** Space id of _trigger. */
 	BOX_TRIGGER_ID = 328,
 	/** Space id of _truncate. */
@@ -206,6 +208,17 @@ enum {
 enum {
 	BOX_CLUSTER_FIELD_ID = 0,
 	BOX_CLUSTER_FIELD_UUID = 1,
+};
+
+/** _cluster_info fields. */
+enum {
+	BOX_CLUSTER_INFO_FIELD_ID = 0,
+	BOX_CLUSTER_INFO_FIELD_UUID = 1,
+	BOX_CLUSTER_INFO_FIELD_HOST_PORT = 2,
+	BOX_CLUSTER_INFO_FIELD_RELAY_TIMESTAMP = 3,
+	BOX_CLUSTER_INFO_FIELD_RELAY_VCLOCK = 4,
+	BOX_CLUSTER_INFO_FIELD_RELAY_STATE = 5,
+	BOX_CLUSTER_INFO_FIELD_RELAY_ERR = 6,
 };
 
 /** _truncate fields. */

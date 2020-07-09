@@ -7,8 +7,11 @@ ok - subscribe without read permissions on universe
 box.schema.user.grant('guest', 'read', 'universe')
 ---
 ...
-ok - join without write permissions to _cluster
+ok - join without write permissions to _cluster or _cluster_info
 box.schema.user.grant('guest', 'write', 'space', '_cluster')
+---
+...
+box.schema.user.grant('guest', 'write', 'space', '_cluster_info')
 ---
 ...
 ok - join with granted permissions
@@ -16,6 +19,9 @@ box.schema.user.revoke('guest', 'read', 'universe')
 ---
 ...
 box.schema.user.revoke('guest', 'write', 'space', '_cluster')
+---
+...
+box.schema.user.revoke('guest', 'write', 'space', '_cluster_info')
 ---
 ...
 box.schema.user.grant('guest', 'replication')
