@@ -379,6 +379,8 @@ struct txn {
 	 * Link in tx_manager::read_view_txs.
 	 */
 	struct rlist in_read_view_txs;
+	/** List of tx_read_trackers with stories that the TX have read. */
+	struct rlist read_set;
 };
 
 /**
@@ -452,6 +454,10 @@ struct txm_story {
 	 * Link in tx_manager::all_stories
 	 */
 	struct rlist in_all_stories;
+	/**
+	 * Link in space::txm_stories.
+	 */
+	struct rlist in_space_stories;
 	/**
 	 * Number of indexes in this space - and the count of link[].
 	 */
@@ -913,6 +919,13 @@ txm_history_prepare_stmt(struct txn_stmt *stmt);
 ssize_t
 txm_history_commit_stmt(struct txn_stmt *stmt);
 
+/**
+ * Record in TX manager that a transaction @txn have read a @tuple in @space.
+ * @return 0 on success, -1 on memory error.
+ */
+int
+txm_track_read(struct txn *txn, struct space *space, struct tuple *tuple);
+
 /** Helper of txm_tuple_clarify */
 struct tuple *
 txm_tuple_clarify_slow(struct txn *txn, struct space *space,
@@ -936,11 +949,60 @@ txm_tuple_clarify(struct txn *txn, struct space *space,
 {
 	if (!tx_manager_use_mvcc_engine)
 		return tuple;
-	if (!tuple->is_dirty)
+	if (!tuple->is_dirty) {
+		txm_track_read(txn, space, tuple);
 		return tuple;
+	}
 	return txm_tuple_clarify_slow(txn, space, tuple, index, mk_index,
 				      is_prepared_ok);
 }
+
+/**
+ * Snapshot cleaner is a short part of history that is supposed to clarify
+ * tuples in a index snapshot. It's also supposed to be used in another
+ * thread while common clarify would probably crash in that case.
+ */
+struct txm_snapshot_cleaner {
+	struct mh_snapshot_cleaner_t *ht;
+};
+
+/**
+ * Create a snapshot cleaner.
+ * @param cleaner - cleaner to create.
+ * @param space - space for which the cleaner must be created.
+ * @param index_name - name of index for diag in case of memory error.
+ * @return 0 on success, -1 on memory erorr.
+ */
+int
+txm_snapshot_cleaner_create(struct txm_snapshot_cleaner *cleaner,
+			    struct space *space, const char *index_name);
+
+/** Helper of txm_snapshot_clafify. */
+struct tuple *
+txm_snapshot_clarify_slow(struct txm_snapshot_cleaner *cleaner,
+			  struct tuple *tuple);
+
+/**
+ * Like a common clarify that function returns proper tuple if original
+ * tuple in index is dirty.
+ * @param cleaner - pre-created snapshot cleaner.
+ * @param tuple - tuple to clean.
+ * @return cleaned tuple, can be NULL.
+ */
+static inline struct tuple *
+txm_snapshot_clarify(struct txm_snapshot_cleaner *cleaner,
+		     struct tuple *tuple)
+{
+	if (cleaner->ht == NULL)
+		return tuple;
+	return txm_snapshot_clarify_slow(cleaner, tuple);
+}
+
+/**
+ * Free resources.in shapshot @cleaner.
+ */
+void
+txm_snapshot_cleaner_destroy(struct txm_snapshot_cleaner *cleaner);
 
 #if defined(__cplusplus)
 } /* extern "C" */

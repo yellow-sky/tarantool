@@ -101,6 +101,20 @@ struct tx_conflict_tracker {
 	struct rlist in_conflicted_by_list;
 };
 
+/**
+ * Record that links transaction and a story that the transaction have read.
+ */
+struct tx_read_tracker {
+	/** The TX that read story. */
+	struct txn *reader;
+	/** The story that was read by reader. */
+	struct txm_story *story;
+	/** Link in story->reader_list. */
+	struct rlist in_reader_list;
+	/** Link in reader->read_set. */
+	struct rlist in_read_set;
+};
+
 double too_long_threshold;
 
 /* Txn cache. */
@@ -263,6 +277,7 @@ txn_new(void)
 	}
 	assert(region_used(&region) == sizeof(*txn));
 	txn->region = region;
+	rlist_create(&txn->read_set);
 	rlist_create(&txn->conflict_list);
 	rlist_create(&txn->conflicted_by_list);
 	rlist_create(&txn->in_read_view_txs);
@@ -275,6 +290,14 @@ txn_new(void)
 inline static void
 txn_free(struct txn *txn)
 {
+	struct tx_read_tracker *tracker, *tmp;
+	rlist_foreach_entry_safe(tracker, &txn->read_set,
+				 in_read_set, tmp) {
+		rlist_del(&tracker->in_reader_list);
+		rlist_del(&tracker->in_read_set);
+	}
+	assert(rlist_empty(&txn->read_set));
+
 	struct tx_conflict_tracker *entry, *next;
 	rlist_foreach_entry_safe(entry, &txn->conflict_list,
 				 in_conflict_list, next) {
@@ -1431,6 +1454,7 @@ txm_story_new(struct space *space, struct tuple *tuple)
 	story->del_psn = 0;
 	rlist_create(&story->reader_list);
 	rlist_add_tail(&txm.all_stories, &story->in_all_stories);
+	rlist_add(&space->txm_stories, &story->in_space_stories);
 	memset(story->link, 0, sizeof(story->link[0]) * index_count);
 	return story;
 }
@@ -1967,26 +1991,32 @@ txm_history_prepare_stmt(struct txn_stmt *stmt)
 			i++;
 			continue;
 		}
+		bool old_story_is_prepared = false;
 		struct txm_story *old_story =
 			story->link[i].older.story;
 		if (old_story->del_psn != 0) {
 			/* if psn is set, the change is prepared. */
-			i++;
-			continue;
-		}
-		if (old_story->add_psn != 0) {
+			old_story_is_prepared = true;
+		} else if (old_story->add_psn != 0) {
 			/* if psn is set, the change is prepared. */
-			i++;
-			continue;
+			old_story_is_prepared = true;
+		} else if (old_story->add_stmt == NULL) {
+			/* ancient. */
+			old_story_is_prepared = true;
+		} else if (old_story->add_stmt->txn == stmt->txn) {
+			/* added by us. */
 		}
 
-		if (old_story->add_stmt == NULL) {
-			/* ancient. */
-			i++;
-			continue;
-		}
-		if (old_story->add_stmt->txn == stmt->txn) {
-			/* added by us. */
+		if (old_story_is_prepared) {
+			struct tx_read_tracker *tracker;
+			rlist_foreach_entry(tracker, &old_story->reader_list,
+					    in_reader_list) {
+				if (tracker->reader == stmt->txn)
+					continue;
+				if (tracker->reader->status != TXN_INPROGRESS)
+					continue;
+				txn_handle_conflict(stmt->txn, tracker->reader);
+			}
 			i++;
 			continue;
 		}
@@ -2095,7 +2125,6 @@ txm_tuple_clarify_slow(struct txn *txn, struct space *space,
 		       struct tuple *tuple, uint32_t index,
 		       uint32_t mk_index, bool is_prepared_ok)
 {
-	(void)space;
 	assert(tuple->is_dirty);
 	struct txm_story *story = txm_story_get(tuple);
 	bool own_change = false;
@@ -2113,7 +2142,8 @@ txm_tuple_clarify_slow(struct txn *txn, struct space *space,
 			break;
 		}
 	}
-	(void)own_change; /* TODO: add conflict */
+	if (!own_change)
+		txm_track_read(txn, space, tuple);
 	(void)mk_index; /* TODO: multiindex */
 	return result;
 }
@@ -2127,6 +2157,7 @@ txm_story_delete(struct txm_story *story)
 	if (txm.traverse_all_stories == &story->in_all_stories)
 		txm.traverse_all_stories = rlist_next(txm.traverse_all_stories);
 	rlist_del(&story->in_all_stories);
+	rlist_del(&story->in_space_stories);
 
 	mh_int_t pos = mh_history_find(txm.history, story->tuple, 0);
 	assert(pos != mh_end(txm.history));
@@ -2146,4 +2177,169 @@ txm_story_delete(struct txm_story *story)
 
 	struct mempool *pool = &txm.txm_story_pool[story->index_count];
 	mempool_free(pool, story);
+}
+
+
+static uint32_t
+txm_snapshot_cleaner_hash(const struct tuple *a)
+{
+	uintptr_t u = (uintptr_t)a;
+	if (sizeof(uintptr_t) <= sizeof(uint32_t))
+		return u;
+	else
+		return u ^ (u >> 32);
+}
+
+struct txm_snapshot_cleaner_entry
+{
+	struct tuple *from;
+	struct tuple *to;
+};
+
+#define mh_name _snapshot_cleaner
+#define mh_key_t struct tuple *
+#define mh_node_t struct txm_snapshot_cleaner_entry
+#define mh_arg_t int
+#define mh_hash(a, arg) (txm_snapshot_cleaner_hash((a)->from))
+#define mh_hash_key(a, arg) (txm_snapshot_cleaner_hash(a))
+#define mh_cmp(a, b, arg) (((a)->from) != ((b)->from))
+#define mh_cmp_key(a, b, arg) ((a) != ((b)->from))
+#define MH_SOURCE
+#include "salad/mhash.h"
+
+int
+txm_snapshot_cleaner_create(struct txm_snapshot_cleaner *cleaner,
+			    struct space *space, const char *index_name)
+{
+	cleaner->ht = NULL;
+	if (space == NULL || rlist_empty(&space->txm_stories))
+		return 0;
+	struct mh_snapshot_cleaner_t *ht = mh_snapshot_cleaner_new();
+	if (ht == NULL) {
+		diag_set(OutOfMemory, sizeof(*ht),
+			 index_name, "snapshot cleaner");
+		free(ht);
+		return -1;
+	}
+
+	struct txm_story *story;
+	rlist_foreach_entry(story, &space->txm_stories, in_space_stories) {
+		struct tuple *tuple = story->tuple;
+		struct tuple *clean =
+			txm_tuple_clarify_slow(NULL, space, tuple, 0, 0, true);
+		if (clean == tuple)
+			continue;
+
+		struct txm_snapshot_cleaner_entry entry;
+		entry.from = tuple;
+		entry.to = clean;
+		mh_int_t res =  mh_snapshot_cleaner_put(ht,  &entry, NULL, 0);
+		if (res == mh_end(ht)) {
+			diag_set(OutOfMemory, sizeof(entry),
+				 index_name, "snapshot rollback entry");
+			mh_snapshot_cleaner_delete(ht);
+			return -1;
+		}
+	}
+
+	cleaner->ht = ht;
+	return 0;
+}
+
+struct tuple *
+txm_snapshot_clarify_slow(struct txm_snapshot_cleaner *cleaner,
+			  struct tuple *tuple)
+{
+	assert(cleaner->ht != NULL);
+
+	struct mh_snapshot_cleaner_t *ht = cleaner->ht;
+	while (true) {
+		mh_int_t pos =  mh_snapshot_cleaner_find(ht, tuple, 0);
+		if (pos == mh_end(ht))
+			break;
+		struct txm_snapshot_cleaner_entry *entry =
+			mh_snapshot_cleaner_node(ht, pos);
+		assert(entry->from == tuple);
+		tuple = entry->to;
+	}
+
+	return tuple;
+}
+
+
+void
+txm_snapshot_cleaner_destroy(struct txm_snapshot_cleaner *cleaner)
+{
+	if (cleaner->ht != NULL)
+		mh_snapshot_cleaner_delete(cleaner->ht);
+}
+
+int
+txm_track_read(struct txn *txn, struct space *space, struct tuple *tuple)
+{
+	if (tuple == NULL)
+		return 0;
+	if (txn == NULL)
+		return 0;
+	if (space == NULL)
+		return 0;
+
+	struct txm_story *story;
+	struct tx_read_tracker *tracker = NULL;
+
+	if (!tuple->is_dirty) {
+		story = txm_story_new(space, tuple);
+		if (story == NULL)
+			return -1;
+		size_t sz;
+		tracker = region_alloc_object(&txn->region,
+					      struct tx_read_tracker, &sz);
+		if (tracker == NULL) {
+			diag_set(OutOfMemory, sz, "tx region", "read_tracker");
+			txm_story_delete(story);
+			return -1;
+		}
+		tracker->reader = txn;
+		tracker->story = story;
+		rlist_add(&story->reader_list, &tracker->in_reader_list);
+		rlist_add(&txn->read_set, &tracker->in_read_set);
+		return 0;
+	}
+	story = txm_story_get(tuple);
+
+	struct rlist *r1 = story->reader_list.next;
+	struct rlist *r2 = txn->read_set.next;
+	while (r1 != &story->reader_list && r2 != &txn->read_set) {
+		tracker = rlist_entry(r1, struct tx_read_tracker,
+				      in_reader_list);
+		assert(tracker->story == story);
+		if (tracker->reader == txn)
+			break;
+		tracker = rlist_entry(r2, struct tx_read_tracker,
+				      in_read_set);
+		assert(tracker->reader == txn);
+		if (tracker->story == story)
+			break;
+		tracker = NULL;
+		r1 = r1->next;
+		r2 = r2->next;
+	}
+	if (tracker != NULL) {
+		/* Move to the beginning of a list for faster further lookups.*/
+		rlist_del(&tracker->in_reader_list);
+		rlist_del(&tracker->in_read_set);
+	} else {
+		size_t sz;
+		tracker = region_alloc_object(&txn->region,
+					      struct tx_read_tracker, &sz);
+		if (tracker == NULL) {
+			diag_set(OutOfMemory, sz, "tx region", "read_tracker");
+			return -1;
+		}
+		tracker->reader = txn;
+		tracker->story = story;
+	}
+	rlist_add(&story->reader_list, &tracker->in_reader_list);
+	rlist_add(&txn->read_set, &tracker->in_read_set);
+	return 0;
 }

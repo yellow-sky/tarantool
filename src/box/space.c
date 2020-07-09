@@ -210,6 +210,7 @@ space_create(struct space *space, struct engine *engine,
 			 "constraint_ids");
 		goto fail;
 	}
+	rlist_create(&space->txm_stories);
 	return 0;
 
 fail_free_indexes:
@@ -252,6 +253,7 @@ space_new_ephemeral(struct space_def *def, struct rlist *key_list)
 void
 space_delete(struct space *space)
 {
+	rlist_del(&space->txm_stories);
 	assert(space->ck_constraint_trigger == NULL);
 	for (uint32_t j = 0; j <= space->index_id_max; j++) {
 		struct index *index = space->index_map[j];
