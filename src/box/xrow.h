@@ -302,6 +302,38 @@ void
 xrow_encode_vote(struct xrow_header *row);
 
 /**
+ * Helper structure for saving decoded information about replica
+ */
+struct replica_info {
+	/** Field to store box.listen value. */
+	const char *address;
+	/** box.listen value */
+	uint32_t addr_len;
+};
+
+/**
+ * Encode an instance info request.
+ * @param row[out] Row to encode into.
+ *
+ * @retval 0 Success.
+ * @retval -1 Memory error.
+ */
+int
+xrow_encode_info_request(struct xrow_header *row);
+
+/**
+ * Decode an instance info reply.
+ * @param Row to decode from.
+ * @param[out] extra_info Where to store the decoded info.
+ *
+ * @retval 0 Success.
+ * @retval -1 Memory error or invalid MsgPack.
+ */
+int
+xrow_decode_info_reply(const struct xrow_header *row,
+		       struct replica_info *extra_info);
+
+/**
  * Encode REGISTER command.
  * @param[out] Row.
  * @param instance_uuid Instance uuid.
@@ -558,6 +590,25 @@ int
 iproto_reply_vote(struct obuf *out, const struct ballot *ballot,
 		  uint64_t sync, uint32_t schema_version);
 
+enum {
+	IPROTO_INFO_HOST_PORT = 0,
+	IPROTO_INFO_MAX_FIELD,
+};
+
+/**
+ * Encode a reply to an IPROTO_INFO request.
+ * @param out Buffer to write to.
+ * @param header Xrow with requested info.
+ * @param sync Request sync.
+ * @param schema_version Actual schema version.
+ *
+ * @retval  0 Success.
+ * @retval -1 Memory error or invalid msgpack.
+ */
+int
+iproto_reply_info(struct obuf *out, const struct xrow_header *header,
+		  uint64_t sync, uint32_t schema_version);
+
 /**
  * Write an error packet int output buffer. Doesn't throw if out
  * of memory
@@ -811,6 +862,23 @@ xrow_decode_ballot_xc(struct xrow_header *row, struct ballot *ballot)
 		diag_raise();
 }
 
+/** @copydoc xrow_encode_info_request. */
+static inline void
+xrow_encode_info_request_xc(struct xrow_header *row)
+{
+	if (xrow_encode_info_request(row) != 0)
+		diag_raise();
+}
+
+/** @copydoc xrow_decode_info_reply. */
+static inline void
+xrow_decode_info_reply_xc(const struct xrow_header *row,
+			  struct replica_info *extra_info)
+{
+	if (xrow_decode_info_reply(row, extra_info) != 0)
+		diag_raise();
+}
+
 /** @copydoc xrow_encode_register. */
 static inline void
 xrow_encode_register_xc(struct xrow_header *row,
@@ -933,6 +1001,15 @@ iproto_reply_vote_xc(struct obuf *out, const struct ballot *ballot,
 		       uint64_t sync, uint32_t schema_version)
 {
 	if (iproto_reply_vote(out, ballot, sync, schema_version) != 0)
+		diag_raise();
+}
+
+/** @copydoc iproto_reply_info. */
+static inline void
+iproto_reply_info_xc(struct obuf *out, const struct xrow_header *header,
+		       uint64_t sync, uint32_t schema_version)
+{
+	if (iproto_reply_info(out, header, sync, schema_version) != 0)
 		diag_raise();
 }
 

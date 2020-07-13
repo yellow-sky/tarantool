@@ -43,6 +43,7 @@
 #include "vclock.h"
 #include "scramble.h"
 #include "iproto_constants.h"
+#include "box/iproto.h"
 #include "mpstream/mpstream.h"
 
 static_assert(IPROTO_DATA < 0x7f && IPROTO_METADATA < 0x7f &&
@@ -483,6 +484,72 @@ iproto_reply_vote(struct obuf *out, const struct ballot *ballot,
 	char *ptr = obuf_alloc(out, size);
 	(void) ptr;
 	assert(ptr == buf);
+	return 0;
+}
+
+int
+iproto_reply_info(struct obuf *out, const struct xrow_header *row,
+		  uint64_t sync, uint32_t schema_version)
+{
+	if (row->bodycnt != 1) {
+		diag_set(ClientError, ER_INVALID_MSGPACK, "request body");
+		return -1;
+	}
+
+	const char *data = (const char *) row->body[0].iov_base;
+	const char *end = data + row->body[0].iov_len;
+	if (mp_typeof(*data) != MP_ARRAY || mp_check_array(data, end) > 0) {
+		xrow_on_decode_err(data, end, ER_INVALID_MSGPACK,
+				   "packet body");
+		return -1;
+	}
+
+	size_t max_size = IPROTO_HEADER_LEN +
+		mp_sizeof_map(IPROTO_INFO_MAX_FIELD) +
+		mp_sizeof_uint(UINT32_MAX) + mp_sizeof_uint(UINT16_MAX);
+
+	char *buf = obuf_reserve(out, max_size);
+	if (buf == NULL) {
+		diag_set(OutOfMemory, max_size, "obuf_alloc", "buf");
+		return -1;
+	}
+
+	char *out_data = buf + IPROTO_HEADER_LEN;
+	mp_encode_map(out_data, IPROTO_INFO_MAX_FIELD);
+	const char *d = data;
+	uint32_t arr_size = mp_decode_array(&d);
+	for (uint32_t i = 0; i < arr_size; i++) {
+		if (mp_typeof(*d) != MP_UINT) {
+			mp_next(&d); /* key */
+			continue;
+		}
+		uint8_t key = mp_decode_uint(&d);
+		switch (key) {
+		case IPROTO_INFO_HOST_PORT: {
+			mp_encode_uint(out_data, IPROTO_INFO_HOST_PORT);
+			const char *address = iproto_bound_address();
+			size_t len;
+			if (address != NULL && (len = strlen(address)) > 0)
+				mp_encode_str(out_data, address, len);
+			else
+				mp_encode_str(out_data, "<unknown>",
+					      sizeof("<unknown>"));
+			break;
+		}
+		default:
+			/* Nothing to do. */
+			continue;
+		}
+	}
+	size_t size = out_data - buf;
+	assert(size <= max_size);
+
+	iproto_header_encode(buf, IPROTO_OK, sync, schema_version,
+			     size - IPROTO_HEADER_LEN);
+
+	char *ptr = obuf_alloc(out, size);
+	assert(ptr == buf);
+	(void) ptr;
 	return 0;
 }
 
@@ -1144,6 +1211,73 @@ xrow_encode_vote(struct xrow_header *row)
 {
 	memset(row, 0, sizeof(*row));
 	row->type = IPROTO_VOTE;
+}
+
+int
+xrow_encode_info_request(struct xrow_header *row)
+{
+	memset(row, 0, sizeof(*row));
+
+	size_t buf_size = XROW_BODY_LEN_MAX;
+	char *buf = (char *) region_alloc(&fiber()->gc, buf_size);
+	if (buf == NULL) {
+		diag_set(OutOfMemory, buf_size, "region_alloc", "buf");
+		return -1;
+	}
+
+	char *d = buf;
+	d = mp_encode_array(d, IPROTO_INFO_MAX_FIELD);
+	d = mp_encode_uint(d, IPROTO_INFO_HOST_PORT);
+
+	assert(d <= buf + buf_size);
+
+	row->body[0].iov_base = buf;
+	row->body[0].iov_len = (d - buf);
+	row->bodycnt = 1;
+	row->type = IPROTO_INFO;
+	return 0;
+}
+
+int
+xrow_decode_info_reply(const struct xrow_header *row,
+		       struct replica_info *extra_info)
+{
+	if (row->bodycnt != 1) {
+		diag_set(ClientError, ER_INVALID_MSGPACK, "request body");
+		return -1;
+	}
+
+	const char *data = (const char *) row->body[0].iov_base;
+	const char *end = data + row->body[0].iov_len;
+	if (mp_typeof(*data) != MP_MAP || mp_check_map(data, end) > 0) {
+		xrow_on_decode_err(data, end, ER_INVALID_MSGPACK,
+				   "packet body");
+		return -1;
+	}
+
+	memset(extra_info, 0, sizeof(*extra_info));
+	dump_row_hex(data, end);
+	uint32_t map_size = mp_decode_map(&data);
+	for (uint32_t i = 0; i < map_size; i++) {
+		if (mp_typeof(*data) != MP_UINT) {
+			mp_next(&data); /* key */
+			mp_next(&data); /* value */
+			continue;
+		}
+		uint8_t key = mp_decode_uint(&data);
+		switch (key) {
+		case IPROTO_INFO_HOST_PORT: {
+			uint32_t *len = &extra_info->addr_len;
+			extra_info->address = mp_decode_str(&data, len);
+			break;
+		}
+		default:
+			/* Skip value. */
+			mp_next(&data);
+			continue;
+		}
+	}
+	return 0;
 }
 
 int

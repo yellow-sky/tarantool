@@ -233,6 +233,8 @@ enum iproto_type {
 	IPROTO_FETCH_SNAPSHOT = 69,
 	/** REGISTER request to leave anonymous replication. */
 	IPROTO_REGISTER = 70,
+	/** Request to get additional INFO about instance. */
+	IPROTO_INFO = 71,
 
 	/** Vinyl run info stored in .index file */
 	VY_INDEX_RUN_INFO = 100,

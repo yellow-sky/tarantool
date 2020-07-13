@@ -70,7 +70,7 @@ target_link_libraries(bloom.test salad)
 add_executable(vclock.test vclock.cc)
 target_link_libraries(vclock.test vclock unit)
 add_executable(xrow.test xrow.cc)
-target_link_libraries(xrow.test xrow unit)
+target_link_libraries(xrow.test box unit)
 add_executable(decimal.test decimal.c)
 target_link_libraries(decimal.test core unit)
 add_executable(mp_error.test mp_error.cc)
@@ -180,7 +180,7 @@ set(ITERATOR_TEST_SOURCES
     ${PROJECT_SOURCE_DIR}/src/box/vy_history.c
     ${PROJECT_SOURCE_DIR}/src/box/vy_mem.c
     ${PROJECT_SOURCE_DIR}/src/box/vy_cache.c)
-set(ITERATOR_TEST_LIBS core tuple xrow unit)
+set(ITERATOR_TEST_LIBS core tuple box unit)
 
 add_executable(vy_mem.test vy_mem.c ${ITERATOR_TEST_SOURCES})
 target_link_libraries(vy_mem.test ${ITERATOR_TEST_LIBS} ${LIB_DL})
@@ -205,7 +205,7 @@ add_executable(vy_point_lookup.test
     ${PROJECT_SOURCE_DIR}/src/box/schema_def.c
     ${PROJECT_SOURCE_DIR}/src/box/identifier.c
 )
-target_link_libraries(vy_point_lookup.test core tuple xrow xlog unit ${LIB_DL})
+target_link_libraries(vy_point_lookup.test core tuple box xlog unit ${LIB_DL})
 
 add_executable(column_mask.test
     column_mask.c)

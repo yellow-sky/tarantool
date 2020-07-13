@@ -1309,6 +1309,9 @@ iproto_msg_decode(struct iproto_msg *msg, const char **pos, const char *reqend,
 			goto error;
 		cmsg_init(&msg->base, misc_route);
 		break;
+	case IPROTO_INFO:
+		cmsg_init(&msg->base, misc_route);
+		break;
 	default:
 		diag_set(ClientError, ER_UNKNOWN_REQUEST_TYPE,
 			 (uint32_t) type);
@@ -1712,6 +1715,11 @@ tx_process_misc(struct cmsg *m)
 		case IPROTO_VOTE:
 			box_process_vote(&ballot);
 			iproto_reply_vote_xc(out, &ballot, msg->header.sync,
+					     ::schema_version);
+			break;
+		case IPROTO_INFO:
+			iproto_reply_info_xc(out, &msg->header,
+					     msg->header.sync,
 					     ::schema_version);
 			break;
 		default:

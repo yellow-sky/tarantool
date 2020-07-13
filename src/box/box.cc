@@ -1666,6 +1666,77 @@ box_process_register(struct ev_io *io, struct xrow_header *header)
 	gc_guard.is_active = false;
 }
 
+static int
+box_process_info_reply(struct replica *replica, struct xrow_header *row)
+{
+	assert(row->type == IPROTO_OK);
+
+	const struct tt_uuid *uuid = &replica->uuid;
+	assert(replica_by_uuid(uuid) != NULL);
+	assert(replica->id != REPLICA_ID_NIL);
+	assert(replica->id != instance_id);
+
+	struct replica_info extra_info;
+	xrow_decode_info_reply_xc(row, &extra_info);
+	assert(extra_info.address != NULL);
+
+	struct credentials *orig_credentials = effective_user();
+	fiber_set_user(fiber(), &admin_credentials);
+
+	int rc = boxk(IPROTO_UPDATE, BOX_CLUSTER_ID, "[%u][[%s%u%s]]",
+		      (unsigned) replica->id,
+		      "=", BOX_CLUSTER_FIELD_HOST_PORT, extra_info.address);
+
+	fiber_set_user(fiber(), orig_credentials);
+	return rc;
+}
+
+static void
+box_process_info_reply_xc(struct replica *replica, struct xrow_header *row)
+{
+	if (box_process_info_reply(replica, row) != 0)
+		diag_raise();
+}
+
+static void
+box_check_info_reply(struct replica *replica, struct xrow_header *row)
+{
+	if (row->type == IPROTO_OK) {
+		box_process_info_reply_xc(replica, row);
+	} else try {
+		xrow_decode_error_xc(row);
+	} catch (ClientError *e) {
+		if (e->errcode() != ER_UNKNOWN_REQUEST_TYPE)
+			e->raise();
+		/*
+		 * Nothing to do if replica does't support
+		 * IPROTO_INFO requests.
+		 */
+	}
+}
+
+// static void
+void
+box_request_additional_info(struct replica *replica, struct replica *self,
+			    int fd, uint64_t sync)
+{
+	struct ev_io io;
+	coio_create(&io, fd);
+
+	struct xrow_header row;
+	xrow_encode_info_request_xc(&row);
+	row.replica_id = self->id;
+	row.sync = sync;
+	coio_write_xrow(&io, &row);
+
+	struct ibuf ibuf;
+	ibuf_create(&ibuf, &cord()->slabc, 1024);
+
+	coio_read_xrow(&io, &ibuf, &row);
+	box_check_info_reply(replica, &row);
+	ibuf_destroy(&ibuf);
+}
+
 void
 box_process_join(struct ev_io *io, struct xrow_header *header)
 {
@@ -1796,6 +1867,9 @@ box_process_join(struct ev_io *io, struct xrow_header *header)
 	 */
 	relay_final_join(io->fd, header->sync, &start_vclock, &stop_vclock);
 	say_info("final data sent.");
+
+	// struct replica *self = replica_by_uuid(&INSTANCE_UUID);
+	// box_request_additional_info(replica, self, io->fd, header->sync);
 
 	/* Send end of WAL stream marker */
 	xrow_encode_vclock_xc(&row, &replicaset.vclock);
@@ -1934,6 +2008,7 @@ box_process_subscribe(struct ev_io *io, struct xrow_header *header)
 	 */
 	relay_subscribe(replica, io->fd, header->sync, &replica_clock,
 			replica_version_id, id_filter);
+	// box_request_additional_info(replica, self, io->fd, header->sync);
 }
 
 void
