@@ -49,6 +49,7 @@
 #include <stdio.h> /* snprintf() */
 #include <ctype.h>
 #include "replication.h" /* for replica_set_id() */
+#include "relay.h"
 #include "session.h" /* to fetch the current user. */
 #include "vclock.h" /* VCLOCK_MAX */
 #include "xrow.h"
@@ -4166,6 +4167,76 @@ on_replace_dd_schema(struct trigger * /* trigger */, void *event)
 	return 0;
 }
 
+/** This trigger is invoked when relay changes its state. */
+static int
+relay_on_state_change(struct trigger *trigger, void *event)
+{
+	struct relay *relay = (struct relay *)event;
+	(void)trigger;
+
+	if (relay_get_state(relay) == RELAY_OFF)
+		return 0;
+
+	struct replica *replica = relay_replica(relay);
+	const struct tt_uuid *uuid = &replica->uuid;
+
+	assert(replica_by_uuid(uuid) != NULL);
+	assert(replica->id != REPLICA_ID_NIL);
+
+	struct credentials *orig_credentials = effective_user();
+	fiber_set_user(fiber(), &admin_credentials);
+
+	const char *vclock_str = vclock_to_string(relay_vclock(relay));
+	const char *state_str = relay_get_state_str(relay);
+	double timestamp = relay_last_row_time(relay);
+
+	int rc = boxk(IPROTO_UPDATE, BOX_CLUSTER_INFO_ID, "[%u]["
+		      "[%s%u%lf]"
+		      "[%s%u%s]"
+		      "[%s%u%s]"
+		      "]",
+		      (unsigned) replica->id,
+		      "=", BOX_CLUSTER_INFO_FIELD_RELAY_TIMESTAMP, timestamp,
+		      "=", BOX_CLUSTER_INFO_FIELD_RELAY_VCLOCK, vclock_str,
+		      "=", BOX_CLUSTER_INFO_FIELD_RELAY_STATE, state_str);
+	if (rc != 0)
+		goto restore_cred;
+
+	switch (relay_get_state(relay)) {
+	case RELAY_STOPPED: {
+		struct diag *diag = relay_get_diag(relay);
+		struct error *e = diag_last_error(diag);
+		if (e != NULL) {
+			rc = boxk(IPROTO_UPDATE, BOX_CLUSTER_INFO_ID,
+				 "[%u][[%s%u%s]]",
+				 (unsigned) replica->id,
+				 "=", BOX_CLUSTER_INFO_FIELD_RELAY_ERR,
+				 e->errmsg);
+		}
+		break;
+	}
+	case RELAY_FOLLOW:
+		rc = boxk(IPROTO_UPDATE, BOX_CLUSTER_INFO_ID,
+			 "[%u][[%s%uNIL]]",
+			 (unsigned) replica->id,
+			 "=", BOX_CLUSTER_INFO_FIELD_RELAY_ERR);
+		break;
+	default:
+		unreachable();
+	}
+
+restore_cred:
+	fiber_set_user(fiber(), orig_credentials);
+	return rc;
+}
+
+static inline void
+relay_add_on_state(struct relay *relay, struct trigger *trigger)
+{
+	trigger_create(trigger, relay_on_state_change, NULL, NULL);
+	trigger_add(relay_on_state(relay), trigger);
+}
+
 /**
  * A record with id of the new instance has been synced to the
  * write ahead log. Update the cluster configuration cache
@@ -4184,9 +4255,15 @@ register_replica(struct trigger *trigger, void * /* event */)
 	struct replica *replica = replica_by_uuid(&uuid);
 	if (replica != NULL) {
 		replica_set_id(replica, id);
+		if (id != instance_id)
+			relay_add_on_state(replica->relay,
+					   &replica->on_relay_state);
 	} else {
 		try {
 			replica = replicaset_add(id, &uuid);
+			if (id != instance_id)
+				relay_add_on_state(replica->relay,
+						   &replica->on_relay_state);
 			/* Can't throw exceptions from on_commit trigger */
 		} catch(Exception *e) {
 			panic("Can't register replica: %s", e->errmsg);
@@ -4207,6 +4284,8 @@ unregister_replica(struct trigger *trigger, void * /* event */)
 	struct replica *replica = replica_by_uuid(&old_uuid);
 	assert(replica != NULL);
 	unsigned replica_id = replica->id;
+	if (replica_id != instance_id)
+		trigger_clear(&replica->on_relay_state);
 	replica_clear_id(replica);
 	if (boxk(IPROTO_DELETE, BOX_CLUSTER_INFO_ID, "[%u]", replica_id) != 0)
 		return -1;

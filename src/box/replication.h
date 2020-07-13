@@ -292,6 +292,10 @@ struct replica {
 	 */
 	struct trigger on_applier_state;
 	/**
+	 * Trigger invoked when the relay changes its state.
+	 */
+	struct trigger on_relay_state;
+	/**
 	 * During initial connect or reconnect we require applier
 	 * to sync with the master before the replica can leave
 	 * read-only mode. This enum reflects the state of the

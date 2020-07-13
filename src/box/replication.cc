@@ -898,15 +898,20 @@ replica_on_relay_stop(struct replica *replica)
 	 * even added there (anon replica), we don't need to keep
 	 * WALs for it anymore. Unregister it with the garbage
 	 * collector then. See also replica_clear_id.
+	 *
+	 * As soon as the relay can run triggers when the state
+	 * of the relay changes, it is possible that running fiber
+	 * will return control to another one that unregisters
+	 * the gc consumer.
 	 */
 	if (replica->id == REPLICA_ID_NIL) {
-		if (!replica->anon) {
-			gc_consumer_unregister(replica->gc);
-			replica->gc = NULL;
-		} else {
+		if (replica->anon) {
 			assert(replica->gc == NULL);
 			assert(replicaset.anon_count > 0);
 			replicaset.anon_count--;
+		} else if (replica->gc != NULL) {
+			gc_consumer_unregister(replica->gc);
+			replica->gc = NULL;
 		}
 	}
 	if (replica_is_orphan(replica)) {
