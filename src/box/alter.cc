@@ -1660,8 +1660,8 @@ public:
 void
 UpdateSchemaVersion::alter(struct alter_space *alter) noexcept
 {
-    (void)alter;
-    ++schema_version;
+	(void) alter;
+	++schema_version;
 }
 
 /**
