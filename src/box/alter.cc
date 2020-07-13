@@ -1030,12 +1030,8 @@ alter_space_rollback(struct trigger *trigger, void * /* event */) noexcept
 	struct alter_space *alter = (struct alter_space *) trigger->data;
 	/* Rollback alter ops */
 	class AlterSpaceOp *op;
-	try {
-		rlist_foreach_entry(op, &alter->ops, link) {
-			op->rollback(alter);
-		}
-	} catch (Exception *e) {
-		return -1;
+	rlist_foreach_entry(op, &alter->ops, link) {
+		op->rollback(alter);
 	}
 	/* Rebuild index maps once for all indexes. */
 	space_fill_index_map(alter->old_space);
