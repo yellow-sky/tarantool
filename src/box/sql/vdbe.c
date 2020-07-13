@@ -2849,7 +2849,7 @@ case OP_Fetch: {
 	break;
 }
 
-/* Opcode: ApplyType P1 P2 * P4 *
+/* Opcode: ApplyType P1 P2 * P4 P5
  * Synopsis: type(r[P1@P2])
  *
  * Check that types of P2 registers starting from register P1 are
@@ -2857,6 +2857,9 @@ case OP_Fetch: {
  * value and the given type are incompatible according to
  * field_mp_plain_type_is_compatible(), but both are numeric,
  * this opcode attempts to convert the value to the type.
+ *
+ * If P5 contains the OPFLAG_BLOB_LIKE_STRING flag, the BLOB
+ * values are processed as if they had the field type STRING.
  */
 case OP_ApplyType: {
 	enum field_type *types = pOp->p4.types;
@@ -2868,6 +2871,19 @@ case OP_ApplyType: {
 		assert(pIn1 <= &p->aMem[(p->nMem+1 - p->nCursor)]);
 		assert(memIsValid(pIn1));
 		if (!mem_is_type_compatible(pIn1, type)) {
+			/*
+			 * If function works with BLOB argument
+			 * the same way it works with STRING
+			 * arguments, we should allow BLOB
+			 * arguments in place of STRING arguments.
+			 */
+			if ((pOp->p5 & OPFLAG_BLOB_LIKE_STRING) != 0) {
+				if (type == FIELD_TYPE_STRING &&
+				    mem_mp_type(pIn1) == MP_BIN) {
+					pIn1++;
+					continue;
+				}
+			}
 			/* Implicit cast is allowed only to numeric type. */
 			if (!sql_type_is_numeric(type))
 				goto type_mismatch;

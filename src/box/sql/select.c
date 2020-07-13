@@ -124,6 +124,40 @@ clearSelect(sql * db, Select * p, int bFree)
 	}
 }
 
+void
+sql_emit_func_arg_type_check(struct Vdbe *vdbe, struct func *func,
+			     int reg, uint32_t argc)
+{
+	if (argc == 0)
+		return;
+	struct func_sql_builtin *f = (struct func_sql_builtin *)func;
+	/*
+	 * There is no need to check types of the MEMs if all
+	 * arguments should be of type ANY.
+	 */
+	if (f->first_arg == FIELD_TYPE_ANY && f->args  == FIELD_TYPE_ANY)
+		return;
+	size_t size = (argc + 1) * sizeof(enum field_type);
+	enum field_type *types = sqlDbMallocZero(sql_get(), size);
+	/* Field type of the first argument of the function. */
+	types[0] = f->first_arg;
+	/*
+	 * The field types of all arguments except the first are
+	 * the same.
+	 */
+	for (uint32_t i = 1; i < argc; ++i)
+		types[i] = f->args;
+	types[argc] = field_type_MAX;
+	sqlVdbeAddOp4(vdbe, OP_ApplyType, reg, argc, 0, (char *)types,
+		      P4_DYNAMIC);
+	/*
+	 * If a function treats a BLOB as a STRING, we should
+	 * allow it to get a BLOB in place of a STRING.
+	 */
+	if (f->is_blob_like_str)
+		sqlVdbeChangeP5(vdbe, OPFLAG_BLOB_LIKE_STRING);
+}
+
 /*
  * Initialize a SelectDest structure.
  */
@@ -5414,6 +5448,7 @@ updateAccumulator(Parse * pParse, AggInfo * pAggInfo)
 			sqlVdbeAddOp4(v, OP_CollSeq, regHit, 0, 0,
 					  (char *)coll, P4_COLLSEQ);
 		}
+		sql_emit_func_arg_type_check(v, pF->func, regAgg, nArg);
 		sqlVdbeAddOp3(v, OP_AggStep0, 0, regAgg, pF->iMem);
 		sqlVdbeAppendP4(v, pF->func, P4_FUNC);
 		sqlVdbeChangeP5(v, (u8) nArg);

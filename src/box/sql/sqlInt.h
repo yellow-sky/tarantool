@@ -2307,6 +2307,8 @@ struct Parse {
 #define OPFLAG_SYSTEMSP      0x20	/* OP_Open**: set if space pointer
 					 * points to system space.
 					 */
+/** OP_ApplyType: Treat BLOB as STRING. */
+#define OPFLAG_BLOB_LIKE_STRING		0x01
 
 /**
  * Prepare vdbe P5 flags for OP_{IdxInsert, IdxReplace, Update}
@@ -3881,6 +3883,20 @@ sql_index_type_str(struct sql *db, const struct index_def *idx_def);
 void
 sql_emit_table_types(struct Vdbe *v, struct space_def *def, int reg);
 
+/**
+ * Code an OP_ApplyType opcode that try to cast implicitly types
+ * for given range of register starting from @a reg. These values
+ * then will be used as arguments of a function.
+ *
+ * @param vdbe VDBE.
+ * @param args Information about arguments of the function.
+ * @param reg Register where types will be placed.
+ * @param argc Number of arguments.
+ */
+void
+sql_emit_func_arg_type_check(struct Vdbe *vdbe, struct func *func,
+			     int reg, uint32_t argc);
+
 enum field_type
 sql_type_result(enum field_type lhs, enum field_type rhs);
 
@@ -4402,6 +4418,24 @@ struct func_sql_builtin {
 	struct func base;
 	/** A bitmask of SQL flags. */
 	uint16_t flags;
+	/**
+	 * In built-in functions, all arguments except the first
+	 * have the same field type. The first argument may have a
+	 * different field type.
+	 *
+	 * Field type of the first argument.
+	 */
+	enum field_type first_arg;
+	/** Field type of all arguments except the first. */
+	enum field_type args;
+	/**
+	 * Some built-in functions works with BLOB arguments the
+	 * same way that works with STRING arguments. This flag
+	 * allows us to reflect on this.
+	 *
+	 * TRUE if the function treats the BLOB as STRING.
+	 */
+	bool is_blob_like_str;
 	/**
 	 * A VDBE-memory-compatible call method.
 	 * SQL built-ins don't use func base class "call"
