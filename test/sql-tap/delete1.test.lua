@@ -132,7 +132,7 @@ test:do_test(
     })
 
 -- Tests for data dictionary integration.
-format = {}
+local format = {}
 format[1] = {name = 'id', type = 'scalar'}
 format[2] = {name = 'f', type = 'scalar'}
 s = box.schema.create_space('t', {format = format})

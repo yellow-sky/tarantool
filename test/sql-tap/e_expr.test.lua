@@ -1077,7 +1077,7 @@ test:do_execsql_test(
 --
 -- MUST_WORK_TEST prepared statements
 if (0>0) then
-    local function parameter_test(tn, sql, params, result)
+    local function parameter_test(tn, sql, params, result) -- luacheck: no unused args
         stmt = sql_prepare_v2("db", sql, -1)
         for _ in X(0, "X!foreach", [=[["number name",["params"]]]=]) do
             nm = sql_bind_parameter_name(stmt, number)
@@ -1264,7 +1264,7 @@ test:do_execsql_test(
 test:execsql [[
     CREATE TABLE tblname(cname INT PRIMARY KEY);
 ]]
-local function glob(args)
+local function glob()
     return 1
 end
 
@@ -2121,7 +2121,7 @@ test:do_execsql_test(
 local likeargs = {}
 function likefunc(...)
     local args = {...}
-    for i, v in ipairs(args) do
+    for _, v in ipairs(args) do
         table.insert(likeargs, v)
     end
     return 1
@@ -2356,7 +2356,7 @@ end
 local regexpargs = {}
 local function regexpfunc(...)
     local args = {...}
-    for i, v in ipairs(args) do
+    for _, v in ipairs(args) do
         table.insert(regexpargs, v)
     end
     return 1
@@ -2415,7 +2415,7 @@ test:do_test(
 local matchargs = {  }
 local function matchfunc(...)
     local args = {...}
-    for i, v in ipairs(args) do
+    for _, v in ipairs(args) do
         table.insert(matchargs, v)
     end
     return 1
@@ -2678,6 +2678,7 @@ if 0>0 then
     -- comparisons take place.
     --
 
+    -- luacheck: ignore (loop is executed at most once)
     for _ in X(0, "X!foreach", [=[["a b c",[["list",[["expr","3"]],[["expr","4"]],[["expr","5"]]]]]]=]) do
         break
     end

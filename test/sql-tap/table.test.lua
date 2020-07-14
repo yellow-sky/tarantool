@@ -1,6 +1,7 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
 test:plan(79)
+enable_broken_tests = false
 
 --!./tcltestrunner.lua
 -- 2001 September 15
@@ -947,7 +948,7 @@ test:do_execsql_test(
 --
 --  Disabled until #3694 is resolved.
 --
-if false then
+if enable_broken_tests then
 test:do_execsql_test(
     "table-13.1",
     [[

@@ -82,9 +82,6 @@ test:do_execsql_test(
     })
 
 -- MUST_WORK_TEST
-if (0 > 0)
- then
-end
 test:do_execsql_test(
     1.7,
     [[

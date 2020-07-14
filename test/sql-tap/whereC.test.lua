@@ -1,6 +1,5 @@
 #!/usr/bin/env tarantool
-test = require("sqltester")
-local yaml = require('yaml')
+local test = require("sqltester")
 test:plan(41)
 
 --!./tcltestrunner.lua
@@ -17,7 +16,7 @@ test:plan(41)
 --
 -- ["set","testdir",[["file","dirname",["argv0"]]]]
 -- ["source",[["testdir"],"\/tester.tcl"]]
-testprefix = "whereC"
+local testprefix = "whereC"
 test:do_execsql_test(
     1.0,
     [[

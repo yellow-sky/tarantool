@@ -29,7 +29,8 @@ test:plan(0)
 
 -- Disabled until #3694 is resolved.
 --
-if false then
+local enable_broken_tests = false
+if enable_broken_tests then
 local function datetest(tnum, expr, result)
     test:do_test(
         "date-"..tnum,

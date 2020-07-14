@@ -22,7 +22,7 @@ test:plan(12)
 
 -- Capture the output of a pragma in a TEMP table.
 --
-local function capture_pragma(db, tabname, sql)
+local function capture_pragma()
     once = 1
 end
 

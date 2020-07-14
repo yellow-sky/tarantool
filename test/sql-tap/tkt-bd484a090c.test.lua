@@ -2,6 +2,7 @@
 test = require("sqltester")
 --test:plan(2)
 test:plan(0)
+enable_broken_tests = false
 
 --!./tcltestrunner.lua
 -- 2011 June 21
@@ -22,7 +23,7 @@ testprefix = "tkt-bd484a090c"
 
 -- Disabled until #3694 is resolved.
 --
-if false then
+if enable_broken_tests then
 test:do_test(
     1.1,
     function()

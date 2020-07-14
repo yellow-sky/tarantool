@@ -6,7 +6,7 @@ test:execsql([[
 	CREATE TABLE t0 (i INT PRIMARY KEY, a INT);
 	CREATE VIEW v0 AS SELECT * FROM t0;
 ]])
-format = {}
+local format = {}
 for i = 1, 2001 do format[i] = {name = 'A' .. i, type = 'unsigned'} end
 s0 = box.schema.space.create('S0', {format = format})
 i0 = s0:create_index('I0')

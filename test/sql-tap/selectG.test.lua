@@ -36,7 +36,6 @@ test:do_test(
     function()
         local sql_arr = {[[CREATE TABLE t1(x INT primary key);
             INSERT INTO t1(x) VALUES]]}
-        local i
         for i = 1, 100000-1, 1 do
             table.insert(sql_arr, "("..i.."),")
         end

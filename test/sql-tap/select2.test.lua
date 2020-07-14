@@ -37,8 +37,8 @@ test:do_test(
         local data = test:execsql "SELECT DISTINCT f1 FROM tbl1 ORDER BY f1"
         for _, f1 in ipairs(data) do
             table.insert(r, f1..":")
-            local data = test:execsql( string.format("SELECT f2 FROM tbl1 WHERE f1=%s ORDER BY f2", f1))
-            for _, f2 in ipairs(data) do
+            local d = test:execsql( string.format("SELECT f2 FROM tbl1 WHERE f1=%s ORDER BY f2", f1))
+            for _, f2 in ipairs(d) do
                 table.insert(r, f2)
             end
         end
@@ -56,8 +56,8 @@ test:do_test(
         local data = test:execsql "SELECT DISTINCT f1 FROM tbl1 WHERE f1>3 AND f1<5"
         for _, f1 in ipairs(data) do
             table.insert(r, f1..":")
-            local data = test:execsql( string.format("SELECT f2 FROM tbl1 WHERE f1=%s ORDER BY f2", f1))
-            for _, f2 in ipairs(data) do
+            local d = test:execsql( string.format("SELECT f2 FROM tbl1 WHERE f1=%s ORDER BY f2", f1))
+            for _, f2 in ipairs(d) do
                 table.insert(r, f2)
             end
         end
