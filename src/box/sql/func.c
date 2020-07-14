@@ -67,6 +67,7 @@ enum {
 	SQL_FUNC_SOUNDEX_ARG_COUNT = 1,
 	SQL_FUNC_SUBSTR_ARG_COUNT = 3,
 	SQL_FUNC_UNICODE_ARG_COUNT = 1,
+	SQL_FUNC_ZEROBLOB_ARG_COUNT = 1,
 	sql_func_arg_count_MAX,
 };
 
@@ -84,6 +85,7 @@ struct arg_def *func_round_args = NULL;
 struct arg_def *func_soundex_args = NULL;
 struct arg_def *func_substr_args = NULL;
 struct arg_def *func_unicode_args = NULL;
+struct arg_def *func_zeroblob_args = NULL;
 
 static int
 initialize_func_args_types()
@@ -199,6 +201,14 @@ initialize_func_args_types()
 		return -1;
 	}
 	func_unicode_args[0].type = FIELD_TYPE_STRING;
+
+	size = sizeof(struct arg_def) * SQL_FUNC_ZEROBLOB_ARG_COUNT;
+	func_zeroblob_args = malloc(size);
+	if (func_zeroblob_args == NULL) {
+		diag_set(OutOfMemory, size, "malloc", "func_zeroblob_args");
+		return -1;
+	}
+	func_zeroblob_args[0].type = FIELD_TYPE_UNSIGNED;
 
 	return 0;
 }
@@ -1655,9 +1665,12 @@ zeroblobFunc(sql_context * context, int argc, sql_value ** argv)
 	i64 n;
 	assert(argc == 1);
 	UNUSED_PARAMETER(argc);
+	enum mp_type mp_type = sql_value_type(argv[0]);
+	if (mp_type == MP_NIL)
+		return sql_result_null(context);
+	assert(mp_type == MP_UINT);
 	n = sql_value_int64(argv[0]);
-	if (n < 0)
-		n = 0;
+	assert(n >= 0);
 	if (sql_result_zeroblob64(context, n) != 0) {
 		diag_set(ClientError, ER_SQL_EXECUTE, "string or binary string"\
 			 "is too big");
@@ -3101,9 +3114,9 @@ static struct {
 	 .export_to_sql = true,
 	}, {
 	 .name = "ZEROBLOB",
-	 .param_count = 1,
+	 .param_count = SQL_FUNC_ZEROBLOB_ARG_COUNT,
 	 .is_var_args = false,
-	 .args = &func_no_args,
+	 .args = &func_zeroblob_args,
 	 .returns = FIELD_TYPE_VARBINARY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
