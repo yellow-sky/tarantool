@@ -276,7 +276,7 @@ SELECT is_boolean('true');
 SELECT abs(a) FROM t0;
  | ---
  | - null
- | - 'Inconsistent types: expected number got boolean'
+ | - 'Type mismatch: can not convert FALSE to number'
  | ...
 SELECT lower(a) FROM t0;
  | ---

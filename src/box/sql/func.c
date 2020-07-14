@@ -504,44 +504,22 @@ absFunc(sql_context * context, int argc, sql_value ** argv)
 {
 	assert(argc == 1);
 	UNUSED_PARAMETER(argc);
-	switch (sql_value_type(argv[0])) {
-	case MP_UINT: {
-		sql_result_uint(context, sql_value_uint64(argv[0]));
-		break;
-	}
-	case MP_INT: {
+	enum mp_type mp_type = sql_value_type(argv[0]);
+	if (mp_type == MP_NIL)
+		return sql_result_null(context);
+	if (mp_type == MP_UINT)
+		return sql_result_uint(context, sql_value_uint64(argv[0]));
+	if (mp_type == MP_INT) {
 		int64_t value = sql_value_int64(argv[0]);
 		assert(value < 0);
-		sql_result_uint(context, -value);
-		break;
+		return sql_result_uint(context, -value);
 	}
-	case MP_NIL:{
-			/* IMP: R-37434-19929 Abs(X) returns NULL if X is NULL. */
-			sql_result_null(context);
-			break;
-		}
-	case MP_BOOL:
-	case MP_BIN:
-	case MP_ARRAY:
-	case MP_MAP: {
-		diag_set(ClientError, ER_INCONSISTENT_TYPES, "number",
-			 mem_type_to_str(argv[0]));
-		context->is_aborted = true;
-		return;
-	}
-	default:{
-			/* Because sql_value_double() returns 0.0 if the argument is not
-			 * something that can be converted into a number, we have:
-			 * IMP: R-01992-00519 Abs(X) returns 0.0 if X is a string or blob
-			 * that cannot be converted to a numeric value.
-			 */
-			double rVal = sql_value_double(argv[0]);
-			if (rVal < 0)
-				rVal = -rVal;
-			sql_result_double(context, rVal);
-			break;
-		}
-	}
+	assert(mp_type == MP_DOUBLE);
+	double value = sql_value_double(argv[0]);
+	if (value < 0)
+		value = -value;
+	sql_result_double(context, value);
+	return;
 }
 
 /**
@@ -2242,7 +2220,7 @@ static struct {
 } sql_builtins[] = {
 	{.name = "ABS",
 	 .param_count = 1,
-	 .first_arg = FIELD_TYPE_ANY,
+	 .first_arg = FIELD_TYPE_NUMBER,
 	 .args = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_NUMBER,
