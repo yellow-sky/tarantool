@@ -982,14 +982,14 @@ test:do_execsql_test(
         -- </func-9.4>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "func-9.5",
     [[
         SELECT length(randomblob(32)), length(randomblob(-5)),
                length(randomblob(2000))
     ]], {
         -- <func-9.5>
-        32, "", 2000
+        1, "Type mismatch: can not convert -5 to unsigned"
         -- </func-9.5>
     })
 
@@ -2928,7 +2928,7 @@ test:do_catchsql_test(
         SELECT RANDOMBLOB(X'FF')
     ]], {
         -- <func-76.2>
-        1, "Type mismatch: can not convert varbinary to numeric"
+        1, "Type mismatch: can not convert varbinary to unsigned"
         -- </func-76.2>
     })
 

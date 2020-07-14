@@ -937,12 +937,10 @@ randomBlob(sql_context * context, int argc, sql_value ** argv)
 	unsigned char *p;
 	assert(argc == 1);
 	UNUSED_PARAMETER(argc);
-	if (mp_type_is_bloblike(sql_value_type(argv[0]))) {
-		diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
-			 sql_value_to_diag_str(argv[0]), "numeric");
-		context->is_aborted = true;
-		return;
-	}
+	enum mp_type mp_type = sql_value_type(argv[0]);
+	if (mp_type == MP_NIL)
+		return sql_result_null(context);
+	assert(mp_type == MP_UINT);
 	n = sql_value_int(argv[0]);
 	if (n < 1)
 		return;
@@ -2734,7 +2732,7 @@ static struct {
 	}, {
 	 .name = "RANDOMBLOB",
 	 .param_count = 1,
-	 .first_arg = FIELD_TYPE_ANY,
+	 .first_arg = FIELD_TYPE_UNSIGNED,
 	 .args = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_VARBINARY,
