@@ -1454,10 +1454,11 @@ charFunc(sql_context * context, int argc, sql_value ** argv)
 	for (i = 0; i < argc; i++) {
 		uint64_t x;
 		unsigned c;
-		if (sql_value_type(argv[i]) == MP_INT)
-			x = 0xfffd;
-		else
-			x = sql_value_uint64(argv[i]);
+		enum mp_type mp_type = sql_value_type(argv[i]);
+		if (mp_type == MP_NIL)
+			continue;
+		assert(mp_type == MP_UINT);
+		x = sql_value_uint64(argv[i]);
 		if (x > 0x10ffff)
 			x = 0xfffd;
 		c = (unsigned)(x & 0x1fffff);
@@ -2264,8 +2265,8 @@ static struct {
 	}, {
 	 .name = "CHAR",
 	 .param_count = -1,
-	 .first_arg = FIELD_TYPE_ANY,
-	 .args = FIELD_TYPE_ANY,
+	 .first_arg = FIELD_TYPE_UNSIGNED,
+	 .args = FIELD_TYPE_UNSIGNED,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_STRING,
 	 .is_deterministic = true,
