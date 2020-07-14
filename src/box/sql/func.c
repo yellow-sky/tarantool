@@ -677,22 +677,21 @@ substrFunc(sql_context * context, int argc, sql_value ** argv)
 	const unsigned char *z;
 	const unsigned char *z2;
 	int len;
-	int p0type;
 	i64 p1, p2;
 	int negP2 = 0;
 
 	if (argc != 2 && argc != 3) {
 		diag_set(ClientError, ER_FUNC_WRONG_ARG_COUNT, "SUBSTR",
-			 "1 or 2", argc);
+			 "2 or 3", argc);
 		context->is_aborted = true;
 		return;
 	}
-	if (sql_value_is_null(argv[1])
-	    || (argc == 3 && sql_value_is_null(argv[2]))
-	    ) {
-		return;
-	}
-	p0type = sql_value_type(argv[0]);
+	enum mp_type p0type = sql_value_type(argv[0]);
+	enum mp_type mp_type_pos = sql_value_type(argv[1]);
+	if (p0type == MP_NIL || mp_type_pos == MP_NIL)
+		return sql_result_null(context);
+	assert(p0type == MP_STR || p0type == MP_BIN);
+	assert(mp_type_pos == MP_INT || mp_type_pos == MP_UINT);
 	p1 = sql_value_int(argv[1]);
 	if (p0type == MP_BIN) {
 		len = sql_value_bytes(argv[0]);
@@ -709,6 +708,10 @@ substrFunc(sql_context * context, int argc, sql_value ** argv)
 			len = sql_utf8_char_count(z, sql_value_bytes(argv[0]));
 	}
 	if (argc == 3) {
+		enum mp_type mp_type_cnt = sql_value_type(argv[2]);
+		if (mp_type_cnt == MP_NIL)
+			return sql_result_null(context);
+		assert(mp_type_cnt == MP_INT || mp_type_cnt == MP_UINT);
 		p2 = sql_value_int(argv[2]);
 		if (p2 < 0) {
 			p2 = -p2;
@@ -2834,9 +2837,9 @@ static struct {
 	}, {
 	 .name = "SUBSTR",
 	 .param_count = -1,
-	 .first_arg = FIELD_TYPE_ANY,
-	 .args = FIELD_TYPE_ANY,
-	 .is_blob_like_str = false,
+	 .first_arg = FIELD_TYPE_STRING,
+	 .args = FIELD_TYPE_INTEGER,
+	 .is_blob_like_str = true,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,

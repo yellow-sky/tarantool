@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(134)
+test:plan(141)
 
 --!./tcltestrunner.lua
 -- 2010 August 27
@@ -1079,6 +1079,55 @@ test:do_catchsql_test(
         SELECT soundex(X'3334');
     ]], {
         1, "Type mismatch: can not convert varbinary to string"
+    })
+
+test:do_execsql_test(
+    "func-5-6.17.1", [[
+        SELECT substr(NULL, NULL, NULL);
+    ]],{
+        ""
+    })
+
+test:do_catchsql_test(
+    "func-5-6.17.2", [[
+        SELECT substr(123, 123, 123);
+    ]], {
+        1, "Type mismatch: can not convert 123 to string"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.17.3", [[
+        SELECT substr(-123, -123, -123);
+    ]], {
+        1, "Type mismatch: can not convert -123 to string"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.17.4", [[
+        SELECT substr(-5.5, -5.5, -5.5);
+    ]], {
+        1, "Type mismatch: can not convert -5.5 to string"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.17.5", [[
+        SELECT substr('-123', '-123', '-123');
+    ]], {
+        1, "Type mismatch: can not convert -123 to integer"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.17.6", [[
+        SELECT substr(false, false, false);
+    ]], {
+        1, "Type mismatch: can not convert FALSE to string"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.17.7", [[
+        SELECT substr(X'3334', X'3334', X'3334');
+    ]], {
+        1, "Type mismatch: can not convert varbinary to integer"
     })
 
 test:finish_test()
