@@ -66,6 +66,7 @@ enum {
 	SQL_FUNC_ROUND_ARG_COUNT = 2,
 	SQL_FUNC_SOUNDEX_ARG_COUNT = 1,
 	SQL_FUNC_SUBSTR_ARG_COUNT = 3,
+	SQL_FUNC_UNICODE_ARG_COUNT = 1,
 	sql_func_arg_count_MAX,
 };
 
@@ -82,6 +83,7 @@ struct arg_def *func_randomblob_args = NULL;
 struct arg_def *func_round_args = NULL;
 struct arg_def *func_soundex_args = NULL;
 struct arg_def *func_substr_args = NULL;
+struct arg_def *func_unicode_args = NULL;
 
 static int
 initialize_func_args_types()
@@ -189,6 +191,14 @@ initialize_func_args_types()
 	func_substr_args[0].type = FIELD_TYPE_SCALAR;
 	func_substr_args[1].type = FIELD_TYPE_INTEGER;
 	func_substr_args[2].type = FIELD_TYPE_INTEGER;
+
+	size = sizeof(struct arg_def) * SQL_FUNC_UNICODE_ARG_COUNT;
+	func_unicode_args = malloc(size);
+	if (func_unicode_args == NULL) {
+		diag_set(OutOfMemory, size, "malloc", "func_unicode_args");
+		return -1;
+	}
+	func_unicode_args[0].type = FIELD_TYPE_STRING;
 
 	return 0;
 }
@@ -1554,6 +1564,10 @@ quoteFunc(sql_context * context, int argc, sql_value ** argv)
 static void
 unicodeFunc(sql_context * context, int argc, sql_value ** argv)
 {
+	enum mp_type mp_type = sql_value_type(argv[0]);
+	if (mp_type == MP_NIL)
+		return sql_result_null(context);
+	assert(mp_type == MP_STR);
 	const unsigned char *z = sql_value_text(argv[0]);
 	(void)argc;
 	if (z && z[0])
@@ -3039,9 +3053,9 @@ static struct {
 	 .export_to_sql = true,
 	}, {
 	 .name = "UNICODE",
-	 .param_count = 1,
+	 .param_count = SQL_FUNC_UNICODE_ARG_COUNT,
 	 .is_var_args = false,
-	 .args = &func_no_args,
+	 .args = &func_unicode_args,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
