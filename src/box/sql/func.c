@@ -532,22 +532,8 @@ position_func(struct sql_context *context, int argc, struct Mem **argv)
 
 	if (haystack_type == MP_NIL || needle_type == MP_NIL)
 		return;
-	/*
-	 * Position function can be called only with string
-	 * or blob params.
-	 */
-	struct Mem *inconsistent_type_arg = NULL;
-	if (needle_type != MP_STR && needle_type != MP_BIN)
-		inconsistent_type_arg = needle;
-	if (haystack_type != MP_STR && haystack_type != MP_BIN)
-		inconsistent_type_arg = haystack;
-	if (inconsistent_type_arg != NULL) {
-		diag_set(ClientError, ER_INCONSISTENT_TYPES,
-			 "text or varbinary",
-			 mem_type_to_str(inconsistent_type_arg));
-		context->is_aborted = true;
-		return;
-	}
+	assert(needle_type == MP_STR || needle_type == MP_BIN);
+	assert(haystack_type == MP_STR || haystack_type == MP_BIN);
 	/*
 	 * Both params of Position function must be of the same
 	 * type.
@@ -2683,9 +2669,9 @@ static struct {
 	}, {
 	 .name = "POSITION",
 	 .param_count = 2,
-	 .first_arg = FIELD_TYPE_ANY,
-	 .args = FIELD_TYPE_ANY,
-	 .is_blob_like_str = false,
+	 .first_arg = FIELD_TYPE_STRING,
+	 .args = FIELD_TYPE_STRING,
+	 .is_blob_like_str = true,
 	 .returns = FIELD_TYPE_INTEGER,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
