@@ -1927,18 +1927,10 @@ sum_step(struct sql_context *context, int argc, sql_value **argv)
 	assert(argc == 1);
 	UNUSED_PARAMETER(argc);
 	struct SumCtx *p = sql_aggregate_context(context, sizeof(*p));
-	int type = sql_value_type(argv[0]);
+	enum mp_type type = sql_value_type(argv[0]);
 	if (type == MP_NIL || p == NULL)
 		return;
-	if (type != MP_DOUBLE && type != MP_INT && type != MP_UINT) {
-		if (mem_apply_numeric_type(argv[0]) != 0) {
-			diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
-				 sql_value_to_diag_str(argv[0]), "number");
-			context->is_aborted = true;
-			return;
-		}
-		type = sql_value_type(argv[0]);
-	}
+	assert(type == MP_DOUBLE || type == MP_INT || type == MP_UINT);
 	p->cnt++;
 	if (type == MP_INT || type == MP_UINT) {
 		int64_t v = sql_value_int64(argv[0]);
@@ -2233,7 +2225,7 @@ static struct {
 	}, {
 	 .name = "AVG",
 	 .param_count = 1,
-	 .first_arg = FIELD_TYPE_ANY,
+	 .first_arg = FIELD_TYPE_NUMBER,
 	 .args = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_NUMBER,
@@ -2896,7 +2888,7 @@ static struct {
 	}, {
 	 .name = "SUM",
 	 .param_count = 1,
-	 .first_arg = FIELD_TYPE_ANY,
+	 .first_arg = FIELD_TYPE_NUMBER,
 	 .args = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_NUMBER,
@@ -2922,7 +2914,7 @@ static struct {
 	}, {
 	 .name = "TOTAL",
 	 .param_count = 1,
-	 .first_arg = FIELD_TYPE_ANY,
+	 .first_arg = FIELD_TYPE_NUMBER,
 	 .args = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_NUMBER,
