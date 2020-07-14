@@ -872,13 +872,10 @@ case_type##ICUFunc(sql_context *context, int argc, sql_value **argv)   \
 	const char *z2;                                                        \
 	int n;                                                                 \
 	UNUSED_PARAMETER(argc);                                                \
-	int arg_type = sql_value_type(argv[0]);                                \
-	if (mp_type_is_bloblike(arg_type)) {                                   \
-		diag_set(ClientError, ER_INCONSISTENT_TYPES, "text",           \
-			 "varbinary");                                         \
-		context->is_aborted = true;                                    \
-		return;                                                        \
-	}                                                                      \
+	enum mp_type mp_type = sql_value_type(argv[0]);                        \
+	if (mp_type == MP_NIL)                                                 \
+		return sql_result_null(context);                               \
+	assert(mp_type == MP_STR);                                             \
 	z2 = (char *)sql_value_text(argv[0]);                              \
 	n = sql_value_bytes(argv[0]);                                      \
 	/*                                                                     \
@@ -2608,7 +2605,7 @@ static struct {
 	}, {
 	 .name = "LOWER",
 	 .param_count = 1,
-	 .first_arg = FIELD_TYPE_ANY,
+	 .first_arg = FIELD_TYPE_STRING,
 	 .args = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_STRING,
@@ -2959,7 +2956,7 @@ static struct {
 	}, {
 	 .name = "UPPER",
 	 .param_count = 1,
-	 .first_arg = FIELD_TYPE_ANY,
+	 .first_arg = FIELD_TYPE_STRING,
 	 .args = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_STRING,

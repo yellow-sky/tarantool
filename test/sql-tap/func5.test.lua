@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(85)
+test:plan(99)
 
 --!./tcltestrunner.lua
 -- 2010 August 27
@@ -734,6 +734,104 @@ test:do_catchsql_test(
 test:do_catchsql_test(
     "func-5-6.9.7", [[
         SELECT X'3334' like X'3334';
+    ]], {
+        1, "Type mismatch: can not convert varbinary to string"
+    })
+
+test:do_execsql_test(
+    "func-5-6.10.1", [[
+        SELECT upper(NULL);
+    ]],{
+        ""
+    })
+
+test:do_catchsql_test(
+    "func-5-6.10.2", [[
+        SELECT upper(123);
+    ]], {
+        1, "Type mismatch: can not convert 123 to string"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.10.3", [[
+        SELECT upper(-123);
+    ]], {
+        1, "Type mismatch: can not convert -123 to string"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.10.4", [[
+        SELECT upper(-5.5);
+    ]], {
+        1, "Type mismatch: can not convert -5.5 to string"
+    })
+
+test:do_execsql_test(
+    "func-5-6.10.5", [[
+        SELECT upper('-123');
+    ]], {
+        "-123"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.10.6", [[
+        SELECT upper(false);
+    ]], {
+        1, "Type mismatch: can not convert FALSE to string"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.10.7", [[
+        SELECT upper(X'3334');
+    ]], {
+        1, "Type mismatch: can not convert varbinary to string"
+    })
+
+test:do_execsql_test(
+    "func-5-6.11.1", [[
+        SELECT lower(NULL);
+    ]],{
+        ""
+    })
+
+test:do_catchsql_test(
+    "func-5-6.11.2", [[
+        SELECT lower(123);
+    ]], {
+        1, "Type mismatch: can not convert 123 to string"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.11.3", [[
+        SELECT lower(-123);
+    ]], {
+        1, "Type mismatch: can not convert -123 to string"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.11.4", [[
+        SELECT lower(-5.5);
+    ]], {
+        1, "Type mismatch: can not convert -5.5 to string"
+    })
+
+test:do_execsql_test(
+    "func-5-6.11.5", [[
+        SELECT lower('-123');
+    ]], {
+        "-123"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.11.6", [[
+        SELECT lower(false);
+    ]], {
+        1, "Type mismatch: can not convert FALSE to string"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.11.7", [[
+        SELECT lower(X'3334');
     ]], {
         1, "Type mismatch: can not convert varbinary to string"
     })
