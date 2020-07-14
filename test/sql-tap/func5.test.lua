@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(22)
+test:plan(29)
 
 --!./tcltestrunner.lua
 -- 2010 August 27
@@ -292,5 +292,58 @@ test:do_catchsql_test(
 
 box.func.COUNTER1:drop()
 box.func.COUNTER2:drop()
+
+--
+-- gh-4159: Make sure function argument types are validated
+-- correctly.
+--
+test:do_execsql_test(
+    "func-5-6.1.1", [[
+        SELECT abs(NULL);
+    ]],{
+        ""
+    })
+
+test:do_execsql_test(
+    "func-5-6.1.2", [[
+        SELECT abs(123);
+    ]], {
+        123
+    })
+
+test:do_execsql_test(
+    "func-5-6.1.3", [[
+        SELECT abs(-123);
+    ]], {
+        123
+    })
+
+test:do_execsql_test(
+    "func-5-6.1.4", [[
+        SELECT abs(-5.5);
+    ]], {
+        5.5
+    })
+
+test:do_catchsql_test(
+    "func-5-6.1.5", [[
+        SELECT abs('-123');
+    ]], {
+        1, "Type mismatch: can not convert -123 to number"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.1.6", [[
+        SELECT abs(false);
+    ]], {
+        1, "Type mismatch: can not convert FALSE to number"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.1.7", [[
+        SELECT abs(X'3334');
+    ]], {
+        1, "Type mismatch: can not convert varbinary to number"
+    })
 
 test:finish_test()
