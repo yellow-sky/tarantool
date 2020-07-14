@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(78)
+test:plan(85)
 
 --!./tcltestrunner.lua
 -- 2010 August 27
@@ -687,6 +687,55 @@ test:do_execsql_test(
         SELECT character_length(X'3334');
     ]], {
         2
+    })
+
+test:do_execsql_test(
+    "func-5-6.9.1", [[
+        SELECT NULL like NULL;
+    ]],{
+        ""
+    })
+
+test:do_catchsql_test(
+    "func-5-6.9.2", [[
+        SELECT 123 like 123;
+    ]], {
+        1, "Type mismatch: can not convert 123 to string"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.9.3", [[
+        SELECT -123 like -123;
+    ]], {
+        1, "Type mismatch: can not convert -123 to string"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.9.4", [[
+        SELECT -5.5 like -5.5;
+    ]], {
+        1, "Type mismatch: can not convert -5.5 to string"
+    })
+
+test:do_execsql_test(
+    "func-5-6.9.5", [[
+        SELECT '-123' like '-123';
+    ]], {
+        true
+    })
+
+test:do_catchsql_test(
+    "func-5-6.9.6", [[
+        SELECT false like false;
+    ]], {
+        1, "Type mismatch: can not convert FALSE to string"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.9.7", [[
+        SELECT X'3334' like X'3334';
+    ]], {
+        1, "Type mismatch: can not convert varbinary to string"
     })
 
 test:finish_test()

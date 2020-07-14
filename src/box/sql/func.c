@@ -60,6 +60,7 @@ enum {
 	SQL_FUNC_SUM_ARG_COUNT = 1,
 	SQL_FUNC_TOTAL_ARG_COUNT = 1,
 	SQL_FUNC_CHAR_ARG_COUNT = SQL_MAX_FUNCTION_ARG,
+	SQL_FUNC_LIKE_ARG_COUNT = 3,
 };
 
 enum field_type *func_no_args = NULL;
@@ -68,6 +69,7 @@ enum field_type *func_avg_param_list = NULL;
 enum field_type *func_sum_param_list = NULL;
 enum field_type *func_total_param_list = NULL;
 enum field_type *func_char_param_list = NULL;
+enum field_type *func_like_param_list = NULL;
 
 static int
 initialize_func_args_types()
@@ -114,6 +116,16 @@ initialize_func_args_types()
 	}
 	for (int i = 0; i < SQL_FUNC_CHAR_ARG_COUNT; ++i)
 		func_char_param_list[i] = FIELD_TYPE_UNSIGNED;
+
+	size = sizeof(enum field_type) * SQL_FUNC_LIKE_ARG_COUNT;
+	func_like_param_list = malloc(size);
+	if (func_like_param_list == NULL) {
+		diag_set(OutOfMemory, size, "malloc", "func_like_param_list");
+		return -1;
+	}
+	func_like_param_list[0] = FIELD_TYPE_STRING;
+	func_like_param_list[1] = FIELD_TYPE_STRING;
+	func_like_param_list[2] = FIELD_TYPE_STRING;
 
 	return 0;
 }
@@ -1273,18 +1285,9 @@ likeFunc(sql_context *context, int argc, sql_value **argv)
 	sql *db = sql_context_db_handle(context);
 	int rhs_type = sql_value_type(argv[0]);
 	int lhs_type = sql_value_type(argv[1]);
-
-	if (lhs_type != MP_STR || rhs_type != MP_STR) {
-		if (lhs_type == MP_NIL || rhs_type == MP_NIL)
-			return;
-		char *inconsistent_type = rhs_type != MP_STR ?
-					  mem_type_to_str(argv[0]) :
-					  mem_type_to_str(argv[1]);
-		diag_set(ClientError, ER_INCONSISTENT_TYPES, "text",
-			 inconsistent_type);
-		context->is_aborted = true;
+	if (lhs_type == MP_NIL || rhs_type == MP_NIL)
 		return;
-	}
+	assert(lhs_type == MP_STR && rhs_type == MP_STR);
 	const char *zB = (const char *) sql_value_text(argv[0]);
 	const char *zA = (const char *) sql_value_text(argv[1]);
 	const char *zB_end = zB + sql_value_bytes(argv[0]);
@@ -2608,9 +2611,9 @@ static struct {
 	 .finalize = NULL,
 	}, {
 	 .name = "LIKE",
-	 .param_count = -1,
+	 .param_count = SQL_FUNC_LIKE_ARG_COUNT,
 	 .is_var_args = true,
-	 .param_list = &func_no_args,
+	 .param_list = &func_like_param_list,
 	 .returns = FIELD_TYPE_INTEGER,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
