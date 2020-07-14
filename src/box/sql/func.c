@@ -1480,9 +1480,12 @@ zeroblobFunc(sql_context * context, int argc, sql_value ** argv)
 	i64 n;
 	assert(argc == 1);
 	UNUSED_PARAMETER(argc);
+	enum mp_type mp_type = sql_value_type(argv[0]);
+	if (mp_type == MP_NIL)
+		return sql_result_null(context);
+	assert(mp_type == MP_UINT);
 	n = sql_value_int64(argv[0]);
-	if (n < 0)
-		n = 0;
+	assert(n >= 0);
 	if (sql_result_zeroblob64(context, n) != 0) {
 		diag_set(ClientError, ER_SQL_EXECUTE, "string or binary string"\
 			 "is too big");
@@ -2971,7 +2974,7 @@ static struct {
 	}, {
 	 .name = "ZEROBLOB",
 	 .param_count = 1,
-	 .first_arg = FIELD_TYPE_ANY,
+	 .first_arg = FIELD_TYPE_UNSIGNED,
 	 .args = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_VARBINARY,
