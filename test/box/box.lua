@@ -1,5 +1,5 @@
 #!/usr/bin/env tarantool
-os = require('os')
+local os = require('os')
 
 local msgpack = require('msgpack')
 
@@ -19,7 +19,7 @@ local _hide = {
 
 function cfg_filter(data)
     if type(data)~='table' then return data end
-    local keys,k,_ = {}
+    local keys = {}
     for k in pairs(data) do
         table.insert(keys, k)
     end
@@ -50,7 +50,8 @@ function iproto_request(socket, query_header, query_body)
     assert(size ~= nil, 'Failed to read response')
     size = msgpack.decode(size)
     local response = socket:read(size)
-    local header, header_len = msgpack.decode(response)
+    local header_len
+    header, header_len = msgpack.decode(response)
     body = msgpack.decode(response:sub(header_len))
     return {
         ['header'] = header,
