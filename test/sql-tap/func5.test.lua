@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(120)
+test:plan(127)
 
 --!./tcltestrunner.lua
 -- 2010 August 27
@@ -981,6 +981,55 @@ test:do_execsql_test(
         SELECT replace(X'3334', X'3334', X'3334');
     ]], {
         "34"
+    })
+
+test:do_execsql_test(
+    "func-5-6.15.1", [[
+        SELECT round(NULL, NULL);
+    ]],{
+        ""
+    })
+
+test:do_execsql_test(
+    "func-5-6.15.2", [[
+        SELECT round(123, 3);
+    ]], {
+        123
+    })
+
+test:do_catchsql_test(
+    "func-5-6.15.3", [[
+        SELECT round(-123, -3);
+    ]], {
+        1, "Type mismatch: can not convert -3 to unsigned"
+    })
+
+test:do_execsql_test(
+    "func-5-6.15.4", [[
+        SELECT round(-5.5, 2.5);
+    ]], {
+        -5.5
+    })
+
+test:do_catchsql_test(
+    "func-5-6.15.5", [[
+        SELECT round('-123', '-123');
+    ]], {
+        1, "Type mismatch: can not convert -123 to double"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.15.6", [[
+        SELECT round(false, true);
+    ]], {
+        1, "Type mismatch: can not convert FALSE to double"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.15.7", [[
+        SELECT round(X'3334', X'35');
+    ]], {
+        1, "Type mismatch: can not convert varbinary to double"
     })
 
 test:finish_test()
