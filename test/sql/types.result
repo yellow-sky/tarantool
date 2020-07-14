@@ -1326,7 +1326,7 @@ box.execute("SELECT upper(v) FROM t;")
 box.execute("SELECT abs(v) FROM t;")
 ---
 - null
-- 'Inconsistent types: expected number got varbinary'
+- 'Type mismatch: can not convert varbinary to number'
 ...
 box.execute("SELECT typeof(v) FROM t;")
 ---

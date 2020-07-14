@@ -412,13 +412,13 @@ test:do_execsql_test(
         -- </func-4.4.1>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "func-4.4.2",
     [[
         SELECT abs(t1) FROM tbl1
     ]], {
         -- <func-4.4.2>
-        0.0, 0.0, 0.0, 0.0, 0.0
+        1, "Type mismatch: can not convert this to number"
         -- </func-4.4.2>
     })
 
