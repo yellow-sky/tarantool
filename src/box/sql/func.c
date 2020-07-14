@@ -63,6 +63,7 @@ enum {
 	SQL_FUNC_LIKE_ARG_COUNT = 3,
 	SQL_FUNC_LOWER_ARG_COUNT = 1,
 	SQL_FUNC_UPPER_ARG_COUNT = 1,
+	SQL_FUNC_RANDOMBLOB_ARG_COUNT = 1,
 };
 
 enum field_type *func_no_args = NULL;
@@ -74,6 +75,7 @@ enum field_type *func_char_param_list = NULL;
 enum field_type *func_like_param_list = NULL;
 enum field_type *func_lower_param_list = NULL;
 enum field_type *func_upper_param_list = NULL;
+enum field_type *func_randomblob_param_list = NULL;
 
 static int
 initialize_func_args_types()
@@ -146,6 +148,15 @@ initialize_func_args_types()
 		return -1;
 	}
 	func_upper_param_list[0] = FIELD_TYPE_STRING;
+
+	size = sizeof(enum field_type) * SQL_FUNC_RANDOMBLOB_ARG_COUNT;
+	func_randomblob_param_list = malloc(size);
+	if (func_randomblob_param_list == NULL) {
+		diag_set(OutOfMemory, size, "malloc",
+			 "func_randomblob_param_list");
+		return -1;
+	}
+	func_randomblob_param_list[0] = FIELD_TYPE_UNSIGNED;
 
 	return 0;
 }
@@ -1054,12 +1065,10 @@ randomBlob(sql_context * context, int argc, sql_value ** argv)
 	unsigned char *p;
 	assert(argc == 1);
 	UNUSED_PARAMETER(argc);
-	if (mp_type_is_bloblike(sql_value_type(argv[0]))) {
-		diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
-			 sql_value_to_diag_str(argv[0]), "numeric");
-		context->is_aborted = true;
-		return;
-	}
+	enum mp_type mp_type = sql_value_type(argv[0]);
+	if (mp_type == MP_NIL)
+		return sql_result_null(context);
+	assert(mp_type == MP_UINT);
 	n = sql_value_int(argv[0]);
 	if (n < 1)
 		return;
@@ -2811,7 +2820,7 @@ static struct {
 	 .name = "RANDOMBLOB",
 	 .param_count = 1,
 	 .is_var_args = false,
-	 .param_list = &func_no_args,
+	 .param_list = &func_randomblob_param_list,
 	 .returns = FIELD_TYPE_VARBINARY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,

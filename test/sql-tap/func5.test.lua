@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(106)
+test:plan(113)
 
 --!./tcltestrunner.lua
 -- 2010 August 27
@@ -883,6 +883,55 @@ test:do_execsql_test(
         SELECT position(X'34', X'3334');
     ]], {
         2
+    })
+
+test:do_execsql_test(
+    "func-5-6.13.1", [[
+        SELECT randomblob(NULL);
+    ]],{
+        ""
+    })
+
+test:do_execsql_test(
+    "func-5-6.13.2", [[
+        SELECT typeof(randomblob(123));
+    ]], {
+        "varbinary"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.13.3", [[
+        SELECT randomblob(-123);
+    ]], {
+        1, "Type mismatch: can not convert -123 to unsigned"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.13.4", [[
+        SELECT randomblob(-5.5);
+    ]], {
+        1, "Type mismatch: can not convert -5.5 to unsigned"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.13.5", [[
+        SELECT randomblob('-123');
+    ]], {
+        1, "Type mismatch: can not convert -123 to unsigned"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.13.6", [[
+        SELECT randomblob(false);
+    ]], {
+        1, "Type mismatch: can not convert FALSE to unsigned"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.13.7", [[
+        SELECT randomblob(X'3334');
+    ]], {
+        1, "Type mismatch: can not convert varbinary to unsigned"
     })
 
 test:finish_test()
