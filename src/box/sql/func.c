@@ -467,30 +467,18 @@ lengthFunc(sql_context * context, int argc, sql_value ** argv)
 
 	assert(argc == 1);
 	UNUSED_PARAMETER(argc);
-	switch (sql_value_type(argv[0])) {
-	case MP_BIN:
-	case MP_ARRAY:
-	case MP_MAP:
-	case MP_INT:
-	case MP_UINT:
-	case MP_BOOL:
-	case MP_DOUBLE:{
-			sql_result_uint(context, sql_value_bytes(argv[0]));
-			break;
-		}
-	case MP_STR:{
-			const unsigned char *z = sql_value_text(argv[0]);
-			if (z == 0)
-				return;
-			len = sql_utf8_char_count(z, sql_value_bytes(argv[0]));
-			sql_result_uint(context, len);
-			break;
-		}
-	default:{
-			sql_result_null(context);
-			break;
-		}
-	}
+	enum mp_type mp_type = sql_value_type(argv[0]);
+	if (mp_type == MP_NIL)
+		return sql_result_null(context);
+	if (mp_type == MP_BIN)
+		return sql_result_uint(context, sql_value_bytes(argv[0]));
+	assert(mp_type == MP_STR);
+	const unsigned char *z = sql_value_text(argv[0]);
+	if (z == NULL)
+		return;
+	len = sql_utf8_char_count(z, sql_value_bytes(argv[0]));
+	sql_result_uint(context, len);
+	return;
 }
 
 /*
@@ -2278,9 +2266,9 @@ static struct {
 	 }, {
 	 .name = "CHARACTER_LENGTH",
 	 .param_count = 1,
-	 .first_arg = FIELD_TYPE_ANY,
+	 .first_arg = FIELD_TYPE_STRING,
 	 .args = FIELD_TYPE_ANY,
-	 .is_blob_like_str = false,
+	 .is_blob_like_str = true,
 	 .returns = FIELD_TYPE_INTEGER,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2291,9 +2279,9 @@ static struct {
 	}, {
 	 .name = "CHAR_LENGTH",
 	 .param_count = 1,
-	 .first_arg = FIELD_TYPE_ANY,
+	 .first_arg = FIELD_TYPE_STRING,
 	 .args = FIELD_TYPE_ANY,
-	 .is_blob_like_str = false,
+	 .is_blob_like_str = true,
 	 .returns = FIELD_TYPE_INTEGER,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2551,9 +2539,9 @@ static struct {
 	}, {
 	 .name = "LENGTH",
 	 .param_count = 1,
-	 .first_arg = FIELD_TYPE_ANY,
+	 .first_arg = FIELD_TYPE_STRING,
 	 .args = FIELD_TYPE_ANY,
-	 .is_blob_like_str = false,
+	 .is_blob_like_str = true,
 	 .returns = FIELD_TYPE_INTEGER,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,

@@ -95,7 +95,7 @@ test:do_execsql_test(
 test:do_execsql_test(
     "func-1.4",
     [[
-        SELECT coalesce(length(a),-1) FROM t2
+        SELECT coalesce(length(CAST(a AS STRING)),-1) FROM t2
     ]], {
         -- <func-1.4>
         1, -1, 3, -1, 5
