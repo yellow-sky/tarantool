@@ -61,6 +61,8 @@ enum {
 	SQL_FUNC_TOTAL_ARG_COUNT = 1,
 	SQL_FUNC_CHAR_ARG_COUNT = SQL_MAX_FUNCTION_ARG,
 	SQL_FUNC_LIKE_ARG_COUNT = 3,
+	SQL_FUNC_LOWER_ARG_COUNT = 1,
+	SQL_FUNC_UPPER_ARG_COUNT = 1,
 };
 
 enum field_type *func_no_args = NULL;
@@ -70,6 +72,8 @@ enum field_type *func_sum_param_list = NULL;
 enum field_type *func_total_param_list = NULL;
 enum field_type *func_char_param_list = NULL;
 enum field_type *func_like_param_list = NULL;
+enum field_type *func_lower_param_list = NULL;
+enum field_type *func_upper_param_list = NULL;
 
 static int
 initialize_func_args_types()
@@ -126,6 +130,22 @@ initialize_func_args_types()
 	func_like_param_list[0] = FIELD_TYPE_STRING;
 	func_like_param_list[1] = FIELD_TYPE_STRING;
 	func_like_param_list[2] = FIELD_TYPE_STRING;
+
+	size = sizeof(enum field_type) * SQL_FUNC_LOWER_ARG_COUNT;
+	func_lower_param_list = malloc(size);
+	if (func_lower_param_list == NULL) {
+		diag_set(OutOfMemory, size, "malloc", "func_lower_param_list");
+		return -1;
+	}
+	func_lower_param_list[0] = FIELD_TYPE_STRING;
+
+	size = sizeof(enum field_type) * SQL_FUNC_UPPER_ARG_COUNT;
+	func_upper_param_list = malloc(size);
+	if (func_upper_param_list == NULL) {
+		diag_set(OutOfMemory, size, "malloc", "func_upper_param_list");
+		return -1;
+	}
+	func_upper_param_list[0] = FIELD_TYPE_STRING;
 
 	return 0;
 }
@@ -954,13 +974,10 @@ case_type##ICUFunc(sql_context *context, int argc, sql_value **argv)   \
 	const char *z2;                                                        \
 	int n;                                                                 \
 	UNUSED_PARAMETER(argc);                                                \
-	int arg_type = sql_value_type(argv[0]);                                \
-	if (mp_type_is_bloblike(arg_type)) {                                   \
-		diag_set(ClientError, ER_INCONSISTENT_TYPES, "text",           \
-			 "varbinary");                                         \
-		context->is_aborted = true;                                    \
-		return;                                                        \
-	}                                                                      \
+	enum mp_type mp_type = sql_value_type(argv[0]);                        \
+	if (mp_type == MP_NIL)                                                 \
+		return sql_result_null(context);                               \
+	assert(mp_type == MP_STR);                                             \
 	z2 = (char *)sql_value_text(argv[0]);                              \
 	n = sql_value_bytes(argv[0]);                                      \
 	/*                                                                     \
@@ -2661,7 +2678,7 @@ static struct {
 	 .name = "LOWER",
 	 .param_count = 1,
 	 .is_var_args = false,
-	 .param_list = &func_no_args,
+	 .param_list = &func_lower_param_list,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2985,7 +3002,7 @@ static struct {
 	 .name = "UPPER",
 	 .param_count = 1,
 	 .is_var_args = false,
-	 .param_list = &func_no_args,
+	 .param_list = &func_upper_param_list,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,

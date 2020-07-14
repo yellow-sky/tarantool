@@ -280,25 +280,13 @@ SELECT abs(a) FROM t0;
  | ...
 SELECT lower(a) FROM t0;
  | ---
- | - metadata:
- |   - name: lower(a)
- |     type: string
- |   rows:
- |   - ['false']
- |   - ['true']
- |   - [null]
- |   - [null]
+ | - null
+ | - 'Type mismatch: can not convert FALSE to string'
  | ...
 SELECT upper(a) FROM t0;
  | ---
- | - metadata:
- |   - name: upper(a)
- |     type: string
- |   rows:
- |   - ['FALSE']
- |   - ['TRUE']
- |   - [null]
- |   - [null]
+ | - null
+ | - 'Type mismatch: can not convert FALSE to string'
  | ...
 SELECT quote(a) FROM t0;
  | ---
