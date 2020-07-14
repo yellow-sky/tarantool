@@ -33,8 +33,8 @@ local spaces = {box.space.s1, box.space.s2, box.space.s3, box.space.s4,
 local max_data_size = box.cfg.vinyl_page_size * 1.5
 
 local function t1(ch, time_limit)
-    local t1 = fiber.time()
-    while fiber.time() - t1 < time_limit do
+    local time = fiber.time()
+    while fiber.time() - time < time_limit do
         local k = math.random(10000)
         local t = math.random(80)
         local data = string.char(math.random(string.byte('Z') - string.byte('A')) + string.byte('A') - 1)
@@ -56,13 +56,13 @@ local function t1(ch, time_limit)
 end;
 
 local function t2(ch, time_limit)
-    local t1 = fiber.time()
-    while fiber.time() - t1 < time_limit do
+    local time = fiber.time()
+    while fiber.time() - time < time_limit do
         local k = math.random(10000)
         local t = math.random(16)
         local space = spaces[math.fmod(t, #spaces) + 1]
         if t < 12 then
-            local l = space:get({k})
+            space:get({k})
         else
             space:delete({k})
         end
@@ -71,9 +71,9 @@ local function t2(ch, time_limit)
 end;
 
 local function t3(ch, time_limit)
-    local t1 = fiber.time()
+    local time = fiber.time()
     local i = 0
-    while fiber.time() - t1 < time_limit do
+    while fiber.time() - time < time_limit do
         i = i + 1
         local k = math.random(10000)
         local t = math.random(20)
@@ -99,19 +99,19 @@ local function stress(time_limit)
 
     math.randomseed(os.time());
 
-    for i = 1, 6 do
+    for _ = 1, 6 do
         fiber.create(t1, ch, time_limit)
     end;
 
-    for i = 1, 6 do
+    for _ = 1, 6 do
         fiber.create(t2, ch, time_limit)
     end;
 
-    for i = 1, 4 do
+    for _ = 1, 4 do
         fiber.create(t3, ch, time_limit)
     end;
 
-    for i = 1, 16 do
+    for _ = 1, 16 do
         ch:get()
     end;
 end
