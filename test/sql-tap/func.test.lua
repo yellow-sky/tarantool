@@ -893,7 +893,7 @@ test:do_execsql_test(
 test:do_execsql_test(
     "func-8.5",
     [[
-        SELECT sum(x) FROM (SELECT '9223372036' || '854775807' AS x
+        SELECT sum(x) FROM (SELECT CAST('9223372036' || '854775807' AS INTEGER) AS x
                             UNION ALL SELECT -9223372036854775807)
     ]], {
         -- <func-8.5>
@@ -904,7 +904,7 @@ test:do_execsql_test(
 test:do_execsql_test(
     "func-8.6",
     [[
-        SELECT typeof(sum(x)) FROM (SELECT '9223372036' || '854775807' AS x
+        SELECT typeof(sum(x)) FROM (SELECT CAST('9223372036' || '854775807' AS INTEGER) AS x
                             UNION ALL SELECT -9223372036854775807)
     ]], {
         -- <func-8.6>
@@ -915,7 +915,7 @@ test:do_execsql_test(
 test:do_execsql_test(
     "func-8.7",
     [[
-        SELECT typeof(sum(x)) FROM (SELECT '9223372036' || '854775808' AS x
+        SELECT typeof(sum(x)) FROM (SELECT CAST('9223372036' || '854775808' AS INTEGER) AS x
                             UNION ALL SELECT -9223372036854775807)
     ]], {
         -- <func-8.7>
@@ -926,7 +926,7 @@ test:do_execsql_test(
 test:do_execsql_test(
     "func-8.8",
     [[
-        SELECT sum(x)>0.0 FROM (SELECT '9223372036' || '854775808' AS x
+        SELECT sum(x)>0.0 FROM (SELECT CAST('9223372036' || '854775808' AS INTEGER) AS x
                             UNION ALL SELECT -9223372036850000000)
     ]], {
         -- <func-8.8>

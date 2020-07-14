@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(29)
+test:plan(50)
 
 --!./tcltestrunner.lua
 -- 2010 August 27
@@ -342,6 +342,153 @@ test:do_catchsql_test(
 test:do_catchsql_test(
     "func-5-6.1.7", [[
         SELECT abs(X'3334');
+    ]], {
+        1, "Type mismatch: can not convert varbinary to number"
+    })
+
+test:do_execsql_test(
+    "func-5-6.2.1", [[
+        SELECT sum("_auto_field_") from (values (NULL), (NULL), (NULL));
+    ]],{
+        ""
+    })
+
+test:do_execsql_test(
+    "func-5-6.2.2", [[
+        SELECT sum("_auto_field_") from (values (123), (123), (123));
+    ]], {
+        369
+    })
+
+test:do_execsql_test(
+    "func-5-6.2.3", [[
+        SELECT sum("_auto_field_") from (values (-123), (-123), (-123));
+    ]], {
+        -369
+    })
+
+test:do_execsql_test(
+    "func-5-6.2.4", [[
+        SELECT sum("_auto_field_") from (values (-5.5), (-5.5), (-5.5));
+    ]], {
+        -16.5
+    })
+
+test:do_catchsql_test(
+    "func-5-6.2.5", [[
+        SELECT sum("_auto_field_") from (values ('-123'), ('-123'), ('-123'));
+    ]], {
+        1, "Type mismatch: can not convert -123 to number"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.2.6", [[
+        SELECT sum("_auto_field_") from (values (false), (false), (false));
+    ]], {
+        1, "Type mismatch: can not convert FALSE to number"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.2.7", [[
+        SELECT sum("_auto_field_") from (values (X'3334'), (X'3334'), (X'3334'));
+    ]], {
+        1, "Type mismatch: can not convert varbinary to number"
+    })
+
+test:do_execsql_test(
+    "func-5-6.3.1", [[
+        SELECT avg("_auto_field_") from (values (NULL), (NULL), (NULL));
+    ]],{
+        ""
+    })
+
+test:do_execsql_test(
+    "func-5-6.3.2", [[
+        SELECT avg("_auto_field_") from (values (123), (123), (123));
+    ]], {
+        123
+    })
+
+test:do_execsql_test(
+    "func-5-6.3.3", [[
+        SELECT avg("_auto_field_") from (values (-123), (-123), (-123));
+    ]], {
+        -123
+    })
+
+test:do_execsql_test(
+    "func-5-6.3.4", [[
+        SELECT avg("_auto_field_") from (values (-5.5), (-5.5), (-5.5));
+    ]], {
+        -5.5
+    })
+
+test:do_catchsql_test(
+    "func-5-6.3.5", [[
+        SELECT avg("_auto_field_") from (values ('-123'), ('-123'), ('-123'));
+    ]], {
+        1, "Type mismatch: can not convert -123 to number"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.3.6", [[
+        SELECT avg("_auto_field_") from (values (false), (false), (false));
+    ]], {
+        1, "Type mismatch: can not convert FALSE to number"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.3.7", [[
+        SELECT avg("_auto_field_") from (values (X'3334'), (X'3334'), (X'3334'));
+    ]], {
+        1, "Type mismatch: can not convert varbinary to number"
+    })
+
+test:do_execsql_test(
+    "func-5-6.4.1", [[
+        SELECT total("_auto_field_") from (values (NULL), (NULL), (NULL));
+    ]],{
+        0
+    })
+
+test:do_execsql_test(
+    "func-5-6.4.2", [[
+        SELECT total("_auto_field_") from (values (123), (123), (123));
+    ]], {
+        369
+    })
+
+test:do_execsql_test(
+    "func-5-6.4.3", [[
+        SELECT total("_auto_field_") from (values (-123), (-123), (-123));
+    ]], {
+        -369
+    })
+
+test:do_execsql_test(
+    "func-5-6.4.4", [[
+        SELECT total("_auto_field_") from (values (-5.5), (-5.5), (-5.5));
+    ]], {
+        -16.5
+    })
+
+test:do_catchsql_test(
+    "func-5-6.4.5", [[
+        SELECT total("_auto_field_") from (values ('-123'), ('-123'), ('-123'));
+    ]], {
+        1, "Type mismatch: can not convert -123 to number"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.4.6", [[
+        SELECT total("_auto_field_") from (values (false), (false), (false));
+    ]], {
+        1, "Type mismatch: can not convert FALSE to number"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.4.7", [[
+        SELECT total("_auto_field_") from (values (X'3334'), (X'3334'), (X'3334'));
     ]], {
         1, "Type mismatch: can not convert varbinary to number"
     })
