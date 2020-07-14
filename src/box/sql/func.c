@@ -1389,6 +1389,10 @@ quoteFunc(sql_context * context, int argc, sql_value ** argv)
 static void
 unicodeFunc(sql_context * context, int argc, sql_value ** argv)
 {
+	enum mp_type mp_type = sql_value_type(argv[0]);
+	if (mp_type == MP_NIL)
+		return sql_result_null(context);
+	assert(mp_type == MP_STR);
 	const unsigned char *z = sql_value_text(argv[0]);
 	(void)argc;
 	if (z && z[0])
@@ -2915,7 +2919,7 @@ static struct {
 	}, {
 	 .name = "UNICODE",
 	 .param_count = 1,
-	 .first_arg = FIELD_TYPE_ANY,
+	 .first_arg = FIELD_TYPE_STRING,
 	 .args = FIELD_TYPE_ANY,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_STRING,
