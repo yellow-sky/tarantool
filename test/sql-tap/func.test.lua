@@ -760,13 +760,13 @@ test:do_execsql_test(
         -- </func-5.2>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "func-5.3",
     [[
         SELECT upper(a), lower(a) FROM t2
     ]], {
         -- <func-5.3>
-        "1","1","","","345","345","","","67890","67890"
+        1, "Type mismatch: can not convert 1 to string"
         -- </func-5.3>
     })
 
@@ -794,13 +794,13 @@ test:do_execsql_test(
         -- </func-6.1>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "func-6.2",
     [[
         SELECT coalesce(upper(a),'nil') FROM t2
     ]], {
         -- <func-6.2>
-        "1","nil","345","nil","67890"
+        1, "Type mismatch: can not convert 1 to string"
         -- </func-6.2>
     })
 
