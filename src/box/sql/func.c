@@ -638,18 +638,19 @@ position_func(struct sql_context *context, int argc, struct Mem **argv)
 	 * Position function can be called only with string
 	 * or blob params.
 	 */
-	struct Mem *inconsistent_type_arg = NULL;
-	if (needle_type != MP_STR && needle_type != MP_BIN)
-		inconsistent_type_arg = needle;
-	if (haystack_type != MP_STR && haystack_type != MP_BIN)
-		inconsistent_type_arg = haystack;
-	if (inconsistent_type_arg != NULL) {
-		diag_set(ClientError, ER_INCONSISTENT_TYPES,
-			 "text or varbinary",
-			 mem_type_to_str(inconsistent_type_arg));
+	if (needle_type != MP_BIN && needle_type != MP_STR) {
+		diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
+			 sql_value_to_diag_str(argv[0]), "string");
 		context->is_aborted = true;
 		return;
 	}
+	if (haystack_type != MP_BIN && haystack_type != MP_STR) {
+		diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
+			 sql_value_to_diag_str(argv[1]), "string");
+		context->is_aborted = true;
+		return;
+	}
+
 	/*
 	 * Both params of Position function must be of the same
 	 * type.
