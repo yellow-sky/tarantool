@@ -1509,20 +1509,25 @@ replaceFunc(sql_context * context, int argc, sql_value ** argv)
 
 	assert(argc == 3);
 	UNUSED_PARAMETER(argc);
+	enum mp_type str_type = sql_value_type(argv[0]);
+	enum mp_type pattern_type = sql_value_type(argv[1]);
+	enum mp_type rep_type = sql_value_type(argv[2]);
+	if (str_type == MP_NIL || pattern_type == MP_NIL || rep_type == MP_NIL)
+		return sql_result_null(context);
+	assert(str_type == MP_STR || str_type == MP_BIN);
+	assert(pattern_type == MP_STR || pattern_type == MP_BIN);
+	assert(rep_type == MP_STR || rep_type == MP_BIN);
+
 	zStr = sql_value_text(argv[0]);
 	if (zStr == 0)
 		return;
 	nStr = sql_value_bytes(argv[0]);
 	assert(zStr == sql_value_text(argv[0]));	/* No encoding change */
 	zPattern = sql_value_text(argv[1]);
-	if (zPattern == 0) {
-		assert(sql_value_is_null(argv[1])
-		       || sql_context_db_handle(context)->mallocFailed);
+	if (zPattern == 0)
 		return;
-	}
 	nPattern = sql_value_bytes(argv[1]);
 	if (nPattern == 0) {
-		assert(! sql_value_is_null(argv[1]));
 		sql_result_value(context, argv[0]);
 		return;
 	}
@@ -2745,9 +2750,9 @@ static struct {
 	}, {
 	 .name = "REPLACE",
 	 .param_count = 3,
-	 .first_arg = FIELD_TYPE_ANY,
-	 .args = FIELD_TYPE_ANY,
-	 .is_blob_like_str = false,
+	 .first_arg = FIELD_TYPE_STRING,
+	 .args = FIELD_TYPE_STRING,
+	 .is_blob_like_str = true,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,

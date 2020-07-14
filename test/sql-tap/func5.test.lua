@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(113)
+test:plan(120)
 
 --!./tcltestrunner.lua
 -- 2010 August 27
@@ -932,6 +932,55 @@ test:do_catchsql_test(
         SELECT randomblob(X'3334');
     ]], {
         1, "Type mismatch: can not convert varbinary to unsigned"
+    })
+
+test:do_execsql_test(
+    "func-5-6.14.1", [[
+        SELECT replace(NULL, NULL, NULL);
+    ]],{
+        ""
+    })
+
+test:do_catchsql_test(
+    "func-5-6.6.2", [[
+        SELECT replace(123, 123, 123);
+    ]], {
+        1, "Type mismatch: can not convert 123 to string"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.14.3", [[
+        SELECT replace(-123, -123, -123);
+    ]], {
+        1, "Type mismatch: can not convert -123 to string"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.14.4", [[
+        SELECT replace(-5.5,-5.5, -5.5);
+    ]], {
+        1, "Type mismatch: can not convert -5.5 to string"
+    })
+
+test:do_execsql_test(
+    "func-5-6.14.5", [[
+        SELECT replace('-123', '-123', '-123');
+    ]], {
+        "-123"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.14.6", [[
+        SELECT replace(false, false, false);
+    ]], {
+        1, "Type mismatch: can not convert FALSE to string"
+    })
+
+test:do_execsql_test(
+    "func-5-6.14.7", [[
+        SELECT replace(X'3334', X'3334', X'3334');
+    ]], {
+        "34"
     })
 
 test:finish_test()
