@@ -59,6 +59,7 @@ enum {
 	SQL_FUNC_AVG_ARG_COUNT = 1,
 	SQL_FUNC_SUM_ARG_COUNT = 1,
 	SQL_FUNC_TOTAL_ARG_COUNT = 1,
+	SQL_FUNC_CHAR_ARG_COUNT = SQL_MAX_FUNCTION_ARG,
 };
 
 enum field_type *func_no_args = NULL;
@@ -66,6 +67,7 @@ enum field_type *func_abs_param_list = NULL;
 enum field_type *func_avg_param_list = NULL;
 enum field_type *func_sum_param_list = NULL;
 enum field_type *func_total_param_list = NULL;
+enum field_type *func_char_param_list = NULL;
 
 static int
 initialize_func_args_types()
@@ -103,6 +105,15 @@ initialize_func_args_types()
 		return -1;
 	}
 	func_total_param_list[0] = FIELD_TYPE_NUMBER;
+
+	size = sizeof(enum field_type) * SQL_FUNC_CHAR_ARG_COUNT;
+	func_char_param_list = malloc(size);
+	if (func_char_param_list == NULL) {
+		diag_set(OutOfMemory, size, "malloc", "func_char_param_list");
+		return -1;
+	}
+	for (int i = 0; i < SQL_FUNC_CHAR_ARG_COUNT; ++i)
+		func_char_param_list[i] = FIELD_TYPE_UNSIGNED;
 
 	return 0;
 }
@@ -1508,10 +1519,11 @@ charFunc(sql_context * context, int argc, sql_value ** argv)
 	for (i = 0; i < argc; i++) {
 		uint64_t x;
 		unsigned c;
-		if (sql_value_type(argv[i]) == MP_INT)
-			x = 0xfffd;
-		else
-			x = sql_value_uint64(argv[i]);
+		enum mp_type mp_type = sql_value_type(argv[i]);
+		if (mp_type == MP_NIL)
+			continue;
+		assert(mp_type == MP_UINT);
+		x = sql_value_uint64(argv[i]);
 		if (x > 0x10ffff)
 			x = 0xfffd;
 		c = (unsigned)(x & 0x1fffff);
@@ -2315,9 +2327,9 @@ static struct {
 	 .finalize = NULL,
 	}, {
 	 .name = "CHAR",
-	 .param_count = -1,
+	 .param_count = SQL_FUNC_CHAR_ARG_COUNT,
 	 .is_var_args = true,
-	 .param_list = &func_no_args,
+	 .param_list = &func_char_param_list,
 	 .returns = FIELD_TYPE_STRING,
 	 .is_deterministic = true,
 	 .aggregate = FUNC_AGGREGATE_NONE,
