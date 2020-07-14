@@ -55,11 +55,17 @@
 
 enum {
 	SQL_FUNC_ABS_ARG_COUNT = 1,
+	SQL_FUNC_AVG_ARG_COUNT = 1,
+	SQL_FUNC_SUM_ARG_COUNT = 1,
+	SQL_FUNC_TOTAL_ARG_COUNT = 1,
 	sql_func_arg_count_MAX,
 };
 
 struct arg_def *func_no_args = NULL;
 struct arg_def *func_abs_args = NULL;
+struct arg_def *func_avg_args = NULL;
+struct arg_def *func_sum_args = NULL;
+struct arg_def *func_total_args = NULL;
 
 static int
 initialize_func_args_types()
@@ -73,6 +79,30 @@ initialize_func_args_types()
 		return -1;
 	}
 	func_abs_args[0].type = FIELD_TYPE_NUMBER;
+
+	size = sizeof(struct arg_def) * SQL_FUNC_AVG_ARG_COUNT;
+	func_avg_args = malloc(size);
+	if (func_avg_args == NULL) {
+		diag_set(OutOfMemory, size, "malloc", "func_avg_args");
+		return -1;
+	}
+	func_avg_args[0].type = FIELD_TYPE_NUMBER;
+
+	size = sizeof(struct arg_def) * SQL_FUNC_SUM_ARG_COUNT;
+	func_sum_args = malloc(size);
+	if (func_sum_args == NULL) {
+		diag_set(OutOfMemory, size, "malloc", "func_sum_args");
+		return -1;
+	}
+	func_sum_args[0].type = FIELD_TYPE_NUMBER;
+
+	size = sizeof(struct arg_def) * SQL_FUNC_TOTAL_ARG_COUNT;
+	func_total_args = malloc(size);
+	if (func_total_args == NULL) {
+		diag_set(OutOfMemory, size, "malloc", "func_total_args");
+		return -1;
+	}
+	func_total_args[0].type = FIELD_TYPE_NUMBER;
 
 	return 0;
 }
@@ -1951,18 +1981,10 @@ sum_step(struct sql_context *context, int argc, sql_value **argv)
 	assert(argc == 1);
 	UNUSED_PARAMETER(argc);
 	struct SumCtx *p = sql_aggregate_context(context, sizeof(*p));
-	int type = sql_value_type(argv[0]);
+	enum mp_type type = sql_value_type(argv[0]);
 	if (type == MP_NIL || p == NULL)
 		return;
-	if (type != MP_DOUBLE && type != MP_INT && type != MP_UINT) {
-		if (mem_apply_numeric_type(argv[0]) != 0) {
-			diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
-				 sql_value_to_diag_str(argv[0]), "number");
-			context->is_aborted = true;
-			return;
-		}
-		type = sql_value_type(argv[0]);
-	}
+	assert(type == MP_DOUBLE || type == MP_INT || type == MP_UINT);
 	p->cnt++;
 	if (type == MP_INT || type == MP_UINT) {
 		int64_t v = sql_value_int64(argv[0]);
@@ -2257,9 +2279,9 @@ static struct {
 	 .export_to_sql = true,
 	}, {
 	 .name = "AVG",
-	 .param_count = 1,
+	 .param_count = SQL_FUNC_ABS_ARG_COUNT,
 	 .is_var_args = false,
-	 .args = &func_no_args,
+	 .args = &func_avg_args,
 	 .returns = FIELD_TYPE_NUMBER,
 	 .is_deterministic = false,
 	 .aggregate = FUNC_AGGREGATE_GROUP,
@@ -2869,9 +2891,9 @@ static struct {
 	 .export_to_sql = true,
 	}, {
 	 .name = "SUM",
-	 .param_count = 1,
+	 .param_count = SQL_FUNC_SUM_ARG_COUNT,
 	 .is_var_args = false,
-	 .args = &func_no_args,
+	 .args = &func_sum_args,
 	 .returns = FIELD_TYPE_NUMBER,
 	 .aggregate = FUNC_AGGREGATE_GROUP,
 	 .is_deterministic = false,
@@ -2893,9 +2915,9 @@ static struct {
 	 .finalize = NULL,
 	}, {
 	 .name = "TOTAL",
-	 .param_count = 1,
+	 .param_count = SQL_FUNC_TOTAL_ARG_COUNT,
 	 .is_var_args = false,
-	 .args = &func_no_args,
+	 .args = &func_total_args,
 	 .returns = FIELD_TYPE_NUMBER,
 	 .aggregate = FUNC_AGGREGATE_GROUP,
 	 .is_deterministic = false,
