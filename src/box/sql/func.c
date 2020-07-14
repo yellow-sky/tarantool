@@ -64,6 +64,7 @@ enum {
 	SQL_FUNC_LOWER_ARG_COUNT = 1,
 	SQL_FUNC_UPPER_ARG_COUNT = 1,
 	SQL_FUNC_RANDOMBLOB_ARG_COUNT = 1,
+	SQL_FUNC_ROUND_ARG_COUNT = 2,
 };
 
 enum field_type *func_no_args = NULL;
@@ -76,6 +77,7 @@ enum field_type *func_like_param_list = NULL;
 enum field_type *func_lower_param_list = NULL;
 enum field_type *func_upper_param_list = NULL;
 enum field_type *func_randomblob_param_list = NULL;
+enum field_type *func_round_param_list = NULL;
 
 static int
 initialize_func_args_types()
@@ -157,6 +159,15 @@ initialize_func_args_types()
 		return -1;
 	}
 	func_randomblob_param_list[0] = FIELD_TYPE_UNSIGNED;
+
+	size = sizeof(enum field_type) * SQL_FUNC_ROUND_ARG_COUNT;
+	func_round_param_list = malloc(size);
+	if (func_round_param_list == NULL) {
+		diag_set(OutOfMemory, size, "malloc", "func_round_param_list");
+		return -1;
+	}
+	func_round_param_list[0] = FIELD_TYPE_DOUBLE;
+	func_round_param_list[1] = FIELD_TYPE_UNSIGNED;
 
 	return 0;
 }
@@ -917,21 +928,17 @@ roundFunc(sql_context * context, int argc, sql_value ** argv)
 		return;
 	}
 	if (argc == 2) {
-		if (sql_value_is_null(argv[1]))
-			return;
+		enum mp_type precision_type = sql_value_type(argv[1]);
+		if (precision_type == MP_NIL)
+			return sql_result_null(context);
+		assert(precision_type == MP_UINT);
 		n = sql_value_int(argv[1]);
-		if (n < 0)
-			n = 0;
+		assert(n >= 0);
 	}
-	if (sql_value_is_null(argv[0]))
-		return;
 	enum mp_type mp_type = sql_value_type(argv[0]);
-	if (mp_type_is_bloblike(mp_type)) {
-		diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
-			 sql_value_to_diag_str(argv[0]), "numeric");
-		context->is_aborted = true;
-		return;
-	}
+	if (mp_type == MP_NIL)
+		return sql_result_null(context);
+	assert(mp_type == MP_DOUBLE);
 	r = sql_value_double(argv[0]);
 	/* If Y==0 and X will fit in a 64-bit int,
 	 * handle the rounding directly,
@@ -2862,9 +2869,9 @@ static struct {
 	 .export_to_sql = true,
 	}, {
 	 .name = "ROUND",
-	 .param_count = -1,
+	 .param_count = 2,
 	 .is_var_args = true,
-	 .param_list = &func_no_args,
+	 .param_list = &func_round_param_list,
 	 .returns = FIELD_TYPE_INTEGER,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
