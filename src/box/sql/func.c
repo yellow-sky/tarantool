@@ -1203,18 +1203,9 @@ likeFunc(sql_context *context, int argc, sql_value **argv)
 	sql *db = sql_context_db_handle(context);
 	int rhs_type = sql_value_type(argv[0]);
 	int lhs_type = sql_value_type(argv[1]);
-
-	if (lhs_type != MP_STR || rhs_type != MP_STR) {
-		if (lhs_type == MP_NIL || rhs_type == MP_NIL)
-			return;
-		char *inconsistent_type = rhs_type != MP_STR ?
-					  mem_type_to_str(argv[0]) :
-					  mem_type_to_str(argv[1]);
-		diag_set(ClientError, ER_INCONSISTENT_TYPES, "text",
-			 inconsistent_type);
-		context->is_aborted = true;
+	if (lhs_type == MP_NIL || rhs_type == MP_NIL)
 		return;
-	}
+	assert(lhs_type == MP_STR && rhs_type == MP_STR);
 	const char *zB = (const char *) sql_value_text(argv[0]);
 	const char *zA = (const char *) sql_value_text(argv[1]);
 	const char *zB_end = zB + sql_value_bytes(argv[0]);
@@ -2565,8 +2556,8 @@ static struct {
 	}, {
 	 .name = "LIKE",
 	 .param_count = -1,
-	 .first_arg = FIELD_TYPE_ANY,
-	 .args = FIELD_TYPE_ANY,
+	 .first_arg = FIELD_TYPE_STRING,
+	 .args = FIELD_TYPE_STRING,
 	 .is_blob_like_str = false,
 	 .returns = FIELD_TYPE_INTEGER,
 	 .aggregate = FUNC_AGGREGATE_NONE,
