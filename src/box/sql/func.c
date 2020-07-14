@@ -65,6 +65,7 @@ enum {
 	SQL_FUNC_UPPER_ARG_COUNT = 1,
 	SQL_FUNC_RANDOMBLOB_ARG_COUNT = 1,
 	SQL_FUNC_ROUND_ARG_COUNT = 2,
+	SQL_FUNC_SOUNDEX_ARG_COUNT = 1,
 };
 
 enum field_type *func_no_args = NULL;
@@ -78,6 +79,7 @@ enum field_type *func_lower_param_list = NULL;
 enum field_type *func_upper_param_list = NULL;
 enum field_type *func_randomblob_param_list = NULL;
 enum field_type *func_round_param_list = NULL;
+enum field_type *func_soundex_param_list = NULL;
 
 static int
 initialize_func_args_types()
@@ -168,6 +170,14 @@ initialize_func_args_types()
 	}
 	func_round_param_list[0] = FIELD_TYPE_DOUBLE;
 	func_round_param_list[1] = FIELD_TYPE_UNSIGNED;
+
+	size = sizeof(enum field_type) * SQL_FUNC_SOUNDEX_ARG_COUNT;
+	func_soundex_param_list = malloc(size);
+	if (func_soundex_param_list == NULL) {
+		diag_set(OutOfMemory, size, "malloc", "func_soundex_param_list");
+		return -1;
+	}
+	func_soundex_param_list[0] = FIELD_TYPE_STRING;
 
 	return 0;
 }
@@ -1974,12 +1984,9 @@ soundexFunc(sql_context * context, int argc, sql_value ** argv)
 	};
 	assert(argc == 1);
 	enum mp_type mp_type = sql_value_type(argv[0]);
-	if (mp_type_is_bloblike(mp_type)) {
-		diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
-			 sql_value_to_diag_str(argv[0]), "text");
-		context->is_aborted = true;
-		return;
-	}
+	if (mp_type == MP_NIL)
+		return sql_result_null(context);
+	assert(mp_type == MP_BIN || mp_type == MP_STR);
 	zIn = (u8 *) sql_value_text(argv[0]);
 	if (zIn == 0)
 		zIn = (u8 *) "";
@@ -2907,7 +2914,7 @@ static struct {
 	 .name = "SOUNDEX",
 	 .param_count = 1,
 	 .is_var_args = false,
-	 .param_list = &func_no_args,
+	 .param_list = &func_soundex_param_list,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
