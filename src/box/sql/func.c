@@ -66,6 +66,7 @@ enum {
 	SQL_FUNC_RANDOMBLOB_ARG_COUNT = 1,
 	SQL_FUNC_ROUND_ARG_COUNT = 2,
 	SQL_FUNC_SOUNDEX_ARG_COUNT = 1,
+	SQL_FUNC_SUBSTR_ARG_COUNT = 3,
 };
 
 enum field_type *func_no_args = NULL;
@@ -80,6 +81,7 @@ enum field_type *func_upper_param_list = NULL;
 enum field_type *func_randomblob_param_list = NULL;
 enum field_type *func_round_param_list = NULL;
 enum field_type *func_soundex_param_list = NULL;
+enum field_type *func_substr_param_list = NULL;
 
 static int
 initialize_func_args_types()
@@ -178,6 +180,16 @@ initialize_func_args_types()
 		return -1;
 	}
 	func_soundex_param_list[0] = FIELD_TYPE_STRING;
+
+	size = sizeof(enum field_type) * SQL_FUNC_SUBSTR_ARG_COUNT;
+	func_substr_param_list = malloc(size);
+	if (func_substr_param_list == NULL) {
+		diag_set(OutOfMemory, size, "malloc", "func_substr_param_list");
+		return -1;
+	}
+	func_substr_param_list[0] = FIELD_TYPE_SCALAR;
+	func_substr_param_list[1] = FIELD_TYPE_INTEGER;
+	func_substr_param_list[2] = FIELD_TYPE_INTEGER;
 
 	return 0;
 }
@@ -826,22 +838,26 @@ substrFunc(sql_context * context, int argc, sql_value ** argv)
 	const unsigned char *z;
 	const unsigned char *z2;
 	int len;
-	int p0type;
 	i64 p1, p2;
 	int negP2 = 0;
 
 	if (argc != 2 && argc != 3) {
 		diag_set(ClientError, ER_FUNC_WRONG_ARG_COUNT, "SUBSTR",
-			 "1 or 2", argc);
+			 "2 or 3", argc);
 		context->is_aborted = true;
 		return;
 	}
-	if (sql_value_is_null(argv[1])
-	    || (argc == 3 && sql_value_is_null(argv[2]))
-	    ) {
+	enum mp_type p0type = sql_value_type(argv[0]);
+	enum mp_type mp_type_pos = sql_value_type(argv[1]);
+	if (p0type == MP_NIL || mp_type_pos == MP_NIL)
+		return sql_result_null(context);
+	if (p0type != MP_STR && p0type != MP_BIN) {
+		diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
+			 sql_value_to_diag_str(argv[0]), "string");
+		context->is_aborted = true;
 		return;
 	}
-	p0type = sql_value_type(argv[0]);
+	assert(mp_type_pos == MP_INT || mp_type_pos == MP_UINT);
 	p1 = sql_value_int(argv[1]);
 	if (p0type == MP_BIN) {
 		len = sql_value_bytes(argv[0]);
@@ -858,6 +874,10 @@ substrFunc(sql_context * context, int argc, sql_value ** argv)
 			len = sql_utf8_char_count(z, sql_value_bytes(argv[0]));
 	}
 	if (argc == 3) {
+		enum mp_type mp_type_cnt = sql_value_type(argv[2]);
+		if (mp_type_cnt == MP_NIL)
+			return sql_result_null(context);
+		assert(mp_type_cnt == MP_INT || mp_type_cnt == MP_UINT);
 		p2 = sql_value_int(argv[2]);
 		if (p2 < 0) {
 			p2 = -p2;
@@ -2948,9 +2968,9 @@ static struct {
 	 .finalize = NULL,
 	}, {
 	 .name = "SUBSTR",
-	 .param_count = -1,
+	 .param_count = 3,
 	 .is_var_args = true,
-	 .param_list = &func_no_args,
+	 .param_list = &func_substr_param_list,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,

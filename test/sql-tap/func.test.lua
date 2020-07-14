@@ -194,23 +194,23 @@ test:do_execsql_test(
         -- </func-2.8>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "func-2.9",
     [[
         SELECT substr(a,1,1) FROM t2
     ]], {
         -- <func-2.9>
-        "1", "", "3", "", "6"
+        1, "Type mismatch: can not convert 1 to string"
         -- </func-2.9>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "func-2.10",
     [[
         SELECT substr(a,2,2) FROM t2
     ]], {
         -- <func-2.10>
-        "", "", "45", "", "78"
+        1, "Type mismatch: can not convert 1 to string"
         -- </func-2.10>
     })
 
