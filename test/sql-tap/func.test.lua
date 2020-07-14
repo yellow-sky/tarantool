@@ -502,13 +502,13 @@ test:do_execsql_test(
         -- </func-4.12>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "func-4.13",
     [[
         SELECT round(t1,2) FROM tbl1
     ]], {
         -- <func-4.13>
-        0.0, 0.0, 0.0, 0.0, 0.0
+        1, "Type mismatch: can not convert this to double"
         -- </func-4.13>
     })
 
@@ -2918,7 +2918,7 @@ test:do_catchsql_test(
         SELECT ROUND(X'FF')
     ]], {
         -- <func-76.1>
-        1, "Type mismatch: can not convert varbinary to numeric"
+        1, "Type mismatch: can not convert varbinary to double"
         -- </func-76.1>
     })
 
