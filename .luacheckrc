@@ -33,7 +33,7 @@ exclude_files = {
     -- Third-party source code.
     "src/box/lua/serpent.lua",
     "test-run/**/*.lua",
-    "test/app/**/*.lua",
+    "test/app/*.test.lua",
     "test/box/**/*.lua",
     "test/box-py/**/*.lua",
     "test/box-tap/**/*.lua",
@@ -80,4 +80,7 @@ files["test/app-tap/lua/require_mod.lua"] = {
 }
 files["test/app-tap/string.test.lua"] = {
     globals = {"utf8"}
+}
+files["test/app/lua/fiber.lua"] = {
+    globals = {"box_fiber_run_test"}
 }
