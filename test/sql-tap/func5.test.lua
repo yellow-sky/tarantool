@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(57)
+test:plan(78)
 
 --!./tcltestrunner.lua
 -- 2010 August 27
@@ -540,6 +540,153 @@ test:do_catchsql_test(
         SELECT char(X'3334');
     ]], {
         1, "Type mismatch: can not convert varbinary to unsigned"
+    })
+
+test:do_execsql_test(
+    "func-5-6.6.1", [[
+        SELECT length(NULL);
+    ]],{
+        ""
+    })
+
+test:do_catchsql_test(
+    "func-5-6.6.2", [[
+        SELECT length(123);
+    ]], {
+        1, "Type mismatch: can not convert 123 to string"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.6.3", [[
+        SELECT length(-123);
+    ]], {
+        1, "Type mismatch: can not convert -123 to string"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.6.4", [[
+        SELECT length(-5.5);
+    ]], {
+        1, "Type mismatch: can not convert -5.5 to string"
+    })
+
+test:do_execsql_test(
+    "func-5-6.6.5", [[
+        SELECT length('-123');
+    ]], {
+        4
+    })
+
+test:do_catchsql_test(
+    "func-5-6.6.6", [[
+        SELECT length(false);
+    ]], {
+        1, "Type mismatch: can not convert FALSE to string"
+    })
+
+test:do_execsql_test(
+    "func-5-6.6.7", [[
+        SELECT length(X'3334');
+    ]], {
+        2
+    })
+
+test:do_execsql_test(
+    "func-5-6.7.1", [[
+        SELECT char_length(NULL);
+    ]],{
+        ""
+    })
+
+test:do_catchsql_test(
+    "func-5-6.7.2", [[
+        SELECT char_length(123);
+    ]], {
+        1, "Type mismatch: can not convert 123 to string"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.7.3", [[
+        SELECT char_length(-123);
+    ]], {
+        1, "Type mismatch: can not convert -123 to string"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.7.4", [[
+        SELECT char_length(-5.5);
+    ]], {
+        1, "Type mismatch: can not convert -5.5 to string"
+    })
+
+test:do_execsql_test(
+    "func-5-6.7.5", [[
+        SELECT char_length('-123');
+    ]], {
+        4
+    })
+
+test:do_catchsql_test(
+    "func-5-6.7.6", [[
+        SELECT char_length(false);
+    ]], {
+        1, "Type mismatch: can not convert FALSE to string"
+    })
+
+test:do_execsql_test(
+    "func-5-6.7.7", [[
+        SELECT char_length(X'3334');
+    ]], {
+        2
+    })
+
+test:do_execsql_test(
+    "func-5-6.8.1", [[
+        SELECT character_length(NULL);
+    ]],{
+        ""
+    })
+
+test:do_catchsql_test(
+    "func-5-6.8.2", [[
+        SELECT character_length(123);
+    ]], {
+        1, "Type mismatch: can not convert 123 to string"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.8.3", [[
+        SELECT character_length(-123);
+    ]], {
+        1, "Type mismatch: can not convert -123 to string"
+    })
+
+test:do_catchsql_test(
+    "func-5-6.8.4", [[
+        SELECT character_length(-5.5);
+    ]], {
+        1, "Type mismatch: can not convert -5.5 to string"
+    })
+
+test:do_execsql_test(
+    "func-5-6.8.5", [[
+        SELECT character_length('-123');
+    ]], {
+        4
+    })
+
+test:do_catchsql_test(
+    "func-5-6.8.6", [[
+        SELECT character_length(false);
+    ]], {
+        1, "Type mismatch: can not convert FALSE to string"
+    })
+
+test:do_execsql_test(
+    "func-5-6.8.7", [[
+        SELECT character_length(X'3334');
+    ]], {
+        2
     })
 
 test:finish_test()
