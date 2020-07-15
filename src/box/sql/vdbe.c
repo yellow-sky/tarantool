@@ -2577,22 +2577,17 @@ case OP_Ge: {             /* same as TK_GE, jump, in1, in3 */
 	} else {
 		enum field_type type = pOp->p5 & FIELD_TYPE_MASK;
 		if (sql_type_is_numeric(type)) {
-			if ((flags1 | flags3)&MEM_Str) {
-				if ((flags1 & MEM_Str) == MEM_Str) {
-					mem_apply_numeric_type(pIn1);
-					testcase( flags3!=pIn3->flags); /* Possible if pIn1==pIn3 */
-					flags3 = pIn3->flags;
-				}
-				if ((flags3 & MEM_Str) == MEM_Str) {
-					if (mem_apply_numeric_type(pIn3) != 0) {
-						diag_set(ClientError,
-							 ER_SQL_TYPE_MISMATCH,
-							 sql_value_to_diag_str(pIn3),
-							 "numeric");
-						goto abort_due_to_error;
-					}
-
-				}
+			if ((flags1 & MEM_Str) == MEM_Str) {
+				diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
+					 sql_value_to_diag_str(pIn1),
+					 "numeric");
+				goto abort_due_to_error;
+			}
+			if ((flags3 & MEM_Str) == MEM_Str) {
+				diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
+					 sql_value_to_diag_str(pIn3),
+					 "numeric");
+				goto abort_due_to_error;
 			}
 			/* Handle the common case of integer comparison here, as an
 			 * optimization, to avoid a call to sqlMemCompare()
@@ -2625,22 +2620,17 @@ case OP_Ge: {             /* same as TK_GE, jump, in1, in3 */
 				goto compare_op;
 			}
 		} else if (type == FIELD_TYPE_STRING) {
-			if ((flags1 & MEM_Str) == 0 &&
-			    (flags1 & (MEM_Int | MEM_UInt | MEM_Real)) != 0) {
-				testcase( pIn1->flags & MEM_Int);
-				testcase( pIn1->flags & MEM_Real);
-				sqlVdbeMemStringify(pIn1);
-				testcase( (flags1&MEM_Dyn) != (pIn1->flags&MEM_Dyn));
-				flags1 = (pIn1->flags & ~MEM_TypeMask) | (flags1 & MEM_TypeMask);
-				assert(pIn1!=pIn3);
+			if ((flags1 & MEM_Str) == 0) {
+				diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
+					 mem_type_to_str(pIn3),
+					 mem_type_to_str(pIn1));
+				goto abort_due_to_error;
 			}
-			if ((flags3 & MEM_Str) == 0 &&
-			    (flags3 & (MEM_Int | MEM_UInt | MEM_Real)) != 0) {
-				testcase( pIn3->flags & MEM_Int);
-				testcase( pIn3->flags & MEM_Real);
-				sqlVdbeMemStringify(pIn3);
-				testcase( (flags3&MEM_Dyn) != (pIn3->flags&MEM_Dyn));
-				flags3 = (pIn3->flags & ~MEM_TypeMask) | (flags3 & MEM_TypeMask);
+			if ((flags3 & MEM_Str) == 0) {
+				diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
+					 mem_type_to_str(pIn1),
+					 mem_type_to_str(pIn3));
+				goto abort_due_to_error;
 			}
 		}
 		assert(pOp->p4type==P4_COLLSEQ || pOp->p4.pColl==0);
