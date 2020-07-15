@@ -2309,6 +2309,8 @@ struct Parse {
 					 */
 /** OP_ApplyType: Treat BLOB as STRING. */
 #define OPFLAG_BLOB_LIKE_STRING		0x01
+/** OP_ApplyType: Do not convert numbers. */
+#define OPFLAG_DO_NOT_CONVERT_NUMBERS	0x02
 
 /**
  * Prepare vdbe P5 flags for OP_{IdxInsert, IdxReplace, Update}
