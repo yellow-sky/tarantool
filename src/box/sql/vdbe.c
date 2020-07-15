@@ -3350,7 +3350,7 @@ case OP_Close: {
 	break;
 }
 
-/* Opcode: SeekGE P1 P2 P3 P4 P5
+/* Opcode: SeekGE P1 P2 P3 P4 *
  * Synopsis: key=r[P3@P4]
  *
  * If cursor P1 refers to an SQL table (B-Tree that uses integer keys),
@@ -3373,14 +3373,9 @@ case OP_Close: {
  * from the beginning toward the end.  In other words, the cursor is
  * configured to use Next, not Prev.
  *
- * If P5 is not zero, than it is offset of integer fields in input
- * vector. Force corresponding value to be INTEGER, in case it
- * is floating point value. Alongside with that, type of
- * iterator may be changed: a > 1.5 -> a >= 2.
- *
  * See also: Found, NotFound, SeekLt, SeekGt, SeekLe
  */
-/* Opcode: SeekGT P1 P2 P3 P4 P5
+/* Opcode: SeekGT P1 P2 P3 P4 *
  * Synopsis: key=r[P3@P4]
  *
  * If cursor P1 refers to an SQL table (B-Tree that uses integer keys),
@@ -3396,12 +3391,9 @@ case OP_Close: {
  * from the beginning toward the end.  In other words, the cursor is
  * configured to use Next, not Prev.
  *
- * If P5 is not zero, than it is offset of integer fields in input
- * vector. Force corresponding value to be INTEGER.
- *
- * P5 has the same meaning as for SeekGE.
+ * See also: Found, NotFound, SeekLt, SeekGe, SeekLe
  */
-/* Opcode: SeekLT P1 P2 P3 P4 P5
+/* Opcode: SeekLT P1 P2 P3 P4 *
  * Synopsis: key=r[P3@P4]
  *
  * If cursor P1 refers to an SQL table (B-Tree that uses integer keys),
@@ -3417,11 +3409,9 @@ case OP_Close: {
  * from the end toward the beginning.  In other words, the cursor is
  * configured to use Prev, not Next.
  *
- * P5 has the same meaning as for SeekGE.
- *
  * See also: Found, NotFound, SeekGt, SeekGe, SeekLe
  */
-/* Opcode: SeekLE P1 P2 P3 P4 P5
+/* Opcode: SeekLE P1 P2 P3 P4 *
  * Synopsis: key=r[P3@P4]
  *
  * If cursor P1 refers to an SQL table (B-Tree that uses integer keys),
@@ -3444,8 +3434,6 @@ case OP_Close: {
  * The IdxGE opcode will be skipped if this opcode succeeds, but the
  * IdxGE opcode will be used on subsequent loop iterations.
  *
- * P5 has the same meaning as for SeekGE.
- *
  * See also: Found, NotFound, SeekGt, SeekGe, SeekLt
  */
 case OP_SeekLT:         /* jump, in3 */
@@ -3457,7 +3445,6 @@ case OP_SeekGT: {       /* jump, in3 */
 	VdbeCursor *pC;    /* The cursor to seek */
 	UnpackedRecord r;  /* The key to seek for */
 	int nField;        /* Number of columns or fields in the key */
-	i64 iKey;          /* The id we are to seek to */
 	int eqOnly;        /* Only interested in == results */
 
 	assert(pOp->p1>=0 && pOp->p1<p->nCursor);
@@ -3475,86 +3462,6 @@ case OP_SeekGT: {       /* jump, in3 */
 #ifdef SQL_DEBUG
 	pC->seekOp = pOp->opcode;
 #endif
-	iKey = 0;
-	/*
-	 * In case floating value is intended to be passed to
-	 * iterator over integer field, we must truncate it to
-	 * integer value and change type of iterator:
-	 * a > 1.5 -> a >= 2
-	 */
-	int int_field = pOp->p5;
-	bool is_neg = false;
-
-	if (int_field > 0) {
-		/* The input value in P3 might be of any type: integer, real, string,
-		 * blob, or NULL.  But it needs to be an integer before we can do
-		 * the seek, so convert it.
-		 */
-		pIn3 = &aMem[int_field];
-		if ((pIn3->flags & MEM_Null) != 0)
-			goto skip_truncate;
-		if ((pIn3->flags & MEM_Str) != 0)
-			mem_apply_numeric_type(pIn3);
-		int64_t i;
-		if ((pIn3->flags & MEM_Int) == MEM_Int) {
-			i = pIn3->u.i;
-			is_neg = true;
-		} else if ((pIn3->flags & MEM_UInt) == MEM_UInt) {
-			i = pIn3->u.u;
-			is_neg = false;
-		} else if ((pIn3->flags & MEM_Real) == MEM_Real) {
-			if (pIn3->u.r > INT64_MAX)
-				i = INT64_MAX;
-			else if (pIn3->u.r < INT64_MIN)
-				i = INT64_MIN;
-			else
-				i = pIn3->u.r;
-			is_neg = i < 0;
-		} else {
-			diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
-				 sql_value_to_diag_str(pIn3), "integer");
-			goto abort_due_to_error;
-		}
-		iKey = i;
-
-		/* If the P3 value could not be converted into an integer without
-		 * loss of information, then special processing is required...
-		 */
-		if ((pIn3->flags & (MEM_Int | MEM_UInt)) == 0) {
-			if ((pIn3->flags & MEM_Real)==0) {
-				/* If the P3 value cannot be converted into any kind of a number,
-				 * then the seek is not possible, so jump to P2
-				 */
-				VdbeBranchTaken(1,2); goto jump_to_p2;
-				break;
-			}
-
-			/* If the approximation iKey is larger than the actual real search
-			 * term, substitute >= for > and < for <=. e.g. if the search term
-			 * is 4.9 and the integer approximation 5:
-			 *
-			 *        (x >  4.9)    ->     (x >= 5)
-			 *        (x <= 4.9)    ->     (x <  5)
-			 */
-			if (pIn3->u.r<(double)iKey) {
-				assert(OP_SeekGE==(OP_SeekGT-1));
-				assert(OP_SeekLT==(OP_SeekLE-1));
-				assert((OP_SeekLE & 0x0001)==(OP_SeekGT & 0x0001));
-				if ((oc & 0x0001)==(OP_SeekGT & 0x0001)) oc--;
-			}
-
-			/* If the approximation iKey is smaller than the actual real search
-			 * term, substitute <= for < and > for >=.
-			 */
-			else if (pIn3->u.r>(double)iKey) {
-				assert(OP_SeekLE==(OP_SeekLT+1));
-				assert(OP_SeekGT==(OP_SeekGE+1));
-				assert((OP_SeekLT & 0x0001)==(OP_SeekGE & 0x0001));
-				if ((oc & 0x0001)==(OP_SeekLT & 0x0001)) oc++;
-			}
-		}
-	}
-skip_truncate:
 	/*
 	 * For a cursor with the OPFLAG_SEEKEQ hint, only the
 	 * OP_SeekGE and OP_SeekLE opcodes are allowed, and these
@@ -3576,9 +3483,6 @@ skip_truncate:
 	assert(nField>0);
 	r.key_def = pC->key_def;
 	r.nField = (u16)nField;
-
-	if (int_field > 0)
-		mem_set_int(&aMem[int_field], iKey, is_neg);
 
 	r.default_rc = ((1 & (oc - OP_SeekLT)) ? -1 : +1);
 	assert(oc!=OP_SeekGT || r.default_rc==-1);
