@@ -2795,3 +2795,114 @@ box.execute([[DROP TABLE ts;]])
 ---
 - row_count: 1
 ...
+--
+-- gh-4230: Make sure the comparison between numbers that use
+-- index is working correctly.
+--
+box.execute([[CREATE TABLE t (i INTEGER PRIMARY KEY, a DOUBLE UNIQUE);]])
+---
+- row_count: 1
+...
+box.execute([[INSERT INTO t VALUES (1, ?);]], {2^60})
+---
+- row_count: 1
+...
+box.execute([[EXPLAIN QUERY PLAN SELECT * FROM t WHERE i > ?]], {2^70})
+---
+- metadata:
+  - name: selectid
+    type: integer
+  - name: order
+    type: integer
+  - name: from
+    type: integer
+  - name: detail
+    type: text
+  rows:
+  - [0, 0, 0, 'SEARCH TABLE T USING PRIMARY KEY (I>?) (~262144 rows)']
+...
+box.execute([[SELECT * FROM t WHERE i > ?]], {2^70})
+---
+- metadata:
+  - name: I
+    type: integer
+  - name: A
+    type: double
+  rows: []
+...
+box.execute([[EXPLAIN QUERY PLAN SELECT * FROM t WHERE i > ?]], {-2^70})
+---
+- metadata:
+  - name: selectid
+    type: integer
+  - name: order
+    type: integer
+  - name: from
+    type: integer
+  - name: detail
+    type: text
+  rows:
+  - [0, 0, 0, 'SEARCH TABLE T USING PRIMARY KEY (I>?) (~262144 rows)']
+...
+box.execute([[SELECT * FROM t WHERE i > ?]], {-2^70})
+---
+- metadata:
+  - name: I
+    type: integer
+  - name: A
+    type: double
+  rows:
+  - [1, 1152921504606846976]
+...
+box.execute([[EXPLAIN QUERY PLAN SELECT * FROM t WHERE a = ?]], {2ULL^60ULL - 1ULL})
+---
+- metadata:
+  - name: selectid
+    type: integer
+  - name: order
+    type: integer
+  - name: from
+    type: integer
+  - name: detail
+    type: text
+  rows:
+  - [0, 0, 0, 'SEARCH TABLE T USING COVERING INDEX unique_unnamed_T_2 (A=?) (~1 row)']
+...
+box.execute([[SELECT * FROM t WHERE a = ?]], {2ULL^60ULL - 1ULL})
+---
+- metadata:
+  - name: I
+    type: integer
+  - name: A
+    type: double
+  rows: []
+...
+box.execute([[EXPLAIN QUERY PLAN SELECT * FROM t WHERE a > ?]], {2ULL^60ULL - 1ULL})
+---
+- metadata:
+  - name: selectid
+    type: integer
+  - name: order
+    type: integer
+  - name: from
+    type: integer
+  - name: detail
+    type: text
+  rows:
+  - [0, 0, 0, 'SEARCH TABLE T USING COVERING INDEX unique_unnamed_T_2 (A>?) (~262144
+      rows)']
+...
+box.execute([[SELECT * FROM t WHERE a > ?]], {2ULL^60ULL - 1ULL})
+---
+- metadata:
+  - name: I
+    type: integer
+  - name: A
+    type: double
+  rows:
+  - [1, 1152921504606846976]
+...
+box.execute([[DROP TABLE t;]])
+---
+- row_count: 1
+...
