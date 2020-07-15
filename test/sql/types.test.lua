@@ -623,3 +623,15 @@ box.execute([[DROP TABLE tb;]])
 box.execute([[DROP TABLE tt;]])
 box.execute([[DROP TABLE tv;]])
 box.execute([[DROP TABLE ts;]])
+
+--
+-- gh-4230: Make sure the comparison between numbers that use
+-- index is working correctly.
+--
+box.execute([[CREATE TABLE t (i INTEGER PRIMARY KEY, a DOUBLE);]])
+box.execute([[INSERT INTO t VALUES (1, ?);]], {2^60})
+box.execute([[SELECT * FROM t WHERE i > ?]], {2^70})
+box.execute([[SELECT * FROM t WHERE i > ?]], {-2^70})
+box.execute([[SELECT * FROM t WHERE a = ?]], {2ULL^60ULL - 1ULL})
+box.execute([[SELECT * FROM t WHERE a > ?]], {2ULL^60ULL - 1ULL})
+box.execute([[DROP TABLE t;]])

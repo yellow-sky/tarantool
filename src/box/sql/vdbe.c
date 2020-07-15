@@ -3137,7 +3137,8 @@ case OP_ApplyType: {
 			if (!mp_type_is_numeric(mem_mp_type(pIn1)))
 				goto type_mismatch;
 			/* Try to convert numeric-to-numeric. */
-			if (mem_convert_to_numeric(pIn1, type) != 0)
+			if ((pOp->p5 & OPFLAG_DO_NOT_CONVERT_NUMBERS) == 0 &&
+			    mem_convert_to_numeric(pIn1, type) != 0)
 				goto type_mismatch;
 		}
 		pIn1++;

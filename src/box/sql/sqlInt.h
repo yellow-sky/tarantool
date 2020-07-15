@@ -2307,6 +2307,8 @@ struct Parse {
 #define OPFLAG_SYSTEMSP      0x20	/* OP_Open**: set if space pointer
 					 * points to system space.
 					 */
+/** OP_ApplyType: Do not convert numbers. */
+#define OPFLAG_DO_NOT_CONVERT_NUMBERS	0x01
 
 /**
  * Prepare vdbe P5 flags for OP_{IdxInsert, IdxReplace, Update}

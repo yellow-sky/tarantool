@@ -2775,3 +2775,57 @@ box.execute([[DROP TABLE ts;]])
 ---
 - row_count: 1
 ...
+--
+-- gh-4230: Make sure the comparison between numbers that use
+-- index is working correctly.
+--
+box.execute([[CREATE TABLE t (i INTEGER PRIMARY KEY, a DOUBLE);]])
+---
+- row_count: 1
+...
+box.execute([[INSERT INTO t VALUES (1, ?);]], {2^60})
+---
+- row_count: 1
+...
+box.execute([[SELECT * FROM t WHERE i > ?]], {2^70})
+---
+- metadata:
+  - name: I
+    type: integer
+  - name: A
+    type: double
+  rows: []
+...
+box.execute([[SELECT * FROM t WHERE i > ?]], {-2^70})
+---
+- metadata:
+  - name: I
+    type: integer
+  - name: A
+    type: double
+  rows:
+  - [1, 1152921504606846976]
+...
+box.execute([[SELECT * FROM t WHERE a = ?]], {2ULL^60ULL - 1ULL})
+---
+- metadata:
+  - name: I
+    type: integer
+  - name: A
+    type: double
+  rows: []
+...
+box.execute([[SELECT * FROM t WHERE a > ?]], {2ULL^60ULL - 1ULL})
+---
+- metadata:
+  - name: I
+    type: integer
+  - name: A
+    type: double
+  rows:
+  - [1, 1152921504606846976]
+...
+box.execute([[DROP TABLE t;]])
+---
+- row_count: 1
+...
