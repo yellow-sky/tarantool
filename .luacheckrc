@@ -45,7 +45,7 @@ exclude_files = {
     "test/engine_long/*.test.lua",
     "test/replication/*.test.lua",
     "test/sql-tap/**/*.lua",
-    "test/sql/**/*.lua",
+    "test/sql/*.test.lua",
     "test/swim/**/*.lua",
     "test/var/**/*.lua",
     "test/vinyl/**/*.lua",
@@ -201,4 +201,38 @@ files["test/replication/lua/fast_replica.lua"] = {
         "wait",
         "wait_all",
     },
+}
+files["test/sql-tap/*.lua"] = {
+    ignore = {
+        -- Setting an undefined global variable.
+        -- https://github.com/tarantool/tarantool/issues/5173
+        "111",
+        -- Accessing an undefined global variable.
+        -- https://github.com/tarantool/tarantool/issues/5174
+        "113",
+        -- Unused local variable.
+        -- https://github.com/tarantool/tarantool/issues/5175
+        "211",
+        -- A line consists of nothing but whitespace.
+        -- https://github.com/tarantool/tarantool/issues/5176
+        "611",
+        -- A line contains trailing whitespace.
+        -- https://github.com/tarantool/tarantool/issues/5177
+        "612",
+        -- Trailing whitespace in a string.
+        -- https://github.com/tarantool/tarantool/issues/5178
+        "613",
+        -- Trailing whitespace in a comment.
+        -- https://github.com/tarantool/tarantool/issues/5179
+        "614",
+        -- Inconsistent indentation (SPACE followed by TAB).
+        -- https://github.com/tarantool/tarantool/issues/5180
+        "621",
+        -- Line is too long.
+        -- https://github.com/tarantool/tarantool/issues/5181
+        "631"
+    }
+}
+files["test/sql-tap/lua/sqltester.lua"] = {
+    globals = {"table_match_regex_p"}
 }
