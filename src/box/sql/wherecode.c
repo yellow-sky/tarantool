@@ -910,10 +910,6 @@ sqlWhereCodeOneLoopStart(WhereInfo * pWInfo,	/* Complete information about the W
 		enum field_type *end_types = NULL;
 		u8 bSeekPastNull = 0;	/* True to seek past initial nulls */
 		u8 bStopAtNull = 0;	/* Add condition to terminate at NULLs */
-		int force_integer_reg = -1;  /* If non-negative: number of
-					      * column which must be converted
-					      * to integer type, used for IPK.
-					      */
 
 		struct index_def *idx_def = pLoop->index_def;
 		assert(idx_def != NULL);
@@ -1120,21 +1116,6 @@ sqlWhereCodeOneLoopStart(WhereInfo * pWInfo,	/* Complete information about the W
 							   1);
 			}
 		}
-		/* Inequality constraint comes always at the end of list. */
-		part_count = idx_def->key_def->part_count;
-		if (pRangeStart != NULL) {
-			/*
-			 * nEq == 0 means that filter condition
-			 * contains only inequality.
-			 */
-			uint32_t ineq_idx = nEq == 0 ? 0 : nEq - 1;
-			assert(ineq_idx < part_count);
-			enum field_type ineq_type =
-				idx_def->key_def->parts[ineq_idx].type;
-			if (ineq_type == FIELD_TYPE_INTEGER ||
-			    ineq_type == FIELD_TYPE_UNSIGNED)
-				force_integer_reg = regBase + nEq;
-		}
 		emit_apply_type(pParse, regBase, nConstraint - bSeekPastNull,
 				start_types);
 		if (pLoop->nSkip > 0 && nConstraint == pLoop->nSkip) {
@@ -1152,14 +1133,6 @@ sqlWhereCodeOneLoopStart(WhereInfo * pWInfo,	/* Complete information about the W
 			}
 			sqlVdbeAddOp4Int(v, op, iIdxCur, addrNxt, regBase,
 					     nConstraint);
-			/* If this is Seek* opcode, and IPK is detected in the
-			 * constraints vector: force it to be integer.
-			 */
-			if ((op == OP_SeekGE || op == OP_SeekGT
-			    || op == OP_SeekLE || op == OP_SeekLT)
-			    && force_integer_reg > 0) {
-				sqlVdbeChangeP5(v, force_integer_reg);
-			}
 			VdbeCoverage(v);
 			VdbeCoverageIf(v, op == OP_Rewind);
 			testcase(op == OP_Rewind);
