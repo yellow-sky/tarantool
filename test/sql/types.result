@@ -608,11 +608,8 @@ box.execute("SELECT 18446744073709551615.0 > 18446744073709551615")
 ...
 box.execute("SELECT 18446744073709551615 IN ('18446744073709551615', 18446744073709551615.0)")
 ---
-- metadata:
-  - name: COLUMN_1
-    type: boolean
-  rows:
-  - [true]
+- null
+- 'Type mismatch: can not convert 18446744073709551615 to numeric'
 ...
 box.execute("SELECT 1 LIMIT 18446744073709551615;")
 ---
