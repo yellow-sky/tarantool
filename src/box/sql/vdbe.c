@@ -522,6 +522,235 @@ mem_convert_to_numeric(struct Mem *mem, enum field_type type)
 	return mem_convert_to_integer(mem);
 }
 
+/**
+ * Check if it is possible to convert numeric value to given numeric type
+ * without precision loss.
+ *
+ * @param mem The MEM that contains the numeric value.
+ * @param type Field type.
+ * @retval true if conversion can be performed without precision loss, false
+ *         otherwise.
+ */
+static bool
+mem_is_convertion_lossless(struct Mem *mem, enum field_type type)
+{
+	enum mp_type mp_type = mem_mp_type(mem);
+	assert(sql_type_is_numeric(type) && mp_type_is_numeric(mp_type));
+	assert(!mem_is_type_compatible(mem, type));
+	if (type == FIELD_TYPE_UNSIGNED) {
+		if (mp_type == MP_INT)
+			return false;
+		assert(mp_type == MP_DOUBLE);
+		double d = mem->u.r;
+		if (d >= 0.0 && d < (double)UINT64_MAX &&
+		    d == (double)(uint64_t)d)
+			return true;
+		return false;
+	}
+	if (type == FIELD_TYPE_INTEGER) {
+		assert(mp_type == MP_DOUBLE);
+		double d = mem->u.r;
+		if (d < (double)INT64_MIN || d > (double)UINT64_MAX)
+			return false;
+		if (d < 0.0 && d == (double)(int64_t)d)
+			return true;
+		if (d >= 0.0 && d == (double)(uint64_t)d)
+			return true;
+		return false;
+	}
+	assert(type == FIELD_TYPE_DOUBLE);
+	if (mp_type == MP_INT && mem->u.i == (int64_t)(double)mem->u.i)
+		return true;
+	if (mp_type == MP_UINT && mem->u.u == (uint64_t)(double)mem->u.u)
+		return true;
+	return false;
+}
+
+static inline int
+new_comparison_operation(int oc, bool has_value_increased)
+{
+	if (has_value_increased) {
+		if (oc == OP_SeekGT)
+			return OP_SeekGE;
+		if (oc == OP_SeekLE)
+			return OP_SeekLT;
+		return oc;
+	}
+	if (oc == OP_SeekGE)
+		return OP_SeekGT;
+	if (oc == OP_SeekLT)
+		return OP_SeekLE;
+	return oc;
+}
+
+/**
+ * Convert the numeric value contained in the MEM to UNSIGNED. If successful
+ * mem is always of field type UNSIGNED after this function. Operation given to
+ * this function is one of four: '>', '>=', '<', '<='. Operations '==' and '!='
+ * are not included. Due to conversion operation may change.
+ *
+ * Main rules of the conversion:
+ * a) If conversion can be done without precision loss, it is done. Nothing else
+ * changes.
+ * b) If after conversion value becomes less than before, operation '>=' changed
+ * to '>' and operation '<' changed to '<='.
+ * c) If after conversion value becomes more than before, operation '>' changed
+ * to '>=' and operation '<=' changed to '<'.
+ *
+ * Additional rules:
+ * - If value is less than 0 it becomes 0 and rule 'c' applied.
+ * - If value is more than UINT64_MAX it becomes UINT64_MAX and rule 'b'
+ * applied.
+ *
+ * @param mem The MEM that contains the numeric value.
+ * @param[out] oc Operation code.
+ * @retval 0 if the conversion was successful, -1 otherwise.
+ */
+static int
+mem_prepare_for_cmp_to_uint(struct Mem *mem, int *oc)
+{
+	enum mp_type type = mem_mp_type(mem);
+	if (type == MP_INT) {
+		mem_set_u64(mem, 0);
+		*oc = new_comparison_operation(*oc, true);
+		return 0;
+	}
+	assert(type == MP_DOUBLE);
+	double d = mem->u.r;
+	if (d < 0.0) {
+		mem_set_u64(mem, 0);
+		*oc = new_comparison_operation(*oc, true);
+		return 0;
+	}
+	if (d >= (double)UINT64_MAX) {
+		mem_set_u64(mem, UINT64_MAX);
+		*oc = new_comparison_operation(*oc, false);
+		return 0;
+	}
+	if (d == (double)(uint64_t)d)
+		return mem_convert_to_unsigned(mem);
+	assert(d > (double)(uint64_t)d);
+	*oc = new_comparison_operation(*oc, false);
+	return mem_convert_to_unsigned(mem);
+}
+
+/**
+ * Convert the numeric value contained in the MEM to INTEGER. If successful
+ * mem is always of field type INTEGER after this function. Operation given to
+ * this function is one of four: '>', '>=', '<', '<='. Operations '==' and '!='
+ * are not included. Due to conversion operation may change.
+ *
+ * Main rules of the conversion:
+ * a) If conversion can be done without precision loss, it is done. Nothing else
+ * changes.
+ * b) If after conversion value becomes less than before, operation '>=' changed
+ * to '>' and operation '<' changed to '<='.
+ * c) If after conversion value becomes more than before, operation '>' changed
+ * to '>=' and operation '<=' changed to '<'.
+ *
+ * Additional rules:
+ * - If value is less than INT64_MIN it becomes INT64_MIN and rule 'c' applied.
+ * - If value is more than UINT64_MAX it becomes UINT64_MAX and rule 'b'
+ * applied.
+ *
+ * @param mem The MEM that contains the numeric value.
+ * @param[out] oc Operation code.
+ * @retval 0 if the conversion was successful, -1 otherwise.
+ */
+static int
+mem_prepare_for_cmp_to_int(struct Mem *mem, int *oc)
+{
+	assert(mem_mp_type(mem) == MP_DOUBLE);
+	double d = mem->u.r;
+	if (d < (double)INT64_MIN) {
+		mem_set_i64(mem, INT64_MIN);
+		*oc = new_comparison_operation(*oc, true);
+		return 0;
+	}
+	if (d >= (double)UINT64_MAX) {
+		mem_set_u64(mem, UINT64_MAX);
+		*oc = new_comparison_operation(*oc, false);
+		return 0;
+	}
+	if (d >= 0.0 && d == (double)(uint64_t)d)
+		return mem_convert_to_integer(mem);
+	if (d < 0.0 && d == (double)(int64_t)d)
+		return mem_convert_to_integer(mem);
+	bool has_increased = d < 0.0 && (double)(int64_t)d < d;
+	*oc = new_comparison_operation(*oc, has_increased);
+	return mem_convert_to_integer(mem);
+}
+
+/**
+ * Convert the numeric value contained in the MEM to DOUBLE. If successful
+ * mem is always of field type DOUBLE after this procedure. Operation given to
+ * this function is one of four: '>', '>=', '<', '<='. Operations '==' and '!='
+ * are not included. Due to conversion operation may change.
+ *
+ * Rules of the conversion:
+ * a) If conversion can be done without precision loss, it is done. Nothing else
+ * changes.
+ * b) If after conversion value becomes less than before, operation '>=' changed
+ * to '>' and operation '<' changed to '<='.
+ * c) If after conversion value becomes more than before, operation '>' changed
+ * to '>=' and operation '<=' changed to '<'.
+ *
+ * @param mem The MEM that contains the numeric value.
+ * @param[out] oc Operation code.
+ * @retval 0 if the conversion was successful, -1 otherwise.
+ */
+static int
+mem_prepare_for_cmp_to_double(struct Mem *mem, int *oc)
+{
+	enum mp_type type = mem_mp_type(mem);
+	bool has_increased;
+	if (type == MP_INT) {
+		int64_t i = mem->u.i;
+		if (i == (int64_t)(double)i)
+			return mem_convert_to_double(mem);
+		double d = (double)i;
+		has_increased = d == (double)INT64_MAX || i < (int64_t)d;
+		*oc = new_comparison_operation(*oc, has_increased);
+	} else {
+		uint64_t u = mem->u.u;
+		if (u == (uint64_t)(double)u)
+			return mem_convert_to_double(mem);
+		double d = (double)u;
+		has_increased = d == (double)UINT64_MAX || u < (uint64_t)d;
+	}
+	*oc = new_comparison_operation(*oc, has_increased);
+	return mem_convert_to_double(mem);
+}
+
+/**
+ * Convert the numeric value contained in the MEM to another numeric type
+ * according to the specified operation. If successful, we will get the MEM of
+ * given field type. Due to conversion operation may change.
+ *
+ * Rules of the conversion:
+ * a) If conversion can be done without precision loss, it is done. Nothing else
+ * changes.
+ * b) If after conversion value becomes less than before, operation '>=' changed
+ * to '>' and operation '<' changed to '<='.
+ * c) If after conversion value becomes more than before, operation '>' changed
+ * to '>=' and operation '<=' changed to '<'.
+ *
+ * @param mem The MEM that contains the numeric value.
+ * @param type The field type to convert to.
+ * @param[out] oc Operation code.
+ * @retval 0 if the conversion was successful, -1 otherwise.
+ */
+static int
+mem_prepare_for_cmp(struct Mem *mem, enum field_type type, int *oc)
+{
+	if (type == FIELD_TYPE_UNSIGNED)
+		return mem_prepare_for_cmp_to_uint(mem, oc);
+	if (type == FIELD_TYPE_INTEGER)
+		return mem_prepare_for_cmp_to_int(mem, oc);
+	assert(type == FIELD_TYPE_DOUBLE);
+	return mem_prepare_for_cmp_to_double(mem, oc);
+}
+
 /*
  * pMem currently only holds a string type (or maybe a BLOB that we can
  * interpret as a string if we want to).  Compute its corresponding
@@ -3491,6 +3720,66 @@ case OP_SeekGT: {       /* jump, in3 */
 	assert(oc!=OP_SeekLT || r.default_rc==+1);
 
 	r.aMem = &aMem[pOp->p3];
+	bool is_on_region = false;
+	for (int i = 0; i < r.nField; ++i) {
+		struct Mem *mem = &r.aMem[i];
+		enum field_type type = r.key_def->parts[i].type;
+		/*
+		 * Comparison possible only if MEM_type and field type are
+		 * compatible or both are numeric. In the second case we need to
+		 * convert MEM to field type.
+		 */
+		if (mem_is_type_compatible(mem, type))
+			continue;
+		/*
+		 * Since OP_ApplyType was applied prior to this opcode, we can
+		 * say that the only case where MEM_type and type incompatible,
+		 * but comparable, is when MEM contains a numeric value and type
+		 * is a numeric type.
+		 */
+		assert(mp_type_is_numeric(mem_mp_type(mem)) &&
+		       sql_type_is_numeric(type));
+		/*
+		 * We cannot make changes to original MEMs since they will be
+		 * used in OP_Idx*. We should copy them and make changes to the
+		 * copies.
+		 */
+		if (!is_on_region) {
+			uint32_t size = sizeof(struct Mem) * r.nField;
+			r.aMem = region_aligned_alloc(&fiber()->gc, size,
+						      alignof(struct Mem));
+			if (r.aMem == NULL) {
+				diag_set(OutOfMemory, size,
+					 "region_aligned_alloc", "r.aMem");
+				goto abort_due_to_error;
+			}
+			memcpy(r.aMem, &aMem[pOp->p3], size);
+			is_on_region = true;
+			mem = &r.aMem[i];
+		}
+		/*
+		 * In case our operation is EQ we may convert value only if
+		 * convertion is lossless. In any other case we may receive
+		 * wrong result. If convertion is not lossless we may say that
+		 * we will find nothing. For example 1.5 != any integer.
+		 */
+		if (eqOnly == 1) {
+			if (!mem_is_convertion_lossless(mem, type)) {
+				res = 1;
+				goto seek_not_found;
+			}
+			mem_convert_to_numeric(mem, type);
+		} else {
+			if (mem_prepare_for_cmp(mem, type, &oc) != 0) {
+				diag_set(ClientError,
+					 ER_SQL_TYPE_MISMATCH,
+					 sql_value_to_diag_str(mem),
+					 field_type_strs[type]);
+				goto abort_due_to_error;
+			}
+		}
+	}
+
 #ifdef SQL_DEBUG
 	{ int i; for(i=0; i<r.nField; i++) assert(memIsValid(&r.aMem[i])); }
 #endif
