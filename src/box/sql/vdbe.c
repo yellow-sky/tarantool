@@ -522,6 +522,268 @@ mem_convert_to_numeric(struct Mem *mem, enum field_type type)
 	return mem_convert_to_integer(mem);
 }
 
+/**
+ * Convert the numeric value contained in the MEM to UNSIGNED.
+ * @see mem_prepare_for_cmp() for more info.
+ *
+ * @param mem The MEM that contains the numeric value.
+ * @param[in][out] oc Operation code.
+ * @retval 0 if the conversion was successful, -1 otherwise.
+ */
+static int
+mem_prepare_for_cmp_to_uint(struct Mem *mem, int *oc, int eqOnly)
+{
+	if ((mem->flags & MEM_Int) != 0) {
+		if (eqOnly == 1)
+			return 0;
+		if (*oc == OP_SeekGT) {
+			mem_set_u64(mem, 0);
+			*oc = OP_SeekGE;
+			return 0;
+		}
+		if (*oc == OP_SeekGE) {
+			mem_set_u64(mem, 0);
+			return 0;
+		}
+		if (*oc == OP_SeekLT)
+			return 0;
+		assert(*oc == OP_SeekLE);
+		return 0;
+	}
+	assert((mem->flags & MEM_Real) != 0);
+	double d = mem->u.r;
+	if (d >= 0.0 && d < (double)UINT64_MAX && d == (double)(uint64_t)d)
+		return mem_convert_to_unsigned(mem);
+	if (eqOnly == 1)
+		return 0;
+	if (*oc == OP_SeekGT) {
+		if (d >= (double)UINT64_MAX)
+			return 0;
+		if (d < 0) {
+			mem_set_u64(mem, 0);
+			*oc = OP_SeekGE;
+			return 0;
+		}
+		assert((double)(uint64_t)d < d);
+		return mem_convert_to_unsigned(mem);
+	}
+	if (*oc == OP_SeekGE) {
+		if (d >= (double)UINT64_MAX)
+			return 0;
+		if (d < 0) {
+			mem_set_u64(mem, 0);
+			return 0;
+		}
+		assert((double)(uint64_t)d < d);
+		*oc = OP_SeekGT;
+		return mem_convert_to_unsigned(mem);
+	}
+	if (*oc == OP_SeekLT) {
+		if (d >= (double)UINT64_MAX) {
+			*oc = OP_SeekLE;
+			mem_set_u64(mem, UINT64_MAX);
+			return 0;
+		}
+		if (d < 0)
+			return 0;
+		assert((double)(uint64_t)d < d);
+		*oc = OP_SeekLE;
+		return mem_convert_to_unsigned(mem);
+	}
+	assert(*oc == OP_SeekLE);
+	if (d >= (double)UINT64_MAX) {
+		mem_set_u64(mem, UINT64_MAX);
+		return 0;
+	}
+	if (d < 0)
+		return 0;
+	assert((double)(uint64_t)d < d);
+	return mem_convert_to_unsigned(mem);
+}
+
+/**
+ * Convert the numeric value contained in the MEM to INTEGER.
+ * @see mem_prepare_for_cmp() for more info.
+ *
+ * @param mem The MEM that contains the numeric value.
+ * @param[in][out] oc Operation code.
+ * @retval 0 if the conversion was successful, -1 otherwise.
+ */
+static int
+mem_prepare_for_cmp_to_int(struct Mem *mem, int *oc, int eqOnly)
+{
+	assert((mem->flags & MEM_Real) != 0);
+	double d = mem->u.r;
+	if (d >= 0.0 && d < (double)UINT64_MAX && d == (double)(uint64_t)d)
+		return mem_convert_to_integer(mem);
+	if (d >= (double)INT64_MIN && d < (double)INT64_MAX &&
+	    d == (double)(uint64_t)d)
+		return mem_convert_to_integer(mem);
+	if (eqOnly == 1)
+		return 0;
+	if (*oc == OP_SeekGT) {
+		if (d >= (double)UINT64_MAX)
+			return 0;
+		if (d < (double)INT64_MIN) {
+			mem_set_i64(mem, INT64_MIN);
+			*oc = OP_SeekGE;
+			return 0;
+		}
+		if (d > 0 || (double)(int64_t)d < d)
+			return mem_convert_to_integer(mem);
+		*oc = OP_SeekGE;
+		return mem_convert_to_integer(mem);
+	}
+	if (*oc == OP_SeekGE) {
+		if (d >= (double)UINT64_MAX)
+			return 0;
+		if (d < (double)INT64_MIN) {
+			mem_set_i64(mem, INT64_MIN);
+			return 0;
+		}
+		if (d > 0 || (double)(int64_t)d < d) {
+			*oc = OP_SeekGT;
+			return mem_convert_to_integer(mem);
+		}
+		return mem_convert_to_integer(mem);
+	}
+	if (*oc == OP_SeekLT) {
+		if (d >= (double)UINT64_MAX) {
+			*oc = OP_SeekLE;
+			mem_set_int(mem, UINT64_MAX, false);
+			return 0;
+		}
+		if (d < (double)INT64_MIN)
+			return 0;
+		if (d > 0 || (double)(int64_t)d < d) {
+			*oc = OP_SeekLE;
+			return mem_convert_to_integer(mem);
+		}
+		return mem_convert_to_integer(mem);
+	}
+	assert(*oc == OP_SeekLE);
+	if (d >= (double)UINT64_MAX) {
+		mem_set_int(mem, UINT64_MAX, false);
+		return 0;
+	}
+	if (d > 0 || (double)(int64_t)d < d)
+		return mem_convert_to_integer(mem);
+	*oc = OP_SeekLT;
+	return mem_convert_to_integer(mem);
+}
+
+/**
+ * Convert the numeric value contained in the MEM to DOUBLE.
+ * @see mem_prepare_for_cmp() for more info.
+ *
+ * @param mem The MEM that contains the numeric value.
+ * @param[in][out] oc Operation code.
+ * @retval 0 if the conversion was successful, -1 otherwise.
+ */
+static int
+mem_prepare_for_cmp_to_double(struct Mem *mem, int *oc, int eqOnly)
+{
+	if ((mem->flags & MEM_Int) != 0) {
+		int64_t i = mem->u.i;
+		if (i == (int64_t)(double)i)
+			return mem_convert_to_double(mem);
+		if (eqOnly == 1)
+			return 0;
+		double d = (double)i;
+		if (*oc == OP_SeekGT) {
+			if (d == (double)INT64_MAX || i < (int64_t)d)
+				*oc = OP_SeekGE;
+			return mem_convert_to_double(mem);
+		}
+		if (*oc == OP_SeekGE) {
+			if (d != (double)INT64_MAX && i > (int64_t)d)
+				*oc = OP_SeekGT;
+			return mem_convert_to_double(mem);
+		}
+		if (*oc == OP_SeekLT) {
+			if (d != (double)INT64_MAX && i > (int64_t)d)
+				*oc = OP_SeekLE;
+			return mem_convert_to_double(mem);
+		}
+		assert(*oc == OP_SeekLE);
+		if (d == (double)INT64_MAX || i < (int64_t)d)
+			*oc = OP_SeekLT;
+		return mem_convert_to_double(mem);
+	}
+	assert((mem->flags & MEM_UInt) != 0);
+	uint64_t u = mem->u.u;
+	if (u == (uint64_t)(double)u)
+		return mem_convert_to_double(mem);
+	if (eqOnly == 1)
+		return 0;
+	double d = (double)u;
+	if (*oc == OP_SeekGT) {
+		if (d == (double)UINT64_MAX || u < (uint64_t)d)
+			*oc = OP_SeekGE;
+		return mem_convert_to_double(mem);
+	}
+	if (*oc == OP_SeekGE) {
+		if (d != (double)UINT64_MAX && u > (uint64_t)d)
+			*oc = OP_SeekGT;
+		return mem_convert_to_double(mem);
+	}
+	if (*oc == OP_SeekLT) {
+		if (d != (double)UINT64_MAX && u > (uint64_t)d)
+			*oc = OP_SeekLE;
+		return mem_convert_to_double(mem);
+	}
+	assert(*oc == OP_SeekLE);
+	if (d == (double)UINT64_MAX || u < (uint64_t)d)
+		*oc = OP_SeekLT;
+	return mem_convert_to_double(mem);
+}
+
+/**
+ * Convert the numeric value contained in the MEM to another
+ * numeric type according to the specified operation. If the
+ * conversion is successful, we will get the converted MEM. If the
+ * conversion fails, the MEM will not be changed.
+ *
+ * There are two reasons why the MEM might not convert.
+ * 1) MEM conversion affects the result of the operation.
+ * For example:
+ * CREATE TABLE t (i INT PRIMARY KEY);
+ * ...
+ * SELECT * FROM t WHERE i = 1.5;
+ *
+ * 2) After conversion, nothing will be found as a result of the
+ * operation.
+ * For example:
+ * CREATE TABLE t (i INT PRIMARY KEY);
+ * ...
+ * SELECT * FROM t WHERE i > 2^100;
+ *
+ *
+ * If the conversion is successful, the operation can also change.
+ * For example:
+ * CREATE TABLE t (i INT PRIMARY KEY);
+ * ...
+ * SELECT * FROM t WHERE i > -(2^100);
+ *
+ * The value becomes INT64_MIN after conversion and the operation
+ * becomes '> ='.
+ *
+ * @param mem The MEM that contains the numeric value.
+ * @param type The type to convert to.
+ * @param[in][out] oc Operation code.
+ * @retval 0 if the conversion was successful, -1 otherwise.
+ */
+static int
+mem_prepare_for_cmp(struct Mem *mem, enum field_type type, int *oc, int eqOnly)
+{
+	if (type == FIELD_TYPE_UNSIGNED)
+		return mem_prepare_for_cmp_to_uint(mem, oc, eqOnly);
+	if (type == FIELD_TYPE_INTEGER)
+		return mem_prepare_for_cmp_to_int(mem, oc, eqOnly);
+	assert(type == FIELD_TYPE_DOUBLE);
+	return mem_prepare_for_cmp_to_double(mem, oc, eqOnly);
+}
+
 /*
  * pMem currently only holds a string type (or maybe a BLOB that we can
  * interpret as a string if we want to).  Compute its corresponding
@@ -3491,6 +3753,74 @@ case OP_SeekGT: {       /* jump, in3 */
 	assert(oc!=OP_SeekLT || r.default_rc==+1);
 
 	r.aMem = &aMem[pOp->p3];
+	bool is_on_region = false;
+	struct region *region = &fiber()->gc;
+	size_t region_svp = 0;
+	for (int i = 0; i < r.nField; ++i) {
+		struct Mem *mem = &r.aMem[i];
+		enum field_type type = r.key_def->parts[i].type;
+		/*
+		 * We already know that MEM_type and field type
+		 * are comparable. If they are not compatible, we
+		 * should try to convert MEM to field type.
+		 */
+		if (!mem_is_type_compatible(mem, type)) {
+			/*
+			 * We cannot make changes to original MEMs
+			 * since they will be used in OP_Idx*. So
+			 * we should copy them and make changes to
+			 * the copies.
+			 */
+			if (!is_on_region) {
+				region_svp = region_used(region);
+				uint32_t size = sizeof(struct Mem) * r.nField;
+				r.aMem = region_aligned_alloc(region, size,
+							      alignof(struct Mem));
+				if (r.aMem == NULL) {
+					diag_set(OutOfMemory, size,
+						 "region_aligned_alloc",
+						 "r.aMem");
+					goto abort_due_to_error;
+				}
+				memcpy(r.aMem, &aMem[pOp->p3], size);
+				is_on_region = true;
+				mem = &r.aMem[i];
+			}
+			/*
+			 * In cases where we can change the MEM
+			 * according to the field type and opcode,
+			 * we will get the converted MEM after
+			 * this function.
+			 *
+			 * There are two cases where MEM does not
+			 * change:
+			 * 1) any resultof conversion can affect
+			 * the result of the operation;
+			 * 2) after conversion nothing will be
+			 * found as a result of the operation.
+			 *
+			 * Examples can be found in description of
+			 * the function.
+			 */
+			if (mem_prepare_for_cmp(mem, type, &oc, eqOnly) != 0) {
+				diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
+					 sql_value_to_diag_str(mem),
+					 field_type_strs[type]);
+				goto abort_due_to_error;
+			}
+			/*
+			 * if the MEM type and the field type are
+			 * still not compatible, then the
+			 * conversion failed and we won't find
+			 * anything.
+			 */
+			if (!mem_is_type_compatible(mem, type)) {
+				res = 1;
+				goto seek_not_found;
+			}
+		}
+	}
+
 #ifdef SQL_DEBUG
 	{ int i; for(i=0; i<r.nField; i++) assert(memIsValid(&r.aMem[i])); }
 #endif
@@ -3528,6 +3858,8 @@ case OP_SeekGT: {       /* jump, in3 */
 		}
 	}
 			seek_not_found:
+	if (is_on_region)
+		region_truncate(region, region_svp);
 	assert(pOp->p2>0);
 	VdbeBranchTaken(res!=0,2);
 	if (res) {
