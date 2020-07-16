@@ -969,8 +969,10 @@ vdbe_emit_analyze_space(struct Parse *parse, struct space *space)
 					     FIELD_TYPE_STRING,
 					     FIELD_TYPE_STRING,
 					     field_type_MAX };
-		sqlVdbeAddOp4(v, OP_MakeRecord, tab_name_reg, 4, tmp_reg,
-				  (char *)types, sizeof(types));
+		sqlVdbeAddOp4(v, OP_ApplyType, tab_name_reg, 4, 0,
+			      (char *)types, P4_STATIC);
+		sqlVdbeChangeP5(v, OPFLAG_DO_NOT_CONVERT_NUMBERS);
+		sqlVdbeAddOp3(v, OP_MakeRecord, tab_name_reg, 4, tmp_reg);
 		sqlVdbeAddOp4(v, OP_IdxInsert, tmp_reg, 0, 0,
 				  (char *)stat1, P4_SPACEPTR);
 		/* Add the entries to the stat4 table. */
