@@ -251,11 +251,14 @@ sqlUpdate(Parse * pParse,		/* The parser context */
 		nKey = pk_part_count;
 		regKey = iPk;
 	} else {
-		enum field_type *types = is_view ? NULL :
-					 sql_index_type_str(pParse->db,
-							    pPk->def);
-		sqlVdbeAddOp4(v, OP_MakeRecord, iPk, pk_part_count,
-				  regKey, (char *) types, P4_DYNAMIC);
+		if (!is_view) {
+			enum field_type *types =
+				sql_index_type_str(pParse->db, pPk->def);
+			sqlVdbeAddOp4(v, OP_ApplyType, iPk, pk_part_count, 0,
+				      (char *)types, P4_DYNAMIC);
+			sqlVdbeChangeP5(v, OPFLAG_DO_NOT_CONVERT_NUMBERS);
+		}
+		sqlVdbeAddOp3(v, OP_MakeRecord, iPk, pk_part_count, regKey);
 		/*
 		 * Set flag to save memory allocating one by
 		 * malloc.
@@ -423,9 +426,13 @@ sqlUpdate(Parse * pParse,		/* The parser context */
 				enum field_type *types =
 					sql_index_type_str(pParse->db,
 							   pPk->def);
-				sqlVdbeAddOp4(v, OP_MakeRecord, iPk,
-						  pk_part_count, key_reg,
-						  (char *) types, P4_DYNAMIC);
+				sqlVdbeAddOp4(v, OP_ApplyType, iPk,
+					      pk_part_count, 0, (char *)types,
+					      P4_DYNAMIC);
+				sqlVdbeChangeP5(v,
+						OPFLAG_DO_NOT_CONVERT_NUMBERS);
+				sqlVdbeAddOp3(v, OP_MakeRecord, iPk,
+					      pk_part_count, key_reg);
 			} else {
 				assert(nKey == 0);
 				key_reg = regKey;

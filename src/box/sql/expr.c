@@ -2886,11 +2886,18 @@ sqlCodeSubselect(Parse * pParse,	/* Parsing context */
 						jmpIfDynamic = -1;
 					}
 					r3 = sqlExprCodeTarget(pParse, pE2, r1);
-					enum field_type types[2] =
-						{ lhs_type, field_type_MAX };
-	 				sqlVdbeAddOp4(v, OP_MakeRecord, r3,
-							  1, r2, (char *)types,
-							  sizeof(types));
+					uint32_t size =
+						2 * sizeof(enum field_type);
+					enum field_type *types=
+						sqlDbMallocZero(pParse->db,
+								size);
+					types[0] = lhs_type;
+					types[1] = field_type_MAX;
+					sqlVdbeAddOp4(v, OP_ApplyType, r3, 1, 0,
+						      (char *)types, P4_DYNAMIC);
+					sqlVdbeChangeP5(v, OPFLAG_DO_NOT_CONVERT_NUMBERS);
+					sqlVdbeAddOp3(v, OP_MakeRecord, r3, 1,
+						      r2);
 					sql_expr_type_cache_change(pParse,
 								   r3, 1);
 					sqlVdbeAddOp2(v, OP_IdxInsert, r2,

@@ -329,11 +329,16 @@ sql_table_delete_from(struct Parse *parse, struct SrcList *tab_list,
 			 */
 			key_len = 0;
 			struct index *pk = space_index(space, 0);
-			enum field_type *types = is_view ? NULL :
-						 sql_index_type_str(parse->db,
-								    pk->def);
-			sqlVdbeAddOp4(v, OP_MakeRecord, reg_pk, pk_len,
-					  reg_key, (char *)types, P4_DYNAMIC);
+			if (!is_view) {
+				enum field_type *types =
+					sql_index_type_str(parse->db, pk->def);
+				sqlVdbeAddOp4(v, OP_ApplyType, reg_pk, pk_len,
+					      0, (char *)types, P4_DYNAMIC);
+				sqlVdbeChangeP5(v,
+						OPFLAG_DO_NOT_CONVERT_NUMBERS);
+			}
+			sqlVdbeAddOp3(v, OP_MakeRecord, reg_pk, pk_len,
+				      reg_key);
 			/* Set flag to save memory allocating one
 			 * by malloc.
 			 */
