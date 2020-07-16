@@ -3881,6 +3881,20 @@ sql_index_type_str(struct sql *db, const struct index_def *idx_def);
 void
 sql_emit_table_types(struct Vdbe *v, struct space_def *def, int reg);
 
+/**
+ * Code an OP_ApplyType opcode that try to cast implicitly types
+ * for given range of register starting from @a reg. These values
+ * then will be used as arguments of a function.
+ *
+ * @param vdbe VDBE.
+ * @param args Information about arguments of the function.
+ * @param reg Register where types will be placed.
+ * @param argc Number of arguments.
+ */
+void
+sql_emit_func_arg_type_check(struct Vdbe *vdbe, struct func *func,
+			     int reg, uint32_t argc);
+
 enum field_type
 sql_type_result(enum field_type lhs, enum field_type rhs);
 
@@ -4402,6 +4416,11 @@ struct func_sql_builtin {
 	struct func base;
 	/** A bitmask of SQL flags. */
 	uint16_t flags;
+	/**
+	 * TRUE if the function takes a variable number of
+	 * arguments.
+	 */
+	bool is_var_args;
 	/**
 	 * A VDBE-memory-compatible call method.
 	 * SQL built-ins don't use func base class "call"

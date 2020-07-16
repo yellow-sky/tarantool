@@ -53,6 +53,18 @@
 #include "lua/utils.h"
 #include "mpstream/mpstream.h"
 
+enum {
+	SQL_FUNC_NO_ARGS = 0,
+};
+
+enum field_type *func_no_args = NULL;
+
+static int
+initialize_func_args_types()
+{
+	return 0;
+}
+
 /*
  * Return the collating function associated with a function.
  */
@@ -2187,8 +2199,9 @@ sql_func_by_signature(const char *name, int argc)
 	struct func *base = func_by_name(name, strlen(name));
 	if (base == NULL || !base->def->exports.sql)
 		return NULL;
-
-	if (base->def->param_count != -1 && base->def->param_count != argc)
+	if (base->def->param_count != argc &&
+	    (base->def->language != FUNC_LANGUAGE_SQL_BUILTIN ||
+	     !((struct func_sql_builtin *)base)->is_var_args))
 		return NULL;
 	return base;
 }
@@ -2229,6 +2242,13 @@ static struct {
 	void (*finalize)(sql_context *ctx);
 	/** Members below are related to struct func_def. */
 	bool is_deterministic;
+	/** The list of types of arguments of the function. */
+	enum field_type **param_list;
+	/**
+	 * TRUE if the function takes a variable number of
+	 * arguments.
+	 */
+	bool is_var_args;
 	int param_count;
 	enum field_type returns;
 	enum func_aggregate aggregate;
@@ -2236,6 +2256,8 @@ static struct {
 } sql_builtins[] = {
 	{.name = "ABS",
 	 .param_count = 1,
+	 .is_var_args = false,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_NUMBER,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2246,6 +2268,8 @@ static struct {
 	}, {
 	 .name = "AVG",
 	 .param_count = 1,
+	 .is_var_args = false,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_NUMBER,
 	 .is_deterministic = false,
 	 .aggregate = FUNC_AGGREGATE_GROUP,
@@ -2258,6 +2282,8 @@ static struct {
 	 .call = sql_builtin_stub,
 	 .export_to_sql = false,
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_ANY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,
@@ -2268,6 +2294,8 @@ static struct {
 	 .call = sql_builtin_stub,
 	 .export_to_sql = false,
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_ANY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,
@@ -2276,6 +2304,8 @@ static struct {
 	}, {
 	 .name = "CHAR",
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_STRING,
 	 .is_deterministic = true,
 	 .aggregate = FUNC_AGGREGATE_NONE,
@@ -2286,6 +2316,8 @@ static struct {
 	 }, {
 	 .name = "CHARACTER_LENGTH",
 	 .param_count = 1,
+	 .is_var_args = false,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_INTEGER,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2296,6 +2328,8 @@ static struct {
 	}, {
 	 .name = "CHAR_LENGTH",
 	 .param_count = 1,
+	 .is_var_args = false,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_INTEGER,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2306,6 +2340,8 @@ static struct {
 	}, {
 	 .name = "COALESCE",
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_SCALAR,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2316,6 +2352,8 @@ static struct {
 	}, {
 	 .name = "COUNT",
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_INTEGER,
 	 .aggregate = FUNC_AGGREGATE_GROUP,
 	 .is_deterministic = false,
@@ -2328,6 +2366,8 @@ static struct {
 	 .call = sql_builtin_stub,
 	 .export_to_sql = false,
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_ANY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,
@@ -2338,6 +2378,8 @@ static struct {
 	 .call = sql_builtin_stub,
 	 .export_to_sql = false,
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_ANY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,
@@ -2348,6 +2390,8 @@ static struct {
 	 .call = sql_builtin_stub,
 	 .export_to_sql = false,
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_ANY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,
@@ -2358,6 +2402,8 @@ static struct {
 	 .call = sql_builtin_stub,
 	 .export_to_sql = false,
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_ANY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,
@@ -2368,6 +2414,8 @@ static struct {
 	 .call = sql_builtin_stub,
 	 .export_to_sql = false,
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_ANY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,
@@ -2378,6 +2426,8 @@ static struct {
 	 .call = sql_builtin_stub,
 	 .export_to_sql = false,
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_ANY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,
@@ -2388,6 +2438,8 @@ static struct {
 	 .call = sql_builtin_stub,
 	 .export_to_sql = false,
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_ANY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,
@@ -2398,6 +2450,8 @@ static struct {
 	 .call = sql_builtin_stub,
 	 .export_to_sql = false,
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_ANY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,
@@ -2408,6 +2462,8 @@ static struct {
 	 .call = sql_builtin_stub,
 	 .export_to_sql = false,
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_ANY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,
@@ -2418,6 +2474,8 @@ static struct {
 	 .call = sql_builtin_stub,
 	 .export_to_sql = false,
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_ANY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,
@@ -2428,6 +2486,8 @@ static struct {
 	 .call = sql_builtin_stub,
 	 .export_to_sql = false,
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_ANY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,
@@ -2436,6 +2496,8 @@ static struct {
 	}, {
 	 .name = "GREATEST",
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_SCALAR,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2446,6 +2508,8 @@ static struct {
 	}, {
 	 .name = "GROUP_CONCAT",
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_GROUP,
 	 .is_deterministic = false,
@@ -2456,6 +2520,8 @@ static struct {
 	}, {
 	 .name = "HEX",
 	 .param_count = 1,
+	 .is_var_args = false,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2466,6 +2532,8 @@ static struct {
 	}, {
 	 .name = "IFNULL",
 	 .param_count = 2,
+	 .is_var_args = false,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_INTEGER,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2478,6 +2546,8 @@ static struct {
 	 .call = sql_builtin_stub,
 	 .export_to_sql = false,
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_ANY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,
@@ -2486,6 +2556,8 @@ static struct {
 	}, {
 	 .name = "LEAST",
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_SCALAR,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2496,6 +2568,8 @@ static struct {
 	}, {
 	 .name = "LENGTH",
 	 .param_count = 1,
+	 .is_var_args = false,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_INTEGER,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2508,6 +2582,8 @@ static struct {
 	 .call = sql_builtin_stub,
 	 .export_to_sql = false,
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_ANY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,
@@ -2516,6 +2592,8 @@ static struct {
 	}, {
 	 .name = "LIKE",
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_INTEGER,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2526,6 +2604,8 @@ static struct {
 	}, {
 	 .name = "LIKELIHOOD",
 	 .param_count = 2,
+	 .is_var_args = false,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_BOOLEAN,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2536,6 +2616,8 @@ static struct {
 	}, {
 	 .name = "LIKELY",
 	 .param_count = 1,
+	 .is_var_args = false,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_BOOLEAN,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2548,6 +2630,8 @@ static struct {
 	 .call = sql_builtin_stub,
 	 .export_to_sql = false,
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_ANY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,
@@ -2556,6 +2640,8 @@ static struct {
 	}, {
 	 .name = "LOWER",
 	 .param_count = 1,
+	 .is_var_args = false,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2566,6 +2652,8 @@ static struct {
 	}, {
 	 .name = "MAX",
 	 .param_count = 1,
+	 .is_var_args = false,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_SCALAR,
 	 .aggregate = FUNC_AGGREGATE_GROUP,
 	 .is_deterministic = false,
@@ -2576,6 +2664,8 @@ static struct {
 	}, {
 	 .name = "MIN",
 	 .param_count = 1,
+	 .is_var_args = false,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_SCALAR,
 	 .aggregate = FUNC_AGGREGATE_GROUP,
 	 .is_deterministic = false,
@@ -2588,6 +2678,8 @@ static struct {
 	 .call = sql_builtin_stub,
 	 .export_to_sql = false,
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_ANY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,
@@ -2596,6 +2688,8 @@ static struct {
 	}, {
 	 .name = "NULLIF",
 	 .param_count = 2,
+	 .is_var_args = false,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_SCALAR,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2608,6 +2702,8 @@ static struct {
 	 .call = sql_builtin_stub,
 	 .export_to_sql = false,
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_ANY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,
@@ -2616,6 +2712,8 @@ static struct {
 	}, {
 	 .name = "POSITION",
 	 .param_count = 2,
+	 .is_var_args = false,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_INTEGER,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2628,6 +2726,8 @@ static struct {
 	 .call = sql_builtin_stub,
 	 .export_to_sql = false,
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_ANY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,
@@ -2636,6 +2736,8 @@ static struct {
 	}, {
 	 .name = "PRINTF",
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2646,6 +2748,8 @@ static struct {
 	}, {
 	 .name = "QUOTE",
 	 .param_count = 1,
+	 .is_var_args = false,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2656,6 +2760,8 @@ static struct {
 	}, {
 	 .name = "RANDOM",
 	 .param_count = 0,
+	 .is_var_args = false,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_INTEGER,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,
@@ -2666,6 +2772,8 @@ static struct {
 	}, {
 	 .name = "RANDOMBLOB",
 	 .param_count = 1,
+	 .is_var_args = false,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_VARBINARY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,
@@ -2676,6 +2784,8 @@ static struct {
 	}, {
 	 .name = "REPLACE",
 	 .param_count = 3,
+	 .is_var_args = false,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2686,6 +2796,8 @@ static struct {
 	}, {
 	 .name = "ROUND",
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_INTEGER,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2696,6 +2808,8 @@ static struct {
 	}, {
 	 .name = "ROW_COUNT",
 	 .param_count = 0,
+	 .is_var_args = false,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_INTEGER,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2708,6 +2822,8 @@ static struct {
 	 .call = sql_builtin_stub,
 	 .export_to_sql = false,
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_ANY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,
@@ -2716,6 +2832,8 @@ static struct {
 	}, {
 	 .name = "SOUNDEX",
 	 .param_count = 1,
+	 .is_var_args = false,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2728,6 +2846,8 @@ static struct {
 	 .call = sql_builtin_stub,
 	 .export_to_sql = false,
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_ANY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,
@@ -2738,6 +2858,8 @@ static struct {
 	 .call = sql_builtin_stub,
 	 .export_to_sql = false,
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_ANY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,
@@ -2746,6 +2868,8 @@ static struct {
 	}, {
 	 .name = "SUBSTR",
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2756,6 +2880,8 @@ static struct {
 	}, {
 	 .name = "SUM",
 	 .param_count = 1,
+	 .is_var_args = false,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_NUMBER,
 	 .aggregate = FUNC_AGGREGATE_GROUP,
 	 .is_deterministic = false,
@@ -2768,6 +2894,8 @@ static struct {
 	 .call = sql_builtin_stub,
 	 .export_to_sql = false,
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_ANY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,
@@ -2776,6 +2904,8 @@ static struct {
 	}, {
 	 .name = "TOTAL",
 	 .param_count = 1,
+	 .is_var_args = false,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_NUMBER,
 	 .aggregate = FUNC_AGGREGATE_GROUP,
 	 .is_deterministic = false,
@@ -2786,6 +2916,8 @@ static struct {
 	}, {
 	 .name = "TRIM",
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2796,6 +2928,8 @@ static struct {
 	}, {
 	 .name = "TYPEOF",
 	 .param_count = 1,
+	 .is_var_args = false,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2806,6 +2940,8 @@ static struct {
 	}, {
 	 .name = "UNICODE",
 	 .param_count = 1,
+	 .is_var_args = false,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2816,6 +2952,8 @@ static struct {
 	}, {
 	 .name = "UNLIKELY",
 	 .param_count = 1,
+	 .is_var_args = false,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_BOOLEAN,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2826,6 +2964,8 @@ static struct {
 	}, {
 	 .name = "UPPER",
 	 .param_count = 1,
+	 .is_var_args = false,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2836,6 +2976,8 @@ static struct {
 	}, {
 	 .name = "VERSION",
 	 .param_count = 0,
+	 .is_var_args = false,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2846,6 +2988,8 @@ static struct {
 	}, {
 	 .name = "ZEROBLOB",
 	 .param_count = 1,
+	 .is_var_args = false,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_VARBINARY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
@@ -2858,6 +3002,8 @@ static struct {
 	 .call = sql_builtin_stub,
 	 .export_to_sql = false,
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_ANY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,
@@ -2868,6 +3014,8 @@ static struct {
 	 .call = sql_builtin_stub,
 	 .export_to_sql = false,
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_ANY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,
@@ -2878,6 +3026,8 @@ static struct {
 	 .call = sql_builtin_stub,
 	 .export_to_sql = false,
 	 .param_count = -1,
+	 .is_var_args = true,
+	 .param_list = &func_no_args,
 	 .returns = FIELD_TYPE_ANY,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = false,
@@ -2892,6 +3042,7 @@ struct func *
 func_sql_builtin_new(struct func_def *def)
 {
 	assert(def->language == FUNC_LANGUAGE_SQL_BUILTIN);
+	initialize_func_args_types();
 	/** Binary search for corresponding builtin entry. */
 	int idx = -1, left = 0, right = nelem(sql_builtins) - 1;
 	while (left <= right) {
@@ -2927,9 +3078,11 @@ func_sql_builtin_new(struct func_def *def)
 	func->base.def = def;
 	func->base.vtab = &func_sql_builtin_vtab;
 	func->flags = sql_builtins[idx].flags;
+	func->is_var_args = sql_builtins[idx].is_var_args;
 	func->call = sql_builtins[idx].call;
 	func->finalize = sql_builtins[idx].finalize;
 	def->param_count = sql_builtins[idx].param_count;
+	def->param_list = *sql_builtins[idx].param_list;
 	def->is_deterministic = sql_builtins[idx].is_deterministic;
 	def->returns = sql_builtins[idx].returns;
 	def->aggregate = sql_builtins[idx].aggregate;
@@ -2942,6 +3095,7 @@ func_sql_builtin_destroy(struct func *func)
 {
 	assert(func->vtab == &func_sql_builtin_vtab);
 	assert(func->def->language == FUNC_LANGUAGE_SQL_BUILTIN);
+	free(func->def->param_list);
 	free(func);
 }
 

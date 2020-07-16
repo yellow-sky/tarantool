@@ -109,6 +109,8 @@ struct func_def {
 	 * available.
 	 */
 	bool is_sandboxed;
+	/** The list of types of arguments of the function. */
+	enum field_type *param_list;
 	/** The count of function's input arguments. */
 	int param_count;
 	/** The type of the value returned by function. */

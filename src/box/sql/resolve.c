@@ -614,8 +614,9 @@ resolveExprStep(Walker * pWalker, Expr * pExpr)
 				pNC->nErr++;
 				return WRC_Abort;
 			}
-			if (func->def->param_count != -1 &&
-			    func->def->param_count != n) {
+			if (func->def->param_count != n &&
+			    (func->def->language != FUNC_LANGUAGE_SQL_BUILTIN ||
+			     !((struct func_sql_builtin *)func)->is_var_args)) {
 				uint32_t argc = func->def->param_count;
 				const char *err = tt_sprintf("%d", argc);
 				diag_set(ClientError, ER_FUNC_WRONG_ARG_COUNT,
