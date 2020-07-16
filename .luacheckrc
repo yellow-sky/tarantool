@@ -45,7 +45,7 @@ exclude_files = {
     "test/engine_long/*.test.lua",
     "test/replication/*.test.lua",
     "test/sql/*.test.lua",
-    "test/swim/**/*.lua",
+    "test/swim/*.test.lua",
     "test/var/**/*.lua",
     "test/vinyl/**/*.lua",
     "test/wal_off/*.lua",
@@ -234,4 +234,14 @@ files["test/sql-tap/*.lua"] = {
 }
 files["test/sql-tap/lua/sqltester.lua"] = {
     globals = {"table_match_regex_p"}
+}
+files["test/swim/box.lua"] = {
+    globals = {
+        "listen_port",
+        "listen_uri",
+        "uuid",
+        "uri",
+        "swim",
+        "fiber"
+    }
 }
