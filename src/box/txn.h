@@ -459,6 +459,10 @@ struct txm_story {
 	 */
 	struct rlist in_space_stories;
 	/**
+	 * The space where the tuple is supposed to be.
+	 */
+	struct space *space;
+	/**
 	 * Number of indexes in this space - and the count of link[].
 	 */
 	uint32_t index_count;

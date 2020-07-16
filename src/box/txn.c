@@ -80,6 +80,15 @@ struct tx_manager
 	struct rlist *traverse_all_stories;
 };
 
+enum {
+	/**
+	 * Number of iterations that is allowed for TX manager to do for
+	 * searching and deleting no more used txm_stories per creation of
+	 * a new story.
+	 */
+	TX_MANAGER_GC_STEPS_SIZE = 2,
+};
+
 /** That's a definition, see declaration for description. */
 bool tx_manager_use_mvcc_engine = false;
 
@@ -1418,6 +1427,10 @@ txm_cause_conflict(struct txn *breaker, struct txn *victim)
 	return 0;
 }
 
+/** See definition for details */
+static void
+txm_story_gc_step();
+
 /**
  * Creates new story and links it with the @tuple.
  * @return story on success, NULL on error (diag is set).
@@ -1425,6 +1438,9 @@ txm_cause_conflict(struct txn *breaker, struct txn *victim)
 static struct txm_story *
 txm_story_new(struct space *space, struct tuple *tuple)
 {
+	/* Free some memory. */
+	for (size_t i = 0; i < TX_MANAGER_GC_STEPS_SIZE; i++)
+		txm_story_gc_step();
 	assert(!tuple->is_dirty);
 	uint32_t index_count = space->index_count;
 	assert(index_count < BOX_INDEX_MAX);
@@ -1450,6 +1466,7 @@ txm_story_new(struct space *space, struct tuple *tuple)
 	tuple->is_dirty = true;
 	tuple_ref(tuple);
 
+	story->space = space;
 	story->index_count = index_count;
 	story->add_stmt = NULL;
 	story->add_psn = 0;
@@ -1597,6 +1614,78 @@ txm_story_unlink(struct txm_story *story, uint32_t index)
 	}
 	link->older.is_story = false;
 	link->older.tuple = NULL;
+}
+
+/**
+ * Run one step of a crawler that traverses all stories and removes no more
+ * used stories.
+ */
+static void
+txm_story_gc_step()
+{
+	if (txm.traverse_all_stories == &txm.all_stories) {
+		/* We came to the head of the list. */
+		txm.traverse_all_stories = txm.traverse_all_stories->next;
+		return;
+	}
+
+	/* Lowest read view PSN */
+	int64_t lowest_rv_psm = txm.last_psn;
+	if (!rlist_empty(&txm.read_view_txs)) {
+		struct txn *txn =
+			rlist_first_entry(&txm.read_view_txs, struct txn,
+					  in_read_view_txs);
+		assert(txn->rv_psn != 0);
+		lowest_rv_psm = txn->rv_psn;
+	}
+
+	struct txm_story *story =
+		rlist_entry(txm.traverse_all_stories, struct txm_story,
+			    in_all_stories);
+	txm.traverse_all_stories = txm.traverse_all_stories->next;
+
+	if (story->add_stmt != NULL || story->del_stmt != NULL ||
+	    !rlist_empty(&story->reader_list)) {
+		/* The story is used directly by some transactions. */
+		return;
+	}
+	if (story->add_psn >= lowest_rv_psm ||
+	    story->del_psn >= lowest_rv_psm) {
+		/* The story can be used by a read view. */
+		return;
+	}
+
+	/* Unlink and delete the story */
+	for (uint32_t i = 0; i < story->index_count; i++) {
+		struct txm_story_link *link = &story->link[i];
+		if (link->newer_story == NULL) {
+			/*
+			 * We are at the top of the chain. That means
+			 * that story->tuple is in index. If the story is
+			 * actually delete the tuple, it must be deleted from
+			 * index.
+			 */
+			if (story->del_psn > 0) {
+				struct index *index = story->space->index[i];
+				struct tuple *unused;
+				if (index_replace(index, story->tuple, NULL,
+						  DUP_INSERT, &unused) != 0) {
+					diag_log();
+					unreachable();
+					panic("failed to rollback change");
+				}
+				assert(story->tuple == unused);
+			}
+			txm_story_unlink(story, i);
+		} else {
+			link->newer_story->link[i].older = link->older;
+			link->older.is_story = false;
+			link->older.story = NULL;
+			link->newer_story = NULL;
+		}
+	}
+
+	txm_story_delete(story);
 }
 
 /**
