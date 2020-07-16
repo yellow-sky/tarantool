@@ -7,7 +7,8 @@ function join(inspector, n)
         os.execute('cp '..path..'/test/replication/replica.lua ./tmp/replica'..rid..'.lua')
         os.execute('chmod +x ./tmp/replica'..rid..'.lua')
         local out_dir = box.cfg.wal_dir
-        inspector:cmd("create server replica"..rid.." with rpl_master=default, script='"..out_dir.."/../tmp/replica"..rid..".lua'")
+        inspector:cmd("create server replica"..rid.." with rpl_master=default, script='"
+			..out_dir.."/../tmp/replica"..rid..".lua'")
         inspector:cmd("start server replica"..rid)
     end
 end
@@ -23,7 +24,7 @@ function call_all(callback)
     end
 end
 
-function unregister(inspector, id)
+function unregister(inspector, id) -- luacheck: no unused args
     box.space._cluster:delete{id}
 end
 
@@ -67,10 +68,10 @@ end
 
 function vclock_diff(left, right)
     local diff = 0
-    for id, lsn in ipairs(left) do
+    for id, lsn in ipairs(left) do -- luacheck: no unused
         diff = diff + (right[id] or 0) - left[id]
     end
-    for id, lsn in ipairs(right) do
+    for id, lsn in ipairs(right) do -- luacheck: no unused
         if left[id] == nil then
             diff = diff + right[id]
         end
