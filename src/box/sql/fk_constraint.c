@@ -264,11 +264,13 @@ fk_constraint_lookup_parent(struct Parse *parse_context, struct space *parent,
 		}
 		struct index *idx = space_index(parent, referenced_idx);
 		assert(idx != NULL);
-		sqlVdbeAddOp4(v, OP_MakeRecord, temp_regs, field_count,
-				  rec_reg,
-				  (char *) sql_index_type_str(parse_context->db,
-							      idx->def),
-				  P4_DYNAMIC);
+		sqlVdbeAddOp4(v, OP_ApplyType, temp_regs, field_count, 0,
+			      (char *) sql_index_type_str(parse_context->db,
+							  idx->def),
+			      P4_DYNAMIC);
+		sqlVdbeChangeP5(v, OPFLAG_DO_NOT_CONVERT_NUMBERS);
+		sqlVdbeAddOp3(v, OP_MakeRecord, temp_regs, field_count,
+			      rec_reg);
 		sqlVdbeAddOp4Int(v, OP_Found, cursor, ok_label, rec_reg, 0);
 		sqlReleaseTempReg(parse_context, rec_reg);
 		sqlReleaseTempRange(parse_context, temp_regs, field_count);

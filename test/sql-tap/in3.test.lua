@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(28)
+test:plan(26)
 
 --!./tcltestrunner.lua
 -- 2007 November 29
@@ -335,18 +335,6 @@ test:do_test(
     })
 
 test:do_test(
-    "in3-3.5",
-    function()
-        -- Numeric affinity should be applied to each side before the comparison
-        -- takes place. Therefore we cannot use index t1_i1, which has no affinity.
-        return exec_neph(" SELECT y IN (SELECT a FROM t1) FROM t2 ")
-    end, {
-        -- <in3-3.5>
-        1, true
-        -- </in3-3.5>
-    })
-
-test:do_test(
     "in3-3.6",
     function()
         -- Numeric affinity is applied to both sides before 
@@ -356,18 +344,6 @@ test:do_test(
         -- <in3-3.6>
         0, true
         -- </in3-3.6>
-    })
-
-test:do_test(
-    "in3-3.7",
-    function()
-        -- Numeric affinity is applied before the comparison takes place. 
-        -- Making it impossible to use index t1_i3.
-        return exec_neph(" SELECT y IN (SELECT c FROM t1) FROM t2 ")
-    end, {
-        -- <in3-3.7>
-        1, true
-        -- </in3-3.7>
     })
 
 -----------------------------------------------------------------------

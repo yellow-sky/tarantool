@@ -1274,9 +1274,13 @@ selectInnerLoop(Parse * pParse,		/* The parser context */
 					field_type_sequence_dup(pParse,
 								pDest->dest_type,
 								nResultCol);
-				sqlVdbeAddOp4(v, OP_MakeRecord, regResult,
-						  nResultCol, r1, (char *)types,
-						  P4_DYNAMIC);
+				sqlVdbeAddOp4(v, OP_ApplyType, regResult,
+					      nResultCol, 0, (char *)types,
+					      P4_DYNAMIC);
+				sqlVdbeChangeP5(v,
+						OPFLAG_DO_NOT_CONVERT_NUMBERS);
+				sqlVdbeAddOp3(v, OP_MakeRecord, regResult,
+						  nResultCol, r1);
 				sql_expr_type_cache_change(pParse,
 							   regResult,
 							   nResultCol);
@@ -1696,9 +1700,11 @@ generateSortTail(Parse * pParse,	/* Parsing context */
 			enum field_type *types =
 				field_type_sequence_dup(pParse, pDest->dest_type,
 							nColumn);
-			sqlVdbeAddOp4(v, OP_MakeRecord, regRow, nColumn,
-					  regTupleid, (char *)types,
-					  P4_DYNAMIC);
+			sqlVdbeAddOp4(v, OP_ApplyType, regRow, nColumn, 0,
+				      (char *)types, P4_DYNAMIC);
+			sqlVdbeChangeP5(v, OPFLAG_DO_NOT_CONVERT_NUMBERS);
+			sqlVdbeAddOp3(v, OP_MakeRecord, regRow, nColumn,
+				      regTupleid);
 			sql_expr_type_cache_change(pParse, regRow, nColumn);
 			sqlVdbeAddOp2(v, OP_IdxInsert, regTupleid, pDest->reg_eph);
 			break;
@@ -3138,9 +3144,11 @@ generateOutputSubroutine(struct Parse *parse, struct Select *p,
 			enum field_type *types =
 				field_type_sequence_dup(parse, dest->dest_type,
 							in->nSdst);
-			sqlVdbeAddOp4(v, OP_MakeRecord, in->iSdst,
-					  in->nSdst, r1, (char *)types,
-					  P4_DYNAMIC);
+			sqlVdbeAddOp4(v, OP_ApplyType, in->iSdst, in->nSdst, 0,
+				      (char *)types, P4_DYNAMIC);
+			sqlVdbeChangeP5(v, OPFLAG_DO_NOT_CONVERT_NUMBERS);
+			sqlVdbeAddOp3(v, OP_MakeRecord, in->iSdst, in->nSdst,
+				      r1);
 			sql_expr_type_cache_change(parse, in->iSdst,
 						   in->nSdst);
 			sqlVdbeAddOp2(v, OP_IdxInsert, r1, dest->reg_eph);

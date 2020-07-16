@@ -2888,9 +2888,12 @@ sqlCodeSubselect(Parse * pParse,	/* Parsing context */
 					r3 = sqlExprCodeTarget(pParse, pE2, r1);
 					enum field_type types[2] =
 						{ lhs_type, field_type_MAX };
-	 				sqlVdbeAddOp4(v, OP_MakeRecord, r3,
-							  1, r2, (char *)types,
-							  sizeof(types));
+					sqlVdbeAddOp4(v, OP_ApplyType, r3, 1, 0,
+						      (char *)types,
+						      sizeof(types));
+					sqlVdbeChangeP5(v, OPFLAG_DO_NOT_CONVERT_NUMBERS);
+					sqlVdbeAddOp3(v, OP_MakeRecord, r3, 1,
+						      r2);
 					sql_expr_type_cache_change(pParse,
 								   r3, 1);
 					sqlVdbeAddOp2(v, OP_IdxInsert, r2,
