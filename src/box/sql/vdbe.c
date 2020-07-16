@@ -2352,16 +2352,20 @@ case OP_AddImm: {            /* in1 */
  */
 case OP_MustBeInt: {            /* jump, in1 */
 	pIn1 = &aMem[pOp->p1];
-	if ((pIn1->flags & (MEM_Int | MEM_UInt)) == 0) {
-		mem_apply_type(pIn1, FIELD_TYPE_INTEGER);
-		if ((pIn1->flags & (MEM_Int | MEM_UInt)) == 0) {
-			if (pOp->p2==0) {
-				diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
-					 sql_value_to_diag_str(pIn1), "integer");
-				goto abort_due_to_error;
-			} else {
-				goto jump_to_p2;
-			}
+	if (mem_is_type_compatible(pIn1, FIELD_TYPE_INTEGER))
+		break;
+	if ((pIn1->flags & MEM_Real) != 0) {
+		double d = pIn1->u.r;
+		if (d == (double)(int64_t)d || d == (double)(uint64_t)d)
+			mem_convert_to_integer(pIn1);
+	}
+	if (!mem_is_type_compatible(pIn1, FIELD_TYPE_INTEGER)) {
+		if (pOp->p2==0) {
+			diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
+				 sql_value_to_diag_str(pIn1), "integer");
+			goto abort_due_to_error;
+		} else {
+			goto jump_to_p2;
 		}
 	}
 	break;
