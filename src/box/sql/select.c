@@ -124,6 +124,29 @@ clearSelect(sql * db, Select * p, int bFree)
 	}
 }
 
+void
+sql_emit_func_arg_type_check(struct Vdbe *vdbe, struct func *func,
+			     int reg, uint32_t argc)
+{
+	if (argc == 0 || func->def->args == NULL)
+		return;
+	assert(func->def->param_count > 0);
+	size_t size = (argc + 1) * sizeof(enum field_type);
+	enum field_type *types = sqlDbMallocZero(sql_get(), size);
+	if (argc <= (uint32_t)func->def->param_count) {
+		for (uint32_t i = 0; i < argc; ++i)
+			types[i] = func->def->args[i].type;
+	} else {
+		for (uint32_t i = 0; i < (uint32_t)func->def->param_count; ++i)
+			types[i] = func->def->args[i].type;
+		for (uint32_t i = func->def->param_count; i < argc; ++i)
+			types[i] = FIELD_TYPE_ANY;
+	}
+	types[argc] = field_type_MAX;
+	sqlVdbeAddOp4(vdbe, OP_ApplyType, reg, argc, 0, (char *)types,
+		      P4_DYNAMIC);
+}
+
 /*
  * Initialize a SelectDest structure.
  */
@@ -5414,6 +5437,7 @@ updateAccumulator(Parse * pParse, AggInfo * pAggInfo)
 			sqlVdbeAddOp4(v, OP_CollSeq, regHit, 0, 0,
 					  (char *)coll, P4_COLLSEQ);
 		}
+		sql_emit_func_arg_type_check(v, pF->func, regAgg, nArg);
 		sqlVdbeAddOp3(v, OP_AggStep0, 0, regAgg, pF->iMem);
 		sqlVdbeAppendP4(v, pF->func, P4_FUNC);
 		sqlVdbeChangeP5(v, (u8) nArg);

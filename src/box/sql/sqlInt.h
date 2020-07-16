@@ -3881,6 +3881,20 @@ sql_index_type_str(struct sql *db, const struct index_def *idx_def);
 void
 sql_emit_table_types(struct Vdbe *v, struct space_def *def, int reg);
 
+/**
+ * Code an OP_ApplyType opcode that try to cast implicitly types
+ * for given range of register starting from @a reg. These values
+ * then will be used as arguments of a function.
+ *
+ * @param vdbe VDBE.
+ * @param args Information about arguments of the function.
+ * @param reg Register where types will be placed.
+ * @param argc Number of arguments.
+ */
+void
+sql_emit_func_arg_type_check(struct Vdbe *vdbe, struct func *func,
+			     int reg, uint32_t argc);
+
 enum field_type
 sql_type_result(enum field_type lhs, enum field_type rhs);
 
@@ -4402,6 +4416,22 @@ struct func_sql_builtin {
 	struct func base;
 	/** A bitmask of SQL flags. */
 	uint16_t flags;
+	/**
+	 * Currently built-in functions that can have a variable
+	 * number of arguments have a param_count of -1. But,
+	 * since we added an array that contains the types of the
+	 * function's arguments, we have to store the length of
+	 * the array somewhere. If we don't, we might get a
+	 * segmentation fault while creating the type array for
+	 * the ApplyType opcode. So for these functions
+	 * param_count will contain the length of the array and an
+	 * additional flag will be added. This flag will tell us
+	 * if the function has a variable number of arguments.
+	 *
+	 * TRUE if the function takes a variable number of
+	 * arguments.
+	 */
+	bool is_var_args;
 	/**
 	 * A VDBE-memory-compatible call method.
 	 * SQL built-ins don't use func base class "call"
