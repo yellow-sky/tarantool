@@ -42,7 +42,7 @@ exclude_files = {
     -- Unused source file, to be dropped (gh-5169).
     "test/box/lua/test_init.lua",
     "test/engine/*.test.lua",
-    "test/engine_long/*.lua",
+    "test/engine_long/*.test.lua",
     "test/long_run-py/**/*.lua",
     "test/replication/**/*.lua",
     "test/replication-py/**/*.lua",
@@ -162,4 +162,10 @@ files["test/engine/conflict.lua"] = {
     globals = {
         "test_conflict",
     },
+}
+files["test/engine_long/suite.lua"] = {
+    globals = {
+        "delete_replace_update",
+        "delete_insert",
+    }
 }
