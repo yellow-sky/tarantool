@@ -613,18 +613,8 @@ luaT_newthread_wrapper(lua_State *L)
  * @param L is a Lua State
  * @sa lua_newthread()
  */
-static inline lua_State *
-luaT_newthread(lua_State *L)
-{
-	lua_State *L1 = NULL;
-	if (luaT_cpcall(L, luaT_newthread_wrapper, &L1) != 0) {
-		return NULL;
-	}
-	assert(L1 != NULL);
-	setthreadV(L, L->top, L1);
-	incr_top(L);
-	return L1;
-}
+lua_State *
+luaT_newthread(lua_State *L);
 
 /**
  * Check if a value on @a L stack by index @a idx is an ibuf
