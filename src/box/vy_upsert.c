@@ -78,6 +78,9 @@ struct tuple *
 vy_apply_upsert(struct tuple *new_stmt, struct tuple *old_stmt,
 		struct key_def *cmp_def, bool suppress_error)
 {
+	say_error("new_stmt %s ", vy_stmt_str(new_stmt));
+	say_error("old_stmt %s ", vy_stmt_str(old_stmt));
+
 	/*
 	 * old_stmt - previous (old) version of stmt
 	 * new_stmt - next (new) version of stmt
@@ -87,14 +90,15 @@ vy_apply_upsert(struct tuple *new_stmt, struct tuple *old_stmt,
 	assert(new_stmt != old_stmt);
 	assert(vy_stmt_type(new_stmt) == IPROTO_UPSERT);
 
+	struct tuple_format *format = tuple_format(new_stmt);
 	if (old_stmt == NULL || vy_stmt_type(old_stmt) == IPROTO_DELETE) {
 		/*
 		 * INSERT case: return new stmt.
 		 */
+//		if (tuple_validate(format, new_stmt) != 0)
+//			return NULL;
 		return vy_stmt_replace_from_upsert(new_stmt);
 	}
-
-	struct tuple_format *format = tuple_format(new_stmt);
 
 	/*
 	 * Unpack UPSERT operation from the new stmt
@@ -122,18 +126,23 @@ vy_apply_upsert(struct tuple *new_stmt, struct tuple *old_stmt,
 					result_mp_end, format, &mp_size,
 					0, suppress_error, &column_mask);
 	result_mp_end = result_mp + mp_size;
+	char *tmp = tt_static_buf();
+	mp_snprint(tmp, 1024, result_mp);
+	say_error("tuple_upsert_execute %s ", tmp);
 	if (old_type != IPROTO_UPSERT) {
-		assert(old_type == IPROTO_INSERT ||
-		       old_type == IPROTO_REPLACE);
 		if (tuple_validate_raw(format, result_mp) != 0) {
 			region_truncate(region, region_svp);
-			return NULL;
+			say_error("FORMAT CHECK FAILED");
+			return vy_stmt_dup(old_stmt);;
 		}
+		assert(old_type == IPROTO_INSERT ||
+		       old_type == IPROTO_REPLACE);
 		/*
 		 * UPDATE case: return the updated old stmt.
 		 */
 		result_stmt = vy_stmt_new_replace(format, result_mp,
 						  result_mp_end);
+		say_error("new replace %s ", vy_stmt_str(result_stmt));
 		region_truncate(region, region_svp);
 		if (result_stmt == NULL)
 			return NULL; /* OOM */
@@ -161,6 +170,7 @@ vy_apply_upsert(struct tuple *new_stmt, struct tuple *old_stmt,
 		return NULL;
 	}
 	if (result_stmt != NULL) {
+		say_error("SQUASH SUCCEED %s", vy_stmt_str(result_stmt));
 		region_truncate(region, region_svp);
 		vy_stmt_set_lsn(result_stmt, vy_stmt_lsn(new_stmt));
 		goto check_key;
@@ -185,6 +195,8 @@ vy_apply_upsert(struct tuple *new_stmt, struct tuple *old_stmt,
 
 	result_stmt = vy_stmt_new_upsert(format, result_mp, result_mp_end,
 					 operations, 3);
+	say_error("SQUASH FAILED %s", vy_stmt_str(result_stmt));
+
 	region_truncate(region, region_svp);
 	if (result_stmt == NULL)
 		return NULL;
@@ -197,6 +209,7 @@ check_key:
 	if (!key_update_can_be_skipped(cmp_def->column_mask, column_mask) &&
 	    vy_stmt_compare(old_stmt, HINT_NONE, result_stmt,
 			    HINT_NONE, cmp_def) != 0) {
+		say_error("PK CHECK FAILED! RETURN OLD STMT");
 		/*
 		 * Key has been changed: ignore this UPSERT and
 		 * @retval the old stmt.
