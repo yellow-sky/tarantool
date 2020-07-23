@@ -48,6 +48,7 @@ static int luaT_newthread_ref = LUA_NOREF;
 
 static uint32_t CTID_STRUCT_IBUF;
 static uint32_t CTID_STRUCT_IBUF_PTR;
+static uint32_t CTID_STRUCT_MP_EXT_RAW;
 static uint32_t CTID_CHAR_PTR;
 static uint32_t CTID_CONST_CHAR_PTR;
 static uint32_t CTID_UUID;
@@ -105,6 +106,12 @@ luaL_pushcdata(struct lua_State *L, uint32_t ctypeid)
 
 	lj_gc_check(L);
 	return cdataptr(cd);
+}
+
+struct mp_ext_raw *
+luaL_pushraw(struct lua_State *L)
+{
+	return luaL_pushcdata(L, CTID_STRUCT_MP_EXT_RAW);
 }
 
 struct tt_uuid *
@@ -734,6 +741,8 @@ luaL_tofield(struct lua_State *L, struct luaL_serializer *cfg,
 				field->ext_type = MP_ERROR;
 			} else {
 				field->ext_type = MP_UNKNOWN_EXTENSION;
+				field->sval.data = cdata;
+				field->sval.len = (uint32_t) size;
 			}
 		}
 		return 0;
@@ -1310,6 +1319,14 @@ tarantool_lua_utils_init(struct lua_State *L)
 	(void) rc;
 	CTID_UUID = luaL_ctypeid(L, "struct tt_uuid");
 	assert(CTID_UUID != 0);
+
+	rc = luaL_cdef(L, "struct mp_ext_raw {"
+				 "const char **data;"
+				 "double size;"
+			  "};");
+	assert(rc == 0);
+	CTID_STRUCT_MP_EXT_RAW = luaL_ctypeid(L, "struct mp_ext_raw");
+	assert(CTID_STRUCT_MP_EXT_RAW != 0);
 
 	lua_pushcfunction(L, luaT_newthread_wrapper);
 	luaT_newthread_ref = luaL_ref(L, LUA_REGISTRYINDEX);

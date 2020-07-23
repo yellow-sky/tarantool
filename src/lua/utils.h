@@ -65,6 +65,11 @@ struct ibuf;
 typedef struct ibuf box_ibuf_t;
 struct tt_uuid;
 
+struct mp_ext_raw {
+	const char **data;
+	double size;
+};
+
 /**
  * Single global lua_State shared by core and modules.
  * Created with tarantool_lua_init().
@@ -76,6 +81,9 @@ extern struct ibuf *tarantool_lua_ibuf;
 
 struct tt_uuid *
 luaL_pushuuid(struct lua_State *L);
+
+struct mp_ext_raw *
+luaL_pushraw(struct lua_State *L);
 
 /** \cond public */
 

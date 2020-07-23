@@ -332,10 +332,14 @@ luamp_decode(struct lua_State *L, struct luaL_serializer *cfg,
 			return;
 		}
 		default:
-			/* reset data to the extension header */
+			luaL_pushraw(L);
+			/*
+			struct mp_ext_raw *mp_ext_raw = luaL_pushraw(L);
+			if (mp_ext_raw == NULL)
+				goto ext_decode_err;
+			*/
 			*data = svp;
-			luamp_decode_extension(L, data);
-			break;
+			return;
 		}
 		break;
 	}
