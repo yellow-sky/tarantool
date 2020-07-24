@@ -783,6 +783,7 @@ func_lua_destroy(struct func *func)
 {
 	assert(func != NULL && func->def->language == FUNC_LANGUAGE_LUA);
 	assert(func->vtab == &func_lua_vtab);
+	free(func->def->param_list);
 	TRASH(func);
 	free(func);
 }
@@ -812,6 +813,7 @@ func_persistent_lua_destroy(struct func *base)
 	assert(base != NULL && base->def->language == FUNC_LANGUAGE_LUA &&
 	       base->def->body != NULL);
 	assert(base->vtab == &func_persistent_lua_vtab);
+	free(base->def->param_list);
 	struct func_lua *func = (struct func_lua *) base;
 	func_persistent_lua_unload(func);
 	free(func);

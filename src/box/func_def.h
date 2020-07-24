@@ -129,6 +129,8 @@ struct func_def {
 	bool is_sandboxed;
 	/** The count of function's input arguments. */
 	int param_count;
+	/** List of input arguments to the function. */
+	enum field_type *param_list;
 	/** The type of the value returned by function. */
 	enum field_type returns;
 	/** Function aggregate option. */

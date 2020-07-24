@@ -3293,7 +3293,11 @@ func_def_new_from_tuple(struct tuple *tuple)
 		diag_set(OutOfMemory, def_sz, "malloc", "def");
 		return NULL;
 	}
-	auto def_guard = make_scoped_guard([=] { free(def); });
+	def->param_list = NULL;
+	auto def_guard = make_scoped_guard([=] {
+		free(def->param_list);
+		free(def);
+	});
 	if (func_def_get_ids_from_tuple(tuple, &def->fid, &def->uid) != 0)
 		return NULL;
 	if (def->fid > BOX_FUNCTION_MAX) {
@@ -3403,6 +3407,8 @@ func_def_new_from_tuple(struct tuple *tuple)
 		if (param_list == NULL)
 			return NULL;
 		uint32_t argc = mp_decode_array(&param_list);
+		uint32_t size = sizeof(enum field_type) * argc;
+		def->param_list = (enum field_type *)malloc(size);
 		for (uint32_t i = 0; i < argc; i++) {
 			 if (mp_typeof(*param_list) != MP_STR) {
 				diag_set(ClientError, ER_FIELD_TYPE,
@@ -3412,7 +3418,8 @@ func_def_new_from_tuple(struct tuple *tuple)
 			}
 			uint32_t len;
 			const char *str = mp_decode_str(&param_list, &len);
-			if (STRN2ENUM(field_type, str, len) == field_type_MAX) {
+			def->param_list[i] = STRN2ENUM(field_type, str, len);
+			if (def->param_list[i] == field_type_MAX) {
 				diag_set(ClientError, ER_CREATE_FUNCTION,
 					  def->name, "invalid argument type");
 				return NULL;
@@ -3433,6 +3440,7 @@ func_def_new_from_tuple(struct tuple *tuple)
 		/* By default export to Lua, but not other frontends. */
 		def->exports.lua = true;
 		def->param_count = 0;
+		assert(def->param_list == NULL);
 	}
 	if (func_def_check(def) != 0)
 		return NULL;
