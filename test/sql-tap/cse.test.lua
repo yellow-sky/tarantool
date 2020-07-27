@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
-test:plan(118)
+test:plan(116)
 
 --!./tcltestrunner.lua
 -- 2008 April 1
@@ -191,28 +191,6 @@ test:do_execsql_test(
         -- <cse-1.12>
         21, 2, 21, 22, 23, 24, 14, 14, 13, 12, 11, 1
         -- </cse-1.12>
-    })
-
-
-
-test:do_execsql_test(
-    "cse-1.13",
-    [[
-        SELECT upper(b), typeof(b), b FROM t1
-    ]], {
-        -- <cse-1.13>
-        "11", "integer", 11, "21", "integer", 21
-        -- </cse-1.13>
-    })
-
-test:do_execsql_test(
-    "cse-1.14",
-    [[
-        SELECT b, typeof(b), upper(b), typeof(b), b FROM t1
-    ]], {
-        -- <cse-1.14>
-        11, "integer", "11", "integer", 11, 21, "integer", "21", "integer", 21
-        -- </cse-1.14>
     })
 
 -- Overflow the column cache.  Create queries involving more and more

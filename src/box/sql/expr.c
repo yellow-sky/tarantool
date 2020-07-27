@@ -4134,6 +4134,10 @@ sqlExprCodeTarget(Parse * pParse, Expr * pExpr, int target)
 			} else {
 				r1 = 0;
 			}
+			if (func->def->language == FUNC_LANGUAGE_SQL_BUILTIN) {
+				sql_emit_func_arg_type_check(v, func, r1,
+							     nFarg);
+			}
 			if (sql_func_flag_is_set(func, SQL_FUNC_NEEDCOLL)) {
 				sqlVdbeAddOp4(v, OP_CollSeq, 0, 0, 0,
 						  (char *)coll, P4_COLLSEQ);
