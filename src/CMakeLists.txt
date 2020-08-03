@@ -269,6 +269,17 @@ add_executable(
 add_dependencies(tarantool build_bundled_libs)
 target_link_libraries(tarantool box ${common_libraries})
 
+target_link_libraries(tarantool
+    -Wl,--whole-archive
+    box ${common_libraries}
+    -Wl,--no-whole-archive
+)
+
+# set_target_properties(tarantool PROPERTIES LINK_FLAGS "-Wl,--whole-archive")
+
+
+set_target_properties(tarantool PROPERTIES LINK_FLAGS "-Wl,--allow-multiple-definition")
+
 if (TARGET_OS_FREEBSD AND NOT TARGET_OS_DEBIAN_FREEBSD)
     # Without rdynamic FreeBSD does not export some symbols even
     # when they are used in the final executable and their
