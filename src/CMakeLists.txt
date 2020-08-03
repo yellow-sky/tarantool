@@ -269,13 +269,13 @@ add_executable(
 add_dependencies(tarantool build_bundled_libs)
 target_link_libraries(tarantool box ${common_libraries})
 
-target_link_libraries(tarantool
-    -Wl,--whole-archive
-    box ${common_libraries}
-    -Wl,--no-whole-archive
-)
+# target_link_libraries(tarantool
+#     -Wl,--whole-archive
+#     box ${common_libraries}
+#     -Wl,--no-whole-archive
+# )
 
-# set_target_properties(tarantool PROPERTIES LINK_FLAGS "-Wl,--whole-archive")
+set_target_properties(tarantool PROPERTIES LINK_FLAGS "-Wl,--whole-archive")
 
 
 set_target_properties(tarantool PROPERTIES LINK_FLAGS "-Wl,--allow-multiple-definition")
