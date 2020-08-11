@@ -3316,7 +3316,7 @@ sql_generate_row_delete(struct Parse *parse, struct space *space,
  * especially with the PRIMARY KEY columns of the index.
  *
  * @param parse Parsing context.
- * @param index The index for which to generate a key.
+ * @param idx_def The index definition for which to generate a key.
  * @param cursor Cursor number from which to take column data.
  * @param reg_out Put the new key into this register if not NULL.
  * @param prev Previously generated index key
@@ -3328,8 +3328,9 @@ sql_generate_row_delete(struct Parse *parse, struct space *space,
  * this routine returns.
  */
 int
-sql_generate_index_key(struct Parse *parse, struct index *index, int cursor,
-		       int reg_out, struct index *prev, int reg_prev);
+sql_generate_index_key(struct Parse *parse, struct index_def *idx_def,
+		       int cursor, int reg_out, struct index *prev,
+		       int reg_prev);
 
 /**
  * Generate code to do constraint checks prior to an INSERT or
