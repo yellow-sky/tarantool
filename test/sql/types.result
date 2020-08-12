@@ -2795,3 +2795,15 @@ box.execute([[DROP TABLE ts;]])
 ---
 - row_count: 1
 ...
+--
+-- gh-4159: Make sure that functions returns values of type INTEGER
+-- instead of values of type UNSIGNED.
+--
+box.execute([[SELECT typeof(length('abc'));]])
+---
+- metadata:
+  - name: COLUMN_1
+    type: string
+  rows:
+  - ['integer']
+...

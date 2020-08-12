@@ -328,7 +328,7 @@ sql_result_double(sql_context * pCtx, double rVal)
 void
 sql_result_uint(sql_context *ctx, uint64_t u_val)
 {
-	mem_set_u64(ctx->pOut, u_val);
+	mem_set_int(ctx->pOut, u_val, false);
 }
 
 void

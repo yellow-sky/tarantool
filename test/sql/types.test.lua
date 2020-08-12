@@ -623,3 +623,9 @@ box.execute([[DROP TABLE tb;]])
 box.execute([[DROP TABLE tt;]])
 box.execute([[DROP TABLE tv;]])
 box.execute([[DROP TABLE ts;]])
+
+--
+-- gh-4159: Make sure that functions returns values of type INTEGER
+-- instead of values of type UNSIGNED.
+--
+box.execute([[SELECT typeof(length('abc'));]])
