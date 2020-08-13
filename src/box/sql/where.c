@@ -728,8 +728,6 @@ constructAutomaticIndex(Parse * pParse,			/* The parsing context */
 	WhereTerm *pTerm;	/* A single term of the WHERE clause */
 	WhereTerm *pWCEnd;	/* End of pWC->a[] */
 	//Index *pIdx;		/* Object describing the transient index */
-	struct key_def *key_def = NULL;
-	struct index_def *idx_def = NULL;
 	Vdbe *v;		/* Prepared statement under construction */
 	int addrInit;		/* Address of the initialization bypass jump */
 	struct space *space;	/* The table being indexed */
@@ -803,16 +801,35 @@ constructAutomaticIndex(Parse * pParse,			/* The parsing context */
 		nKeyCol += space->def->field_count - BMS + 1;
 	}
 
+	struct key_part_def part = {
+		.fieldno = 0,
+		.type = space->def->fields[0].type,
+		.nullable_action = ON_CONFLICT_ACTION_ABORT,
+		.is_nullable = false,
+		.sort_order = SORT_ORDER_ASC,
+		.coll_id = COLL_NONE,
+		.path = NULL,
+	};
+
+	struct key_def *key_def = key_def_new(&part, 1, false);
+	assert(key_def);
+	if (key_def == NULL)
+		goto end_auto_index_create;
+
+
 	/* Construct the Index object to describe this index */
-	struct index_opts opts = {0};
-	idx_def = index_def_new(space->def->id,
-				0,
-				"auto-index", strlen("auto-index"),
-				TREE,
-				&opts, key_def, NULL);
+	struct index_opts opts;
+	index_opts_create(&opts);
+	struct index_def *idx_def = index_def_new(space->def->id,
+						 0, "auto-index",
+						 sizeof("auto-index") -1,
+						 TREE, &opts, key_def,
+						 NULL);
+	key_def_delete(key_def);
+	assert(idx_def);
+	if (idx_def == NULL)
+		goto end_auto_index_create;
 	//pIdx = sqlDbMallocZero(pParse->db, sizeof(*pIdx));
-	//if (pIdx == 0)
-	//	goto end_auto_index_create;
 	//pLoop->pIndex = pIdx;
 	pLoop->index_def = idx_def;
 	//pIdx->zName = "auto-index";

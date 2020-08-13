@@ -130,6 +130,7 @@ key_def_copy(struct key_def *dest, const struct key_def *src)
 struct key_def *
 key_def_dup(const struct key_def *src)
 {
+	assert(src);
 	size_t sz = key_def_copy_size(src);
 	struct key_def *res = malloc(sz);
 	if (res == NULL) {
