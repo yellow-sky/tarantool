@@ -2182,7 +2182,7 @@ sql_func_by_signature(const char *name, int argc)
 	if (base == NULL || !base->def->exports.sql)
 		return NULL;
 
-	if (base->def->param_count != -1 && base->def->param_count != argc)
+	if (!base->def->opts.has_vararg && base->def->param_count != argc)
 		return NULL;
 	return base;
 }
@@ -2928,6 +2928,7 @@ func_sql_builtin_new(struct func_def *def)
 	def->returns = sql_builtins[idx].returns;
 	def->aggregate = sql_builtins[idx].aggregate;
 	def->exports.sql = sql_builtins[idx].export_to_sql;
+	def->opts.has_vararg = sql_builtins[idx].param_count == -1;
 	return &func->base;
 }
 

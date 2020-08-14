@@ -614,7 +614,7 @@ resolveExprStep(Walker * pWalker, Expr * pExpr)
 				pNC->nErr++;
 				return WRC_Abort;
 			}
-			if (func->def->param_count != -1 &&
+			if (!func->def->opts.has_vararg &&
 			    func->def->param_count != n) {
 				uint32_t argc = func->def->param_count;
 				const char *err = tt_sprintf("%d", argc);
