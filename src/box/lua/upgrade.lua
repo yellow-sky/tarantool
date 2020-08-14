@@ -972,6 +972,197 @@ local function upgrade_to_2_3_1()
 end
 
 --------------------------------------------------------------------------------
+-- Tarantool 2.5.2
+--------------------------------------------------------------------------------
+
+local function update_sql_builtin_functions()
+    local _func = box.space[box.schema.FUNC_ID]
+    local _priv = box.space[box.schema.PRIV_ID]
+    local updates
+    local datetime = os.date("%Y-%m-%d %H:%M:%S")
+    local overloaded_function_list = {
+        "LENGTH_VARBINARY", "POSITION_VARBINARY", "TRIM_VARBINARY",
+        "SUBSTR_VARBINARY",
+    }
+
+    for _, v in pairs(overloaded_function_list) do
+        local t = _func:auto_increment({ADMIN, v, 1, 'SQL_BUILTIN', '',
+                                       'function', {}, 'any', 'none', 'none',
+                                        false, false, true, {}, setmap({}), '',
+                                        datetime, datetime})
+        _priv:replace{ADMIN, PUBLIC, 'function', t.id, box.priv.X}
+    end
+
+    _func:run_triggers(false)
+    updates = {{'=', 'param_list', {'number'}}, {'=', 'returns', 'number'},
+               {'=', 'is_deterministic', true}, {'=', 'exports', {'SQL'}}}
+    _func.index[2]:update('ABS', updates)
+
+    updates = {{'=', 'param_list', {'number'}}, {'=', 'returns', 'number'},
+               {'=', 'aggregate', 'group'}, {'=', 'exports', {'SQL'}}}
+    _func.index[2]:update('AVG', updates)
+    _func.index[2]:update('SUM', updates)
+    _func.index[2]:update('TOTAL', updates)
+
+    updates = {{'=', 'param_list', {'unsigned'}}, {'=', 'returns', 'string'},
+               {'=', 'is_deterministic', true}, {'=', 'exports', {'SQL'}},
+               {'=', 'opts', {has_vararg = true}}}
+    _func.index[2]:update('CHAR', updates)
+
+    updates = {{'=', 'param_list', {'string'}}, {'=', 'returns', 'integer'},
+               {'=', 'is_deterministic', true}, {'=', 'exports', {'SQL'}}}
+    _func.index[2]:update('CHARACTER_LENGTH', updates)
+    _func.index[2]:update('CHAR_LENGTH', updates)
+
+    updates = {{'=', 'param_list', {'string'}}, {'=', 'returns', 'integer'},
+               {'=', 'is_deterministic', true}, {'=', 'exports', {'SQL'}},
+               {'=', 'opts', {has_overload = true}}}
+    _func.index[2]:update('LENGTH', updates)
+
+    updates = {{'=', 'param_list', {'varbinary'}}, {'=', 'returns', 'integer'},
+               {'=', 'is_deterministic', true}, {'=', 'exports', {'SQL'}},
+               {'=', 'opts', {is_overloaded = true}}}
+    _func.index[2]:update('LENGTH_VARBINARY', updates)
+
+    updates = {{'=', 'param_list', {'scalar'}}, {'=', 'returns', 'scalar'},
+               {'=', 'is_deterministic', true}, {'=', 'exports', {'SQL'}},
+               {'=', 'opts', {has_vararg = true}}}
+    _func.index[2]:update('COALESCE', updates)
+
+    updates = {{'=', 'param_list', {'scalar'}}, {'=', 'returns', 'integer'},
+               {'=', 'aggregate', 'group'}, {'=', 'exports', {'SQL'}},
+               {'=', 'opts', {has_vararg = true}}}
+    _func.index[2]:update('COUNT', updates)
+
+    updates = {{'=', 'param_list', {'scalar'}}, {'=', 'returns', 'scalar'},
+               {'=', 'is_deterministic', true}, {'=', 'exports', {'SQL'}},
+               {'=', 'opts', {has_vararg = true}}}
+    _func.index[2]:update('GREATEST', updates)
+    _func.index[2]:update('LEAST', updates)
+
+    updates = {{'=', 'param_list', {'scalar', 'scalar'}},
+               {'=', 'returns', 'string'}, {'=', 'aggregate', 'group'},
+               {'=', 'exports', {'SQL'}}, {'=', 'opts', {has_vararg = true}}}
+    _func.index[2]:update('GROUP_CONCAT', updates)
+
+    updates = {{'=', 'param_list', {'scalar'}}, {'=', 'returns', 'string'},
+               {'=', 'is_deterministic', true}, {'=', 'exports', {'SQL'}}}
+    _func.index[2]:update('HEX', updates)
+
+    updates = {{'=', 'param_list', {'scalar', 'scalar'}},
+               {'=', 'returns', 'scalar'}, {'=', 'is_deterministic', true},
+               {'=', 'exports', {'SQL'}}}
+    _func.index[2]:update('IFNULL', updates)
+    _func.index[2]:update('NULLIF', updates)
+
+    updates = {{'=', 'param_list', {'string', 'string', 'string'}},
+               {'=', 'returns', 'boolean'}, {'=', 'is_deterministic', true},
+               {'=', 'exports', {'SQL'}}, {'=', 'opts', {has_vararg = true}}}
+    _func.index[2]:update('LIKE', updates)
+
+    updates = {{'=', 'param_list', {'scalar', 'double'}},
+               {'=', 'returns', 'scalar'}, {'=', 'is_deterministic', true},
+               {'=', 'exports', {'SQL'}}}
+    _func.index[2]:update('LIKELIHOOD', updates)
+
+    updates = {{'=', 'param_list', {'scalar'}}, {'=', 'returns', 'scalar'},
+               {'=', 'is_deterministic', true}, {'=', 'exports', {'SQL'}}}
+    _func.index[2]:update('LIKELY', updates)
+    _func.index[2]:update('UNLIKELY', updates)
+
+    updates = {{'=', 'param_list', {'string'}}, {'=', 'returns', 'string'},
+               {'=', 'is_deterministic', true}, {'=', 'exports', {'SQL'}}}
+    _func.index[2]:update('LOWER', updates)
+    _func.index[2]:update('SOUNDEX', updates)
+    _func.index[2]:update('UNICODE', updates)
+    _func.index[2]:update('UPPER', updates)
+
+    updates = {{'=', 'param_list', {'scalar'}}, {'=', 'returns', 'string'},
+               {'=', 'is_deterministic', true}, {'=', 'exports', {'SQL'}}}
+    _func.index[2]:update('QUOTE', updates)
+    _func.index[2]:update('TYPEOF', updates)
+
+    updates = {{'=', 'param_list', {'scalar'}}, {'=', 'returns', 'scalar'},
+               {'=', 'aggregate', 'group'}, {'=', 'exports', {'SQL'}}}
+    _func.index[2]:update('MAX', updates)
+    _func.index[2]:update('MIN', updates)
+
+    updates = {{'=', 'param_list', {'string', 'string'}},
+               {'=', 'returns', 'integer'}, {'=', 'is_deterministic', true},
+               {'=', 'exports', {'SQL'}}, {'=', 'opts', {has_overload = true}}}
+    _func.index[2]:update('POSITION', updates)
+
+    updates = {{'=', 'param_list', {'varbinary', 'varbinary'}},
+               {'=', 'returns', 'integer'}, {'=', 'is_deterministic', true},
+               {'=', 'exports', {'SQL'}}, {'=', 'opts', {is_overloaded = true}}}
+    _func.index[2]:update('POSITION_VARBINARY', updates)
+
+    updates = {{'=', 'param_list', {'scalar'}}, {'=', 'returns', 'string'},
+               {'=', 'is_deterministic', true}, {'=', 'exports', {'SQL'}},
+               {'=', 'opts', {has_vararg = true}}}
+    _func.index[2]:update('PRINTF', updates)
+
+    updates = {{'=', 'param_list', {'string', 'unsigned', 'string'}},
+               {'=', 'returns', 'string'}, {'=', 'is_deterministic', true},
+               {'=', 'exports', {'SQL'}},
+               {'=', 'opts', {has_vararg = true, has_overload = true}}}
+    _func.index[2]:update('TRIM', updates)
+
+    updates = {{'=', 'param_list', {'varbinary', 'unsigned', 'varbinary'}},
+               {'=', 'returns', 'string'}, {'=', 'is_deterministic', true},
+               {'=', 'exports', {'SQL'}},
+               {'=', 'opts', {has_vararg = true, is_overloaded = true}}}
+    _func.index[2]:update('TRIM_VARBINARY', updates)
+
+    updates = {{'=', 'returns', 'integer'}, {'=', 'exports', {'SQL'}}}
+    _func.index[2]:update('RANDOM', updates)
+
+    updates = {{'=', 'returns', 'integer'}, {'=', 'is_deterministic', true},
+               {'=', 'exports', {'SQL'}}}
+    _func.index[2]:update('ROW_COUNT', updates)
+
+    updates = {{'=', 'param_list', {'unsigned'}},
+               {'=', 'returns', 'varbinary'}, {'=', 'exports', {'SQL'}}}
+    _func.index[2]:update('RANDOMBLOB', updates)
+
+    updates = {{'=', 'param_list', {'unsigned'}},
+               {'=', 'returns', 'varbinary'}, {'=', 'is_deterministic', true},
+               {'=', 'exports', {'SQL'}}}
+    _func.index[2]:update('ZEROBLOB', updates)
+
+    updates = {{'=', 'param_list', {'string', 'string', 'string'}},
+               {'=', 'returns', 'string'}, {'=', 'is_deterministic', true},
+               {'=', 'exports', {'SQL'}}}
+    _func.index[2]:update('REPLACE', updates)
+
+    updates = {{'=', 'param_list', {'double', 'unsigned'}},
+               {'=', 'returns', 'double'}, {'=', 'is_deterministic', true},
+               {'=', 'exports', {'SQL'}}, {'=', 'opts', {has_vararg = true}}}
+    _func.index[2]:update('ROUND', updates)
+
+    updates = {{'=', 'param_list', {'string', 'integer', 'integer'}},
+               {'=', 'returns', 'string'}, {'=', 'is_deterministic', true},
+               {'=', 'exports', {'SQL'}},
+               {'=', 'opts', {has_vararg = true, has_overload = true}}}
+    _func.index[2]:update('SUBSTR', updates)
+
+    updates = {{'=', 'param_list', {'varbinary', 'integer', 'integer'}},
+               {'=', 'returns', 'string'}, {'=', 'is_deterministic', true},
+               {'=', 'exports', {'SQL'}},
+               {'=', 'opts', {has_vararg = true, is_overloaded = true}}}
+    _func.index[2]:update('SUBSTR_VARBINARY', updates)
+
+    updates = {{'=', 'returns', 'string'}, {'=', 'is_deterministic', true},
+               {'=', 'exports', {'SQL'}}}
+    _func.index[2]:update('VERSION', updates)
+    _func:run_triggers(true)
+end
+
+local function upgrade_to_2_5_2()
+    update_sql_builtin_functions()
+end
+
+--------------------------------------------------------------------------------
 
 local function get_version()
     local version = box.space._schema:get{'version'}
@@ -1007,6 +1198,7 @@ local function upgrade(options)
         {version = mkversion(2, 2, 1), func = upgrade_to_2_2_1, auto = true},
         {version = mkversion(2, 3, 0), func = upgrade_to_2_3_0, auto = true},
         {version = mkversion(2, 3, 1), func = upgrade_to_2_3_1, auto = true},
+        {version = mkversion(2, 5, 2), func = upgrade_to_2_5_2, auto = true},
     }
 
     for _, handler in ipairs(handlers) do

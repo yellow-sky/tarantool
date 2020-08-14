@@ -2971,12 +2971,6 @@ func_sql_builtin_new(struct func_def *def)
 	func->flags = sql_builtins[idx].flags;
 	func->call = sql_builtins[idx].call;
 	func->finalize = sql_builtins[idx].finalize;
-	def->param_count = sql_builtins[idx].param_count;
-	def->is_deterministic = sql_builtins[idx].is_deterministic;
-	def->returns = sql_builtins[idx].returns;
-	def->aggregate = sql_builtins[idx].aggregate;
-	def->exports.sql = sql_builtins[idx].export_to_sql;
-	def->opts.has_vararg = sql_builtins[idx].param_count == -1;
 	return &func->base;
 }
 
