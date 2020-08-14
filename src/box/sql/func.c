@@ -1764,10 +1764,6 @@ trim_func_one_arg(struct sql_context *context, sql_value *arg)
 /**
  * Normalize args from @a argv input array when it has two args.
  *
- * Case: TRIM(<character_set> FROM <str>)
- * If user has specified <character_set> only, call trimming
- * procedure with TRIM_BOTH as the flags and that trimming set.
- *
  * Case: TRIM(LEADING/TRAILING/BOTH FROM <str>)
  * If user has specified side keyword only, then call trimming
  * procedure with the specified side and " " as the trimming set.
@@ -1776,31 +1772,29 @@ static void
 trim_func_two_args(struct sql_context *context, sql_value *arg1,
 		   sql_value *arg2)
 {
-	const unsigned char *input_str, *trim_set;
-	if ((input_str = sql_value_text(arg2)) == NULL)
-		return;
+	assert(sql_value_type(arg2) == MP_UINT);
+	enum mp_type type = sql_value_type(arg1);
+	if (type == MP_NIL)
+		return sql_result_null(context);
+	const unsigned char *input_str = sql_value_text(arg1);
+	const unsigned char *trim_set;
 
-	int input_str_sz = sql_value_bytes(arg2);
-	if (sql_value_type(arg1) == MP_INT || sql_value_type(arg1) == MP_UINT) {
-		uint8_t len_one = 1;
-		trim_procedure(context, sql_value_int(arg1),
-			       (const unsigned char *) " ", &len_one, 1,
-			       input_str, input_str_sz);
-	} else if ((trim_set = sql_value_text(arg1)) != NULL) {
-		int trim_set_sz = sql_value_bytes(arg1);
-		uint8_t *char_len;
-		int char_cnt = trim_prepare_char_len(context, trim_set,
-						     trim_set_sz, &char_len);
-		if (char_cnt == -1)
-			return;
-		trim_procedure(context, TRIM_BOTH, trim_set, char_len, char_cnt,
-			       input_str, input_str_sz);
-		sql_free(char_len);
-	}
+	int input_str_sz = sql_value_bytes(arg1);
+	uint8_t len_one = 1;
+	if (type == MP_BIN)
+		trim_set = (const unsigned char *) "\0";
+	else
+		trim_set = (const unsigned char *) " ";
+	trim_procedure(context, sql_value_int(arg2), trim_set,  &len_one, 1,
+		       input_str, input_str_sz);
 }
 
 /**
  * Normalize args from @a argv input array when it has three args.
+ *
+ * Case: TRIM(<character_set> FROM <str>)
+ * If user has specified <character_set> only, call trimming
+ * procedure with TRIM_BOTH as the flags and that trimming set.
  *
  * Case: TRIM(LEADING/TRAILING/BOTH <character_set> FROM <str>)
  * If user has specified side keyword and <character_set>, then
@@ -1810,20 +1804,20 @@ static void
 trim_func_three_args(struct sql_context *context, sql_value *arg1,
 		     sql_value *arg2, sql_value *arg3)
 {
-	assert(sql_value_type(arg1) == MP_INT || sql_value_type(arg1) == MP_UINT);
+	assert(sql_value_type(arg2) == MP_UINT);
 	const unsigned char *input_str, *trim_set;
-	if ((input_str = sql_value_text(arg3)) == NULL ||
-	    (trim_set = sql_value_text(arg2)) == NULL)
+	if ((input_str = sql_value_text(arg1)) == NULL ||
+	    (trim_set = sql_value_text(arg3)) == NULL)
 		return;
 
-	int trim_set_sz = sql_value_bytes(arg2);
-	int input_str_sz = sql_value_bytes(arg3);
+	int trim_set_sz = sql_value_bytes(arg3);
+	int input_str_sz = sql_value_bytes(arg1);
 	uint8_t *char_len;
 	int char_cnt = trim_prepare_char_len(context, trim_set, trim_set_sz,
 					     &char_len);
 	if (char_cnt == -1)
 		return;
-	trim_procedure(context, sql_value_int(arg1), trim_set, char_len,
+	trim_procedure(context, sql_value_int(arg2), trim_set, char_len,
 		       char_cnt, input_str, input_str_sz);
 	sql_free(char_len);
 }

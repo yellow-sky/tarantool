@@ -1133,6 +1133,14 @@ box.execute("SELECT DISTINCT trim(s2) FROM jj;")
   rows:
   - ['A']
 ...
+box.execute("SELECT DISTINCT trim(BOTH FROM s2) FROM jj;")
+---
+- metadata:
+  - name: COLUMN_1
+    type: string
+  rows:
+  - ['A']
+...
 box.execute("INSERT INTO jj VALUES (3, 'aS'), (4, 'AS');")
 ---
 - row_count: 2
