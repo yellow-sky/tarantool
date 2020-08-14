@@ -2169,18 +2169,26 @@ sql_is_like_func(struct Expr *expr)
 	    expr->x.pList->nExpr != 2)
 		return 0;
 	assert(!ExprHasProperty(expr, EP_xIsSelect));
-	struct func *func = sql_func_by_signature(expr->u.zToken, 2);
+	struct func *func = sql_func_by_signature(expr->u.zToken, false, 2);
 	if (func == NULL || !sql_func_flag_is_set(func, SQL_FUNC_LIKE))
 		return 0;
 	return 1;
 }
 
 struct func *
-sql_func_by_signature(const char *name, int argc)
+sql_func_by_signature(const char *name, bool has_blob_arg, int argc)
 {
 	struct func *base = func_by_name(name, strlen(name));
-	if (base == NULL || !base->def->exports.sql)
+	if (base == NULL || !base->def->exports.sql ||
+	    base->def->opts.is_overloaded)
 		return NULL;
+
+	if (has_blob_arg && base->def->opts.has_overload) {
+		const char *overload_name = tt_sprintf("%s_VARBINARY", name);
+		base = func_by_name(overload_name, strlen(overload_name));
+		assert(base != NULL && base->def->exports.sql);
+		assert(base->def->opts.is_overloaded);
+	}
 
 	if (!base->def->opts.has_vararg && base->def->param_count != argc)
 		return NULL;
@@ -2498,6 +2506,16 @@ static struct {
 	 .finalize = NULL,
 	 .export_to_sql = true,
 	}, {
+	 .name = "LENGTH_VARBINARY",
+	 .param_count = 1,
+	 .returns = FIELD_TYPE_INTEGER,
+	 .aggregate = FUNC_AGGREGATE_NONE,
+	 .is_deterministic = true,
+	 .flags = SQL_FUNC_LENGTH,
+	 .call = lengthFunc,
+	 .finalize = NULL,
+	 .export_to_sql = true,
+	}, {
 	 .name = "LESSER",
 	 .call = sql_builtin_stub,
 	 .export_to_sql = false,
@@ -2614,6 +2632,16 @@ static struct {
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
 	 .flags = SQL_FUNC_NEEDCOLL,
+	 .call = position_func,
+	 .finalize = NULL,
+	 .export_to_sql = true,
+	}, {
+	 .name = "POSITION_VARBINARY",
+	 .param_count = 2,
+	 .returns = FIELD_TYPE_INTEGER,
+	 .aggregate = FUNC_AGGREGATE_NONE,
+	 .is_deterministic = true,
+	 .flags = 0,
 	 .call = position_func,
 	 .finalize = NULL,
 	 .export_to_sql = true,
@@ -2748,6 +2776,16 @@ static struct {
 	 .finalize = NULL,
 	 .export_to_sql = true,
 	}, {
+	 .name = "SUBSTR_VARBINARY",
+	 .param_count = -1,
+	 .returns = FIELD_TYPE_STRING,
+	 .aggregate = FUNC_AGGREGATE_NONE,
+	 .is_deterministic = true,
+	 .flags = SQL_FUNC_DERIVEDCOLL,
+	 .call = substrFunc,
+	 .finalize = NULL,
+	 .export_to_sql = true,
+	}, {
 	 .name = "SUM",
 	 .param_count = 1,
 	 .returns = FIELD_TYPE_NUMBER,
@@ -2779,6 +2817,16 @@ static struct {
 	 .export_to_sql = true,
 	}, {
 	 .name = "TRIM",
+	 .param_count = -1,
+	 .returns = FIELD_TYPE_STRING,
+	 .aggregate = FUNC_AGGREGATE_NONE,
+	 .is_deterministic = true,
+	 .flags = SQL_FUNC_DERIVEDCOLL,
+	 .call = trim_func,
+	 .finalize = NULL,
+	 .export_to_sql = true,
+	}, {
+	 .name = "TRIM_VARBINARY",
 	 .param_count = -1,
 	 .returns = FIELD_TYPE_STRING,
 	 .aggregate = FUNC_AGGREGATE_NONE,

@@ -328,8 +328,15 @@ sql_expr_coll(Parse *parse, Expr *p, bool *is_explicit_coll, uint32_t *coll_id,
 		if (op == TK_FUNCTION) {
 			uint32_t arg_count = p->x.pList == NULL ? 0 :
 					     p->x.pList->nExpr;
+			bool has_blob_arg = false;
+			if (arg_count > 0) {
+				enum field_type type =
+					sql_expr_type(p->x.pList->a[0].pExpr);
+				has_blob_arg = type == FIELD_TYPE_VARBINARY;
+			}
 			struct func *func =
-				sql_func_by_signature(p->u.zToken, arg_count);
+				sql_func_by_signature(p->u.zToken, has_blob_arg,
+						      arg_count);
 			if (func == NULL)
 				break;
 			if (sql_func_flag_is_set(func, SQL_FUNC_DERIVEDCOLL) &&
@@ -3975,8 +3982,15 @@ sqlExprCodeTarget(Parse * pParse, Expr * pExpr, int target)
 			}
 			nFarg = pFarg ? pFarg->nExpr : 0;
 			assert(!ExprHasProperty(pExpr, EP_IntValue));
+			bool has_blob_arg = false;
+			if (nFarg > 0) {
+				enum field_type type =
+					sql_expr_type(pExpr->x.pList->a[0].pExpr);
+				has_blob_arg = type == FIELD_TYPE_VARBINARY;
+			}
 			zId = pExpr->u.zToken;
-			struct func *func = sql_func_by_signature(zId, nFarg);
+			struct func *func =
+				sql_func_by_signature(zId, has_blob_arg, nFarg);
 			if (func == NULL) {
 				diag_set(ClientError, ER_NO_SUCH_FUNCTION,
 					 zId);
@@ -5448,9 +5462,18 @@ analyzeAggregate(Walker * pWalker, Expr * pExpr)
 						uint32_t argc =
 							pExpr->x.pList != NULL ?
 							pExpr->x.pList->nExpr : 0;
+						bool has_blob_arg = false;
+						if (argc > 0) {
+							enum field_type type =
+								sql_expr_type(pExpr->x.pList->a[0].pExpr);
+							has_blob_arg =
+								type == FIELD_TYPE_VARBINARY;
+						}
 						pItem->func =
 							sql_func_by_signature(
-								name, argc);
+								name,
+								has_blob_arg,
+								argc);
 						assert(pItem->func != NULL);
 						assert(pItem->func->def->
 						       language ==

@@ -4441,13 +4441,14 @@ sql_func_flag_is_set(struct func *func, uint16_t flag)
  * A SQL method to find a function in a hash by its name and
  * count of arguments. Only functions that have 'SQL' engine
  * export field set true and have exactly the same signature
- * are returned.
+ * are returned. If has_blob_arg is set to true, the varbinary
+ * version of the function is returned is the functions has one.
  *
  * Returns not NULL function pointer when a valid and exported
  * to SQL engine function is found and NULL otherwise.
  */
 struct func *
-sql_func_by_signature(const char *name, int argc);
+sql_func_by_signature(const char *name, bool has_blob_arg, int argc);
 
 /**
  * Generate VDBE code to halt execution with correct error if
