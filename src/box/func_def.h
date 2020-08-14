@@ -68,6 +68,24 @@ struct func_opts {
 	 * packed in array.
 	 */
 	bool is_multikey;
+	/**
+	 * True if this function is overloaded version of another function.
+	 *
+	 * Currently only used in built-in SQL functions.
+	 */
+	bool is_overloaded;
+	/**
+	 * True if this function has overloaded version.
+	 *
+	 * Currently only used in built-in SQL functions.
+	 */
+	bool has_overload;
+	/**
+	 * True if the function can have a variable number of arguments.
+	 *
+	 * Currently only used in built-in SQL functions.
+	 */
+	bool has_vararg;
 };
 
 extern const struct func_opts func_opts_default;
