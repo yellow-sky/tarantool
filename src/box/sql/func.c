@@ -2466,7 +2466,7 @@ static struct {
 	}, {
 	 .name = "IFNULL",
 	 .param_count = 2,
-	 .returns = FIELD_TYPE_INTEGER,
+	 .returns = FIELD_TYPE_SCALAR,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
 	 .flags = SQL_FUNC_COALESCE,
@@ -2516,7 +2516,7 @@ static struct {
 	}, {
 	 .name = "LIKE",
 	 .param_count = -1,
-	 .returns = FIELD_TYPE_INTEGER,
+	 .returns = FIELD_TYPE_BOOLEAN,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
 	 .flags = SQL_FUNC_NEEDCOLL | SQL_FUNC_LIKE,
@@ -2526,7 +2526,7 @@ static struct {
 	}, {
 	 .name = "LIKELIHOOD",
 	 .param_count = 2,
-	 .returns = FIELD_TYPE_BOOLEAN,
+	 .returns = FIELD_TYPE_SCALAR,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
 	 .flags = SQL_FUNC_UNLIKELY,
@@ -2536,7 +2536,7 @@ static struct {
 	}, {
 	 .name = "LIKELY",
 	 .param_count = 1,
-	 .returns = FIELD_TYPE_BOOLEAN,
+	 .returns = FIELD_TYPE_SCALAR,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
 	 .flags = SQL_FUNC_UNLIKELY,
@@ -2686,7 +2686,7 @@ static struct {
 	}, {
 	 .name = "ROUND",
 	 .param_count = -1,
-	 .returns = FIELD_TYPE_INTEGER,
+	 .returns = FIELD_TYPE_DOUBLE,
 	 .aggregate = FUNC_AGGREGATE_NONE,
 	 .is_deterministic = true,
 	 .flags = 0,

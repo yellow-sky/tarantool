@@ -231,7 +231,7 @@ box.execute("SELECT s LIKE NULL FROM t1;")
 ---
 - metadata:
   - name: COLUMN_1
-    type: integer
+    type: boolean
   rows:
   - [null]
 ...
@@ -257,7 +257,7 @@ box.execute("SELECT NULL LIKE s FROM t1;")
 ---
 - metadata:
   - name: COLUMN_1
-    type: integer
+    type: boolean
   rows:
   - [null]
 ...
