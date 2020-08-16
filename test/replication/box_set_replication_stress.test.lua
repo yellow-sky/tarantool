@@ -14,4 +14,9 @@ end
 test_run:cmd("switch default")
 
 -- Cleanup.
-test_run:drop_cluster(SERVERS)
+test_run:cmd('stop server master_quorum1 with signal=SIGKILL')
+test_run:cmd('cleanup server master_quorum1')
+test_run:cmd('delete server master_quorum1')
+test_run:cmd('stop server master_quorum2 with signal=SIGKILL')
+test_run:cmd('cleanup server master_quorum2')
+test_run:cmd('delete server master_quorum2')
