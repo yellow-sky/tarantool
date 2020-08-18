@@ -638,3 +638,68 @@ box.execute([[SELECT 1 % '2';]])
 box.execute([[SELECT 1 * '2';]])
 box.execute([[SELECT 1 / '2';]])
 box.execute([[SELECT 1 - '2';]])
+
+--
+-- Make sure there is no implicit string-to-number conversion in bitwise
+-- operations.
+--
+box.execute([[SELECT '1' | 2;]])
+box.execute([[SELECT '1' & 2;]])
+box.execute([[SELECT '1' << 2;]])
+box.execute([[SELECT '1' >> 2;]])
+box.execute([[SELECT ~'1';]])
+box.execute([[SELECT 1 | '2';]])
+box.execute([[SELECT 1 & '2';]])
+box.execute([[SELECT 1 << '2';]])
+box.execute([[SELECT 1 >> '2';]])
+
+--
+-- Make sure that only values of type INTEGER can be operands of bitwise
+-- operations.
+--
+box.execute([[SELECT 3 | 1;]])
+box.execute([[SELECT 3 | 1.1;]])
+box.execute([[SELECT 3 | '1';]])
+box.execute([[SELECT 3 | true;]])
+box.execute([[SELECT 3 | X'31';]])
+box.execute([[SELECT 1 | 3;]])
+box.execute([[SELECT 1.1 | 3;]])
+box.execute([[SELECT '1' | 3;]])
+box.execute([[SELECT true | 3;]])
+box.execute([[SELECT X'31' | 3;]])
+
+box.execute([[SELECT 3 & 1;]])
+box.execute([[SELECT 3 & 1.1;]])
+box.execute([[SELECT 3 & '1';]])
+box.execute([[SELECT 3 & true;]])
+box.execute([[SELECT 3 & X'31';]])
+box.execute([[SELECT 1.1 & 3;]])
+box.execute([[SELECT '1' & 3;]])
+box.execute([[SELECT true & 3;]])
+box.execute([[SELECT X'31' & 3;]])
+
+box.execute([[SELECT 3 << 1;]])
+box.execute([[SELECT 3 << 1.1;]])
+box.execute([[SELECT 3 << '1';]])
+box.execute([[SELECT 3 << true;]])
+box.execute([[SELECT 3 << X'31';]])
+box.execute([[SELECT 1.1 << 3;]])
+box.execute([[SELECT '1' << 3;]])
+box.execute([[SELECT true << 3;]])
+box.execute([[SELECT X'31' << 3;]])
+
+box.execute([[SELECT 3 >> 1;]])
+box.execute([[SELECT 3 >> 1.1;]])
+box.execute([[SELECT 3 >> '1';]])
+box.execute([[SELECT 3 >> true;]])
+box.execute([[SELECT 3 >> X'31';]])
+box.execute([[SELECT 1.1 >> 3;]])
+box.execute([[SELECT '1' >> 3;]])
+box.execute([[SELECT true >> 3;]])
+box.execute([[SELECT X'31' >> 3;]])
+
+box.execute([[SELECT ~1;]])
+box.execute([[SELECT ~1.1;]])
+box.execute([[SELECT ~'1';]])
+box.execute([[SELECT ~true;]])
+box.execute([[SELECT ~X'31';]])

@@ -2846,3 +2846,284 @@ box.execute([[SELECT 1 - '2';]])
 - null
 - 'Type mismatch: can not convert 2 to numeric'
 ...
+--
+-- Make sure there is no implicit string-to-number conversion in bitwise
+-- operations.
+--
+box.execute([[SELECT '1' | 2;]])
+---
+- null
+- 'Type mismatch: can not convert 1 to integer'
+...
+box.execute([[SELECT '1' & 2;]])
+---
+- null
+- 'Type mismatch: can not convert 1 to integer'
+...
+box.execute([[SELECT '1' << 2;]])
+---
+- null
+- 'Type mismatch: can not convert 1 to integer'
+...
+box.execute([[SELECT '1' >> 2;]])
+---
+- null
+- 'Type mismatch: can not convert 1 to integer'
+...
+box.execute([[SELECT ~'1';]])
+---
+- null
+- 'Type mismatch: can not convert 1 to integer'
+...
+box.execute([[SELECT 1 | '2';]])
+---
+- null
+- 'Type mismatch: can not convert 2 to integer'
+...
+box.execute([[SELECT 1 & '2';]])
+---
+- null
+- 'Type mismatch: can not convert 2 to integer'
+...
+box.execute([[SELECT 1 << '2';]])
+---
+- null
+- 'Type mismatch: can not convert 2 to integer'
+...
+box.execute([[SELECT 1 >> '2';]])
+---
+- null
+- 'Type mismatch: can not convert 2 to integer'
+...
+--
+-- Make sure that only values of type INTEGER can be operands of bitwise
+-- operations.
+--
+box.execute([[SELECT 3 | 1;]])
+---
+- metadata:
+  - name: COLUMN_1
+    type: integer
+  rows:
+  - [3]
+...
+box.execute([[SELECT 3 | 1.1;]])
+---
+- null
+- 'Type mismatch: can not convert 1.1 to integer'
+...
+box.execute([[SELECT 3 | '1';]])
+---
+- null
+- 'Type mismatch: can not convert 1 to integer'
+...
+box.execute([[SELECT 3 | true;]])
+---
+- null
+- 'Type mismatch: can not convert TRUE to integer'
+...
+box.execute([[SELECT 3 | X'31';]])
+---
+- null
+- 'Type mismatch: can not convert varbinary to integer'
+...
+box.execute([[SELECT 1 | 3;]])
+---
+- metadata:
+  - name: COLUMN_1
+    type: integer
+  rows:
+  - [3]
+...
+box.execute([[SELECT 1.1 | 3;]])
+---
+- null
+- 'Type mismatch: can not convert 1.1 to integer'
+...
+box.execute([[SELECT '1' | 3;]])
+---
+- null
+- 'Type mismatch: can not convert 1 to integer'
+...
+box.execute([[SELECT true | 3;]])
+---
+- null
+- 'Type mismatch: can not convert TRUE to integer'
+...
+box.execute([[SELECT X'31' | 3;]])
+---
+- null
+- 'Type mismatch: can not convert varbinary to integer'
+...
+box.execute([[SELECT 3 & 1;]])
+---
+- metadata:
+  - name: COLUMN_1
+    type: integer
+  rows:
+  - [1]
+...
+box.execute([[SELECT 3 & 1.1;]])
+---
+- null
+- 'Type mismatch: can not convert 1.1 to integer'
+...
+box.execute([[SELECT 3 & '1';]])
+---
+- null
+- 'Type mismatch: can not convert 1 to integer'
+...
+box.execute([[SELECT 3 & true;]])
+---
+- null
+- 'Type mismatch: can not convert TRUE to integer'
+...
+box.execute([[SELECT 3 & X'31';]])
+---
+- null
+- 'Type mismatch: can not convert varbinary to integer'
+...
+box.execute([[SELECT 1.1 & 3;]])
+---
+- null
+- 'Type mismatch: can not convert 1.1 to integer'
+...
+box.execute([[SELECT '1' & 3;]])
+---
+- null
+- 'Type mismatch: can not convert 1 to integer'
+...
+box.execute([[SELECT true & 3;]])
+---
+- null
+- 'Type mismatch: can not convert TRUE to integer'
+...
+box.execute([[SELECT X'31' & 3;]])
+---
+- null
+- 'Type mismatch: can not convert varbinary to integer'
+...
+box.execute([[SELECT 3 << 1;]])
+---
+- metadata:
+  - name: COLUMN_1
+    type: integer
+  rows:
+  - [6]
+...
+box.execute([[SELECT 3 << 1.1;]])
+---
+- null
+- 'Type mismatch: can not convert 1.1 to integer'
+...
+box.execute([[SELECT 3 << '1';]])
+---
+- null
+- 'Type mismatch: can not convert 1 to integer'
+...
+box.execute([[SELECT 3 << true;]])
+---
+- null
+- 'Type mismatch: can not convert TRUE to integer'
+...
+box.execute([[SELECT 3 << X'31';]])
+---
+- null
+- 'Type mismatch: can not convert varbinary to integer'
+...
+box.execute([[SELECT 1.1 << 3;]])
+---
+- null
+- 'Type mismatch: can not convert 1.1 to integer'
+...
+box.execute([[SELECT '1' << 3;]])
+---
+- null
+- 'Type mismatch: can not convert 1 to integer'
+...
+box.execute([[SELECT true << 3;]])
+---
+- null
+- 'Type mismatch: can not convert TRUE to integer'
+...
+box.execute([[SELECT X'31' << 3;]])
+---
+- null
+- 'Type mismatch: can not convert varbinary to integer'
+...
+box.execute([[SELECT 3 >> 1;]])
+---
+- metadata:
+  - name: COLUMN_1
+    type: integer
+  rows:
+  - [1]
+...
+box.execute([[SELECT 3 >> 1.1;]])
+---
+- null
+- 'Type mismatch: can not convert 1.1 to integer'
+...
+box.execute([[SELECT 3 >> '1';]])
+---
+- null
+- 'Type mismatch: can not convert 1 to integer'
+...
+box.execute([[SELECT 3 >> true;]])
+---
+- null
+- 'Type mismatch: can not convert TRUE to integer'
+...
+box.execute([[SELECT 3 >> X'31';]])
+---
+- null
+- 'Type mismatch: can not convert varbinary to integer'
+...
+box.execute([[SELECT 1.1 >> 3;]])
+---
+- null
+- 'Type mismatch: can not convert 1.1 to integer'
+...
+box.execute([[SELECT '1' >> 3;]])
+---
+- null
+- 'Type mismatch: can not convert 1 to integer'
+...
+box.execute([[SELECT true >> 3;]])
+---
+- null
+- 'Type mismatch: can not convert TRUE to integer'
+...
+box.execute([[SELECT X'31' >> 3;]])
+---
+- null
+- 'Type mismatch: can not convert varbinary to integer'
+...
+box.execute([[SELECT ~1;]])
+---
+- metadata:
+  - name: COLUMN_1
+    type: integer
+  rows:
+  - [-2]
+...
+box.execute([[SELECT ~1.1;]])
+---
+- null
+- 'Type mismatch: can not convert 1.1 to integer'
+...
+box.execute([[SELECT ~'1';]])
+---
+- null
+- 'Type mismatch: can not convert 1 to integer'
+...
+box.execute([[SELECT ~true;]])
+---
+- null
+- 'Type mismatch: can not convert TRUE to integer'
+...
+box.execute([[SELECT ~X'31';]])
+---
+- null
+- 'Type mismatch: can not convert varbinary to integer'
+...

@@ -1989,23 +1989,26 @@ case OP_ShiftRight: {           /* same as TK_RSHIFT, in1, in2, out3 */
 
 	pIn1 = &aMem[pOp->p1];
 	pIn2 = &aMem[pOp->p2];
+	enum mp_type type1 = mem_mp_type(pIn1);
+	enum mp_type type2 = mem_mp_type(pIn2);
 	pOut = vdbe_prepare_null_out(p, pOp->p3);
-	if ((pIn1->flags | pIn2->flags) & MEM_Null) {
+	if (type1 == MP_NIL || type2 == MP_NIL) {
 		/* Force NULL be of type INTEGER. */
 		pOut->field_type = FIELD_TYPE_INTEGER;
 		break;
 	}
-	bool unused;
-	if (sqlVdbeIntValue(pIn2, (int64_t *) &iA, &unused) != 0) {
+	if (type2 != MP_INT && type2 != MP_UINT) {
 		diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
 			 sql_value_to_diag_str(pIn2), "integer");
 		goto abort_due_to_error;
 	}
-	if (sqlVdbeIntValue(pIn1, (int64_t *) &iB, &unused) != 0) {
+	if (type1 != MP_INT && type1 != MP_UINT) {
 		diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
 			 sql_value_to_diag_str(pIn1), "integer");
 		goto abort_due_to_error;
 	}
+	iA = pIn2->u.i;
+	iB = pIn1->u.i;
 	op = pOp->opcode;
 	if (op==OP_BitAnd) {
 		iA &= iB;
@@ -2621,19 +2624,18 @@ case OP_Not: {                /* same as TK_NOT, in1, out2 */
  */
 case OP_BitNot: {             /* same as TK_BITNOT, in1, out2 */
 	pIn1 = &aMem[pOp->p1];
+	enum mp_type type = mem_mp_type(pIn1);
 	pOut = vdbe_prepare_null_out(p, pOp->p2);
 	/* Force NULL be of type INTEGER. */
 	pOut->field_type = FIELD_TYPE_INTEGER;
-	if ((pIn1->flags & MEM_Null)==0) {
-		int64_t i;
-		bool is_neg;
-		if (sqlVdbeIntValue(pIn1, &i, &is_neg) != 0) {
-			diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
-				 sql_value_to_diag_str(pIn1), "integer");
-			goto abort_due_to_error;
-		}
-		mem_set_i64(pOut, ~i);
+	if (type == MP_NIL)
+		break;
+	if (type != MP_INT && type != MP_UINT) {
+		diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
+			 sql_value_to_diag_str(pIn1), "integer");
+		goto abort_due_to_error;
 	}
+	mem_set_i64(pOut, ~pIn1->u.i);
 	break;
 }
 
