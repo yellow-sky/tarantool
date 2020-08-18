@@ -1,7 +1,7 @@
 #!/usr/bin/env tarantool
 test = require("sqltester")
 local json = require("json")
-test:plan(34)
+test:plan(30)
 
 --!./tcltestrunner.lua
 -- 2003 December 17
@@ -139,46 +139,6 @@ test:do_execsql_test(
         -- <misc3-2.5>
         1e-225
         -- </misc3-2.5>
-    })
-
-test:do_execsql_test(
-    "misc3-2.6",
-    [[
-        SELECT '-2.0e-127' * '-0.5e27'
-    ]], {
-        -- <misc3-2.6>
-        1e-100
-        -- </misc3-2.6>
-    })
-
-test:do_execsql_test(
-    "misc3-2.7",
-    [[
-        SELECT '+2.0e-127' * '-0.5e27'
-    ]], {
-        -- <misc3-2.7>
-        -1e-100
-        -- </misc3-2.7>
-    })
-
-test:do_execsql_test(
-    "misc3-2.8",
-    [[
-        SELECT 2.0e-27 * '+0.5e+127'
-    ]], {
-        -- <misc3-2.8>
-        1e+100
-        -- </misc3-2.8>
-    })
-
-test:do_execsql_test(
-    "misc3-2.9",
-    [[
-        SELECT 2.0e-27 * '+0.000005e+132'
-    ]], {
-        -- <misc3-2.9>
-        1e+100
-        -- </misc3-2.9>
     })
 
 -- Ticket #522.  Make sure integer overflow is handled properly in

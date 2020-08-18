@@ -522,41 +522,6 @@ mem_convert_to_numeric(struct Mem *mem, enum field_type type)
 	return mem_convert_to_integer(mem);
 }
 
-/*
- * pMem currently only holds a string type (or maybe a BLOB that we can
- * interpret as a string if we want to).  Compute its corresponding
- * numeric type, if has one.  Set the pMem->u.r and pMem->u.i fields
- * accordingly.
- */
-static u16 SQL_NOINLINE computeNumericType(Mem *pMem)
-{
-	assert((pMem->flags & (MEM_Int | MEM_UInt | MEM_Real)) == 0);
-	assert((pMem->flags & (MEM_Str|MEM_Blob))!=0);
-	if (sqlAtoF(pMem->z, &pMem->u.r, pMem->n)==0)
-		return 0;
-	bool is_neg;
-	if (sql_atoi64(pMem->z, (int64_t *) &pMem->u.i, &is_neg, pMem->n) == 0)
-		return is_neg ? MEM_Int : MEM_UInt;
-	return MEM_Real;
-}
-
-/*
- * Return the numeric type for pMem, either MEM_Int or MEM_Real or both or
- * none.
- *
- * Unlike mem_apply_numeric_type(), this routine does not modify pMem->flags.
- * But it does set pMem->u.r and pMem->u.i appropriately.
- */
-static u16 numericType(Mem *pMem)
-{
-	if ((pMem->flags & (MEM_Int | MEM_UInt | MEM_Real)) != 0)
-		return pMem->flags & (MEM_Int | MEM_UInt | MEM_Real);
-	if (pMem->flags & (MEM_Str|MEM_Blob)) {
-		return computeNumericType(pMem);
-	}
-	return 0;
-}
-
 #ifdef SQL_DEBUG
 /*
  * Write a nice string representation of the contents of cell pMem
@@ -1681,27 +1646,24 @@ case OP_Subtract:              /* same as TK_MINUS, in1, in2, out3 */
 case OP_Multiply:              /* same as TK_STAR, in1, in2, out3 */
 case OP_Divide:                /* same as TK_SLASH, in1, in2, out3 */
 case OP_Remainder: {           /* same as TK_REM, in1, in2, out3 */
-	u32 flags;      /* Combined MEM_* flags from both inputs */
-	u16 type1;      /* Numeric type of left operand */
-	u16 type2;      /* Numeric type of right operand */
 	i64 iA;         /* Integer value of left operand */
 	i64 iB;         /* Integer value of right operand */
 	double rA;      /* Real value of left operand */
 	double rB;      /* Real value of right operand */
 
 	pIn1 = &aMem[pOp->p1];
-	type1 = numericType(pIn1);
 	pIn2 = &aMem[pOp->p2];
-	type2 = numericType(pIn2);
+	enum mp_type type1 = mem_mp_type(pIn1);
+	enum mp_type type2 = mem_mp_type(pIn2);
 	pOut = vdbe_prepare_null_out(p, pOp->p3);
-	flags = pIn1->flags | pIn2->flags;
-	if ((flags & MEM_Null)!=0) goto arithmetic_result_is_null;
-	if ((type1 & (MEM_Int | MEM_UInt)) != 0 &&
-	    (type2 & (MEM_Int | MEM_UInt)) != 0) {
+	if (type1 == MP_NIL || type2 == MP_NIL)
+		goto arithmetic_result_is_null;
+	if ((type1 == MP_INT || type1 == MP_UINT) &&
+	    (type2 == MP_INT || type2 == MP_UINT)) {
 		iA = pIn1->u.i;
 		iB = pIn2->u.i;
-		bool is_lhs_neg = pIn1->flags & MEM_Int;
-		bool is_rhs_neg = pIn2->flags & MEM_Int;
+		bool is_lhs_neg = type1 == MP_INT;
+		bool is_rhs_neg = type2 == MP_INT;
 		bool is_res_neg;
 		switch( pOp->opcode) {
 		case OP_Add: {
@@ -1742,17 +1704,28 @@ case OP_Remainder: {           /* same as TK_REM, in1, in2, out3 */
 		}
 		mem_set_int(pOut, iB, is_res_neg);
 	} else {
-		if (sqlVdbeRealValue(pIn1, &rA) != 0) {
+		if (!mp_type_is_numeric(type1)) {
 			diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
 				 sql_value_to_diag_str(pIn1), "numeric");
 			goto abort_due_to_error;
 		}
-		if (sqlVdbeRealValue(pIn2, &rB) != 0) {
+		if (!mp_type_is_numeric(type2)) {
 			diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
 				 sql_value_to_diag_str(pIn2), "numeric");
 			goto abort_due_to_error;
 		}
-		assert(((type1 | type2) & MEM_Real) != 0);
+		if (type1 == MP_DOUBLE)
+			rA = pIn1->u.r;
+		else if (type1 == MP_INT)
+			rA = (double) pIn1->u.i;
+		else
+			rA = (double) pIn1->u.u;
+		if (type2 == MP_DOUBLE)
+			rB = pIn2->u.r;
+		else if (type2 == MP_INT)
+			rB = (double) pIn2->u.i;
+		else
+			rB = (double) pIn2->u.u;
 		switch( pOp->opcode) {
 		case OP_Add:         rB += rA;       break;
 		case OP_Subtract:    rB -= rA;       break;

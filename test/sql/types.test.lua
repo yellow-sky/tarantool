@@ -623,3 +623,18 @@ box.execute([[DROP TABLE tb;]])
 box.execute([[DROP TABLE tt;]])
 box.execute([[DROP TABLE tv;]])
 box.execute([[DROP TABLE ts;]])
+
+--
+-- Make sure there is no implicit string-to-number conversion in arithmetic
+-- operations.
+--
+box.execute([[SELECT '1' + 2;]])
+box.execute([[SELECT '1' % 2;]])
+box.execute([[SELECT '1' * 2;]])
+box.execute([[SELECT '1' / 2;]])
+box.execute([[SELECT '1' - 2;]])
+box.execute([[SELECT 1 + '2';]])
+box.execute([[SELECT 1 % '2';]])
+box.execute([[SELECT 1 * '2';]])
+box.execute([[SELECT 1 / '2';]])
+box.execute([[SELECT 1 - '2';]])
