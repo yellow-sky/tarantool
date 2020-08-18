@@ -801,18 +801,79 @@ constructAutomaticIndex(Parse * pParse,			/* The parsing context */
 		nKeyCol += space->def->field_count - BMS + 1;
 	}
 
-	struct key_part_def part = {
-		.fieldno = 0,
-		.type = space->def->fields[0].type,
-		.nullable_action = ON_CONFLICT_ACTION_ABORT,
-		.is_nullable = false,
-		.sort_order = SORT_ORDER_ASC,
-		.coll_id = COLL_NONE,
-		.path = NULL,
-	};
+	//pIdx = sqlDbMallocZero(pParse->db, sizeof(*pIdx));
+	//pLoop->pIndex = pIdx;
+	//pIdx->zName = "auto-index";
+	//pIdx->pTable = pTable;
+	n = 0;
+	idxCols = 0;
+	struct key_part_def *part_def = malloc(sizeof(*part_def) * nKeyCol);
+	for (pTerm = pWC->a; pTerm < pWCEnd; pTerm++) {
+		if (termCanDriveIndex(pTerm, pSrc, notReady)) {
+			int iCol = pTerm->u.leftColumn;
+			Bitmask cMask =
+			    iCol >= BMS ? MASKBIT(BMS - 1) : MASKBIT(iCol);
+			testcase(iCol == BMS - 1);
+			testcase(iCol == BMS);
+			if ((idxCols & cMask) == 0) {
+				idxCols |= cMask;
+				int i = pTerm->u.leftColumn;
+				struct field_def *field =
+					&space->def->fields[i];
+				struct key_part_def *part = &part_def[n];
+				part->fieldno = iCol;
+				part->type = field->type;
+				part->nullable_action = field->nullable_action;
+				part->is_nullable = field->is_nullable;
+				part->sort_order = SORT_ORDER_ASC;
+				part->coll_id = field->coll_id;
+				part->path = NULL;
+				n++;
+			}
+		}
+	}
+	assert((u32) n == pLoop->nEq);
 
-	struct key_def *key_def = key_def_new(&part, 1, false);
+	/* Add additional columns needed to make the automatic index into
+	 * a covering index
+	 */
+	for (i = 0; i < mxBitCol; i++) {
+		if (extraCols & MASKBIT(i)) {
+			//pIdx->aiColumn[n] = i;
+			struct field_def *field = &space->def->fields[i];
+			struct key_part_def *part = &part_def[n];
+			part->fieldno = i;
+			part->type = field->type;
+			part->nullable_action = field->nullable_action;
+			part->is_nullable = field->is_nullable;
+			part->sort_order = SORT_ORDER_ASC;
+			part->coll_id = field->coll_id;
+			part->path = NULL;
+			n++;
+		}
+	}
+	if (pSrc->colUsed & MASKBIT(BMS - 1)) {
+		for (i = BMS - 1; i < (int)space->def->field_count; i++) {
+			//pIdx->aiColumn[n] = i;
+			struct field_def *field = &space->def->fields[i];
+			struct key_part_def *part = &part_def[n];
+			part->fieldno = i;
+			part->type = field->type;
+			part->nullable_action = field->nullable_action;
+			part->is_nullable = field->is_nullable;
+			part->sort_order = SORT_ORDER_ASC;
+			part->coll_id = field->coll_id;
+			part->path = NULL;
+			n++;
+		}
+	}
+	assert(n == nKeyCol);
+
+
+
+	struct key_def *key_def = key_def_new(part_def, nKeyCol, false);
 	assert(key_def);
+	free(part_def);
 	if (key_def == NULL)
 		goto end_auto_index_create;
 
@@ -834,52 +895,23 @@ constructAutomaticIndex(Parse * pParse,			/* The parsing context */
 	pLoop->index_def = idx_def;
 	//pIdx->zName = "auto-index";
 	//pIdx->pTable = pTable;
-	n = 0;
-	idxCols = 0;
-	for (pTerm = pWC->a; pTerm < pWCEnd; pTerm++) {
-		if (termCanDriveIndex(pTerm, pSrc, notReady)) {
-			int iCol = pTerm->u.leftColumn;
-			Bitmask cMask =
-			    iCol >= BMS ? MASKBIT(BMS - 1) : MASKBIT(iCol);
-			testcase(iCol == BMS - 1);
-			testcase(iCol == BMS);
-			if ((idxCols & cMask) == 0) {
-				idxCols |= cMask;
-				//pIdx->aiColumn[n] = pTerm->u.leftColumn;
-				n++;
-			}
-		}
-	}
-	assert((u32) n == pLoop->nEq);
 
-	/* Add additional columns needed to make the automatic index into
-	 * a covering index
-	 */
-	for (i = 0; i < mxBitCol; i++) {
-		if (extraCols & MASKBIT(i)) {
-			//pIdx->aiColumn[n] = i;
-			n++;
-		}
-	}
-	if (pSrc->colUsed & MASKBIT(BMS - 1)) {
-		for (i = BMS - 1; i < (int)space->def->field_count; i++) {
-			//pIdx->aiColumn[n] = i;
-			n++;
-		}
-	}
-	assert(n == nKeyCol);
+
+
 	//pIdx->aiColumn[n] = XN_ROWID;
 
 	/* Create the automatic index */
 	assert(pLevel->iIdxCur >= 0);
 	pLevel->iIdxCur = pParse->nTab++;
+	int reg_eph = ++pParse->nMem;
 	// sqlVdbeAddOp2(v, OP_OpenTEphemeral, pLevel->iIdxCur, nKeyCol + 1);
 	// sql_vdbe_set_p4_key_def(pParse, pIdx->key_def);
 	struct sql_key_info *pk_info;
 	pk_info = sql_key_info_new_from_key_def(pParse->db,
 						idx_def->key_def);
-	sqlVdbeAddOp4(v, OP_OpenTEphemeral, pLevel->iIdxCur,
+	sqlVdbeAddOp4(v, OP_OpenTEphemeral, reg_eph,
 		      nKeyCol, 0, (char *)pk_info, P4_KEYINFO);
+	sqlVdbeAddOp3(v, OP_IteratorOpen, pLevel->iIdxCur, 0, reg_eph);
 	VdbeComment((v, "for %s", space->def->name));
 
 	/* Fill the automatic index with content */
@@ -897,11 +929,10 @@ constructAutomaticIndex(Parse * pParse,			/* The parsing context */
 		addrTop = sqlVdbeAddOp1(v, OP_Rewind, pLevel->iTabCur);
 		VdbeCoverage(v);
 	}
-	regRecord = sqlGetTempReg(pParse);
+	regRecord = ++pParse->nMem;
 	regBase = sql_generate_index_key(pParse, idx_def, pLevel->iTabCur,
 					 regRecord, NULL, 0);
-	regBase = 0;
-	sqlVdbeAddOp2(v, OP_IdxInsert, pLevel->iIdxCur, regRecord);
+	sqlVdbeAddOp2(v, OP_IdxInsert, regRecord, reg_eph);
 	if (pTabItem->fg.viaCoroutine) {
 		sqlVdbeChangeP2(v, addrCounter, regBase + n);
 		translateColumnToCopy(v, addrTop, pLevel->iTabCur,
@@ -914,7 +945,6 @@ constructAutomaticIndex(Parse * pParse,			/* The parsing context */
 	}
 	sqlVdbeChangeP5(v, SQL_STMTSTATUS_AUTOINDEX);
 	sqlVdbeJumpHere(v, addrTop);
-	sqlReleaseTempReg(pParse, regRecord);
 	sqlExprCachePop(pParse);
 
 	/* Jump here when skipping the initialization */
@@ -1743,7 +1773,7 @@ whereLoopInit(WhereLoop * p)
 static void
 whereLoopClearUnion(WhereLoop * p)
 {
-	if ((p->wsFlags & WHERE_AUTO_INDEX) != 0) {
+	if ((p->wsFlags & WHERE_AUTO_INDEX) != 0 && p->index_def != NULL) {
 		index_def_delete(p->index_def);
 		p->index_def = NULL;
 	}
@@ -2841,7 +2871,7 @@ tnt_error:
 
 #ifndef SQL_OMIT_AUTOMATIC_INDEX
 	/* Automatic indexes */
-	struct index *pk = space_index(space, 0);
+	struct index *pk = space->index != NULL ? space_index(space, 0) : NULL;
 	rSize = pk == NULL ? DEFAULT_TUPLE_LOG_COUNT : pk->vtab->size(pk);
 	LogEst rLogSize = sql_space_tuple_log_count(pSrc->space);
 	if (!pBuilder->pOrSet && /* Not pqart of an OR optimization */
