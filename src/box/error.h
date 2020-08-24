@@ -246,9 +246,6 @@ public:
 
 	~AccessDeniedError()
 	{
-		free(m_object_name);
-		free(m_object_type);
-		free(m_access_type);
 	}
 
 	const char *
@@ -271,11 +268,11 @@ public:
 
 private:
 	/** Type of object the required access was denied to */
-	char *m_object_type;
+       char m_object_type[64];
 	/** Name of object the required access was denied to */
-	char *m_object_name;
+       char m_object_name[64];
 	/** Type of declined access */
-	char *m_access_type;
+       char m_access_type[64];
 };
 
 /**

@@ -304,9 +304,13 @@ AccessDeniedError::AccessDeniedError(const char *file, unsigned int line,
 	 */
 	if (run_trigers)
 		trigger_run(&on_access_denied, (void *) &ctx);
-	m_object_type = strdup(object_type);
-	m_access_type = strdup(access_type);
-	m_object_name = strdup(object_name);
+       strncpy(m_object_type, object_type, sizeof(m_object_type) - 1);
+       m_object_type[sizeof(m_object_type) - 1] = '\0';
+       strncpy(m_access_type, access_type, sizeof(m_access_type) - 1);
+       m_access_type[sizeof(m_access_type) - 1] = '\0';
+       strncpy(m_object_name, object_name, sizeof(m_object_name) - 1);
+       m_object_name[sizeof(m_object_name) - 1] = '\0';
+
 }
 
 struct error *

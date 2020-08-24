@@ -30,12 +30,6 @@ leak:gconv_init
 # source: third_party/luajit
 leak:lj_BC_FUNCC
 
-# test: box/access.test.lua
-# test: box/access_bin.test.lua
-# test: box/access_misc.test.lua
-# source: src/box/error.cc
-leak:AccessDeniedError::AccessDeniedError
-
 # test: box/bitset.test.lua
 # source: src/lib/bitset/iterator.c
 leak:tt_bitset_iterator_init
