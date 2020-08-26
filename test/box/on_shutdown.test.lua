@@ -54,7 +54,11 @@ test_run:cmd("switch default")
 -- instance to make sure test_run doesn't lose connection to the
 -- shutting down instance.
 test_run:eval("test", "_ = fiber.new(function() os.exit() while true do end end)")
-fiber.sleep(0.1)
+-- On some builds like ASAN server stop routine needs more time to free
+-- the 'proxy.control' socket created by tarantoolctl:process_local(),
+-- check gh-5260. So instead of time delay before server restart need
+-- to use garbage collector to be sure that it will be freed.
+collectgarbage('collect')
 -- The server should be already stopped by os.exit(),
 -- but start doesn't work without a prior call to stop.
 test_run:cmd("stop server test")
