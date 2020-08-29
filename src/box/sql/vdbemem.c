@@ -173,7 +173,7 @@ sqlVdbeMemClearAndResize(Mem * pMem, int szNew)
 	}
 	assert((pMem->flags & MEM_Dyn) == 0);
 	pMem->z = pMem->zMalloc;
-	pMem->flags &= (MEM_Null | MEM_Int | MEM_Real);
+	pMem->flags = MEM_Blob;
 	return 0;
 }
 
@@ -303,38 +303,34 @@ sqlVdbeMemStringify(Mem * pMem)
 	 * In case we have ARRAY/MAP we should save decoded value
 	 * before clearing pMem->z.
 	 */
-	char *value = NULL;
-	if (mem_has_msgpack_subtype(pMem)) {
-		const char *value_str = mp_str(pMem->z);
-		nByte = strlen(value_str) + 1;
-		value = region_alloc(&fiber()->gc, nByte);
-		memcpy(value, value_str, nByte);
-	}
-
-	if (sqlVdbeMemClearAndResize(pMem, nByte)) {
+	const char *str = NULL;
+	int64_t i;
+	uint64_t u;
+	double r;
+	if (mem_has_msgpack_subtype(pMem))
+		str = mp_str(pMem->z);
+	else if ((fg & MEM_Bool) != 0)
+		str = SQL_TOKEN_BOOLEAN(pMem->u.b);
+	else if ((fg & MEM_Int) != 0)
+		i = pMem->u.i;
+	else if ((fg & MEM_UInt) != 0)
+		u = pMem->u.u;
+	else
+		r = pMem->u.r;
+	if (str != NULL)
+		nByte = strlen(str) + 1;
+	if (sqlVdbeMemClearAndResize(pMem, nByte))
 		return -1;
-	}
-	if (fg & MEM_Int) {
-		sql_snprintf(nByte, pMem->z, "%lld", pMem->u.i);
-		pMem->flags &= ~MEM_Int;
-	} else if ((fg & MEM_UInt) != 0) {
-		sql_snprintf(nByte, pMem->z, "%llu", pMem->u.u);
-		pMem->flags &= ~MEM_UInt;
-	} else if ((fg & MEM_Bool) != 0) {
-		sql_snprintf(nByte, pMem->z, "%s",
-			     SQL_TOKEN_BOOLEAN(pMem->u.b));
-		pMem->flags &= ~MEM_Bool;
-	} else if (mem_has_msgpack_subtype(pMem)) {
-		sql_snprintf(nByte, pMem->z, "%s", value);
-		pMem->flags &= ~MEM_Subtype;
-		pMem->subtype = SQL_SUBTYPE_NO;
-	} else {
-		assert(fg & MEM_Real);
-		sql_snprintf(nByte, pMem->z, "%!.15g", pMem->u.r);
-		pMem->flags &= ~MEM_Real;
-	}
+	if (str != NULL)
+		sql_snprintf(nByte, pMem->z, "%s", str);
+	else if ((fg & MEM_Int) != 0)
+		sql_snprintf(nByte, pMem->z, "%lli", i);
+	else if ((fg & MEM_UInt) != 0)
+		sql_snprintf(nByte, pMem->z, "%llu", u);
+	else if ((fg & MEM_Real) != 0)
+		sql_snprintf(nByte, pMem->z, "%!.15g", r);
 	pMem->n = sqlStrlen30(pMem->z);
-	pMem->flags |= MEM_Str | MEM_Term;
+	pMem->flags = MEM_Str | MEM_Term;
 	return 0;
 }
 
