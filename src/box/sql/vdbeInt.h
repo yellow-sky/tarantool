@@ -559,6 +559,16 @@ mem_set_int(struct Mem *mem, int64_t value, bool is_neg);
 void
 mem_set_double(struct Mem *mem, double value);
 
+int
+mem_copy_str(struct Mem *mem, const char *value, uint32_t len,
+	     bool is_null_terminated);
+
+/** Set string value and MEM_Str flag. */
+void
+mem_set_str(struct Mem *mem, char *value, uint32_t len, int alloc_type,
+	    bool is_null_terminated);
+
+
 void sqlVdbeMemInit(Mem *, sql *, u32);
 void sqlVdbeMemSetNull(Mem *);
 void sqlVdbeMemSetZeroBlob(Mem *, int);

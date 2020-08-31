@@ -895,6 +895,54 @@ mem_set_double(struct Mem *mem, double value)
 	mem->field_type = FIELD_TYPE_DOUBLE;
 }
 
+int
+mem_copy_str(struct Mem *mem, const char *value, uint32_t len,
+	     bool is_null_terminated)
+{
+	assert(value != NULL);
+	if (len == 0) {
+		mem_set_str(mem, "", 0, MEM_Static, true);
+		return 0;
+	}
+	uint32_t size = is_null_terminated ? len + 1 : len;
+	if (sqlVdbeMemClearAndResize(mem, size) != 0)
+		return -1;
+	memcpy(mem->z, value, size);
+	mem->n = len;
+	mem->flags = MEM_Str;
+	if (is_null_terminated)
+		mem->flags |= MEM_Term;
+	mem->type = MEM_STR;
+	mem->field_type = FIELD_TYPE_STRING;
+	return 0;
+}
+
+void
+mem_set_str(struct Mem *mem, char *value, uint32_t len, int alloc_type,
+	    bool is_null_terminated)
+{
+	assert(value != NULL);
+	if (alloc_type == 0 && len == 0) {
+		alloc_type = MEM_Static;
+		value = "";
+	}
+	sqlVdbeMemSetNull(mem);
+	mem->z = value;
+	if (alloc_type == 0) {
+		sqlVdbeMemRelease(mem);
+		mem->z = value;
+		mem->zMalloc = value;
+		mem->szMalloc = sqlDbMallocSize(mem->db, mem->zMalloc);
+	}
+	mem->n = len;
+	mem->flags = MEM_Str | alloc_type;
+	if (is_null_terminated)
+		mem->flags |= MEM_Term;
+	mem->type = MEM_STR;
+	mem->field_type = FIELD_TYPE_STRING;
+	return;
+}
+
 /*
  * Return true if the Mem object contains a TEXT or BLOB that is
  * too large - whose size exceeds SQL_MAX_LENGTH.
