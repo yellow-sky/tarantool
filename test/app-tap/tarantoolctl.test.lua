@@ -133,6 +133,26 @@ local function tctl_command(dir, cmd, args, name)
     return run_command(dir, command)
 end
 
+local function tctl_wait_eval(dir, app, attempts)
+    local code = [[ return 1 ]]
+    local script_name = 'check_eval.lua'
+
+    if not fio.stat(fio.pathjoin(dir, script_name)) then
+	create_script(dir, script_name,  code)
+    end
+
+    local args = '%s %s'
+    args = args:format(app, script_name)
+
+    for i = 0, attempts - 1 do
+	local res, stdout, stderr = tctl_command(dir, 'eval', args)
+	if (res ~= nil) and tonumber(res) == 0 then
+	    break
+	end
+	fiber.sleep(0.01)
+    end
+end
+
 local function check_ok(test, dir, cmd, args, e_res, e_stdout, e_stderr)
     local res, stdout, stderr = tctl_command(dir, cmd, args)
     stdout, stderr = stdout or '', stderr or ''
@@ -237,6 +257,7 @@ do
             check_ok(test_i, dir, 'start', 'good_script', 0)
             tctl_wait_start(dir, 'good_script')
             -- wait here
+	    tctl_wait_eval(dir, 'good_script', 10)
             check_ok(test_i, dir, 'eval',  'good_script bad_script.lua', 3,
                      nil, nil)
             check_ok(test_i, dir, 'stop', 'good_script', 0)
@@ -268,6 +289,8 @@ do
             test_i:plan(5)
             check_ok(test_i, dir, 'start', 'good_script', 0)
             tctl_wait_start(dir, 'good_script')
+
+	    tctl_wait_eval(dir, 'good_script', 10)
             check_ok(test_i, dir, 'eval',  'good_script bad_script.lua', 3,
                      nil, nil)
             check_ok(test_i, dir, 'eval',  'good_script ok_script.lua', 0,
