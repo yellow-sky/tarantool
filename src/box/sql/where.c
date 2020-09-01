@@ -4863,7 +4863,15 @@ sqlWhereEnd(WhereInfo * pWInfo)
 					       def->space_id ==
 					       pTabItem->space->def->id);
 					if (x >= 0) {
-						pOp->p2 = x;
+						if (pLoop->wsFlags & WHERE_AUTO_INDEX) {
+							struct index_def *def = pLevel->pWLoop->index_def;
+							for (uint32_t i = 0; i < def->key_def->part_count; ++i) {
+								if (def->key_def->parts[i].fieldno == (uint32_t)x)
+									pOp->p2 = i;
+							}
+						} else {
+							pOp->p2 = x;
+						}
 						pOp->p1 = pLevel->iIdxCur;
 					}
 					assert((pLoop->
