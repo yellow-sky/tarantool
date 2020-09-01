@@ -906,11 +906,11 @@ constructAutomaticIndex(Parse * pParse,			/* The parsing context */
 	int reg_eph = ++pParse->nMem;
 	// sqlVdbeAddOp2(v, OP_OpenTEphemeral, pLevel->iIdxCur, nKeyCol + 1);
 	// sql_vdbe_set_p4_key_def(pParse, pIdx->key_def);
-	struct sql_key_info *pk_info;
-	pk_info = sql_key_info_new_from_key_def(pParse->db,
-						idx_def->key_def);
-	sqlVdbeAddOp4(v, OP_OpenTEphemeral, reg_eph,
-		      nKeyCol, 0, (char *)pk_info, P4_KEYINFO);
+	// struct sql_key_info *pk_info;
+	// pk_info = sql_key_info_new_from_key_def(pParse->db,
+	// 					idx_def->key_def);
+	sqlVdbeAddOp2(v, OP_OpenTEphemeral, reg_eph, nKeyCol);
+		      // nKeyCol, 0, (char *)pk_info, P4_KEYINFO);
 	sqlVdbeAddOp3(v, OP_IteratorOpen, pLevel->iIdxCur, 0, reg_eph);
 	VdbeComment((v, "for %s", space->def->name));
 
