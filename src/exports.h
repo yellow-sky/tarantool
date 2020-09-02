@@ -493,3 +493,63 @@ EXPORT(uri_format)
 EXPORT(uri_parse)
 EXPORT(uuid_nil)
 EXPORT(uuid_unpack)
+
+/**
+* ICU symbols
+*
+* ICU libraries contains symbols with appended lib version suffix.
+* (This behaviour is configured by --enable-renaming/disable flag when
+* building libicu; by default --enable-renaming is used)
+*
+* To solve symbols suffix problem <unicode/urename.h> file was included.
+* At this file used #define macros to rename symbols.
+* For example: symobl `u_strlen` converts to `ustrlen_VER`
+*
+* Next symbols used at icu-date rock (also here added u_getVersion symbol)
+* Also we assume that icu version is >= 55, because two symbols used by
+* icu-date rock appeared at following library versions:
+*  - ucal_getTimeZoneID at icu 51
+*  - udat_formatCalendar at icu 55
+*
+* To add this symbols to export list properly (to keep backward compatibility
+* with an older versions of icu) was used define from icu library:
+* U_ICU_VERSION_MAJOR_NUM.
+*
+* Older versions of libicu, for example 4.8 (or 48) has following define:
+*   #define U_ICU_VERSION_MAJOR_NUM 4
+* From version 49 of libicu numbering changed, for example libicu 50 has
+* following define:
+*   #define U_ICU_VERSION_MAJOR_NUM 50
+* Here are links for version numbering of libicu:
+*   - Changes at icu 49: http://site.icu-project.org/download/49
+*   - Version numbering: http://userguide.icu-project.org/design#TOC-Version-Numbers-in-ICU
+*/
+#include <unicode/urename.h>
+EXPORT(u_austrcpy)
+EXPORT(u_errorName)
+EXPORT(u_getVersion)
+EXPORT(u_strlen)
+EXPORT(u_uastrcpy)
+EXPORT(ucal_add)
+EXPORT(ucal_clear)
+EXPORT(ucal_clearField)
+EXPORT(ucal_close)
+EXPORT(ucal_get)
+EXPORT(ucal_getAttribute)
+EXPORT(ucal_getMillis)
+EXPORT(ucal_getNow)
+#if U_ICU_VERSION_MAJOR_NUM >= 51
+    EXPORT(ucal_getTimeZoneID)
+#endif
+EXPORT(ucal_open)
+EXPORT(ucal_set)
+EXPORT(ucal_setAttribute)
+EXPORT(ucal_setMillis)
+EXPORT(ucal_setTimeZone)
+EXPORT(udat_close)
+#if U_ICU_VERSION_MAJOR_NUM >= 55
+    EXPORT(udat_formatCalendar)
+#endif
+EXPORT(udat_open)
+EXPORT(udat_parseCalendar)
+EXPORT(udat_setLenient)
