@@ -2871,9 +2871,8 @@ tnt_error:
 
 #ifndef SQL_OMIT_AUTOMATIC_INDEX
 	/* Automatic indexes */
-	struct index *pk = space->index != NULL ? space_index(space, 0) : NULL;
-	rSize = pk == NULL ? DEFAULT_TUPLE_LOG_COUNT : pk->vtab->size(pk);
-	LogEst rLogSize = sql_space_tuple_log_count(pSrc->space);
+	rSize = DEFAULT_TUPLE_LOG_COUNT;
+	LogEst rLogSize = estLog(rSize);
 	if (!pBuilder->pOrSet && /* Not pqart of an OR optimization */
 	    (pWInfo->wctrlFlags & WHERE_OR_SUBCLAUSE) == 0 &&
 	    (pWInfo->pParse->sql_flags & SQL_AutoIndex) != 0 &&
@@ -2908,8 +2907,10 @@ tnt_error:
 				if (!space->def->opts.is_view &&
 				    space->def->id == 0)
 					pNew->rSetup += 24;
-				if (pNew->rSetup < 0)
-					pNew->rSetup = 0;
+				else
+					pNew->rSetup -= 10;
+				// if (pNew->rSetup < 0)
+				// 	pNew->rSetup = 0;
 				/* TUNING: Each index lookup yields 20 rows in the table.  This
 				 * is more than the usual guess of 10 rows, since we have no way
 				 * of knowing how selective the index will ultimately be.  It would
