@@ -2841,13 +2841,11 @@ install_blob:
 		goto install_blob;
 	}
 	case MP_FLOAT: {
-		mem->u.r = mp_decode_float(&buf);
-		mem->flags = sqlIsNaN(mem->u.r) ? MEM_Null : MEM_Real;
+		mem_set_double(mem, mp_decode_float(&buf));
 		break;
 	}
 	case MP_DOUBLE: {
-		mem->u.r = mp_decode_double(&buf);
-		mem->flags = sqlIsNaN(mem->u.r) ? MEM_Null : MEM_Real;
+		mem_set_double(mem, mp_decode_double(&buf));
 		break;
 	}
 	}
