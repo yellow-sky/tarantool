@@ -595,8 +595,7 @@ vdbe_mem_numerify(struct Mem *mem)
 	if ((mem->flags & (MEM_Int | MEM_UInt | MEM_Real | MEM_Null)) != 0)
 		return 0;
 	if ((mem->flags & MEM_Bool) != 0) {
-		mem->u.u = mem->u.b;
-		MemSetTypeFlag(mem, MEM_UInt);
+		mem_set_int(mem, mem->u.b, false);
 		return 0;
 	}
 	assert((mem->flags & (MEM_Blob | MEM_Str)) != 0);
@@ -701,8 +700,7 @@ sqlVdbeMemCast(Mem * pMem, enum field_type type)
 			return 0;
 		}
 		if ((pMem->flags & MEM_Bool) != 0) {
-			pMem->u.u = pMem->u.b;
-			MemSetTypeFlag(pMem, MEM_UInt);
+			mem_set_int(pMem, pMem->u.b, false);
 			return 0;
 		}
 		if ((pMem->flags & MEM_Real) != 0) {

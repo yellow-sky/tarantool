@@ -2806,14 +2806,11 @@ vdbe_decode_msgpack_into_mem(const char *buf, struct Mem *mem, uint32_t *len)
 		break;
 	}
 	case MP_UINT: {
-		uint64_t v = mp_decode_uint(&buf);
-		mem->u.u = v;
-		mem->flags = MEM_UInt;
+		mem_set_int(mem, mp_decode_uint(&buf), false);
 		break;
 	}
 	case MP_INT: {
-		mem->u.i = mp_decode_int(&buf);
-		mem->flags = MEM_Int;
+		mem_set_int(mem, mp_decode_int(&buf), true);
 		break;
 	}
 	case MP_STR: {

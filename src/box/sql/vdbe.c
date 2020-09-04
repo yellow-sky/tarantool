@@ -5338,11 +5338,11 @@ case OP_Init: {          /* jump */
  */
 case OP_IncMaxid: {
 	assert(pOp->p1 > 0);
-	pOut = vdbe_prepare_null_out(p, pOp->p1);
-
-	if (tarantoolsqlIncrementMaxid(&pOut->u.u) != 0)
+	pOut = &aMem[pOp->p1];
+	uint64_t max_id;
+	if (tarantoolsqlIncrementMaxid(&max_id) != 0)
 		goto abort_due_to_error;
-	pOut->flags = MEM_UInt;
+	mem_set_int(pOut, max_id, false);
 	break;
 }
 
