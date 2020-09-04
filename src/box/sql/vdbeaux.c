@@ -2322,13 +2322,14 @@ sqlVdbeAllocUnpackedRecord(struct sql *db, struct key_def *key_def)
 {
 	UnpackedRecord *p;	/* Unpacked record to return */
 	int nByte;		/* Number of bytes required for *p */
-	nByte =
-	    ROUND8(sizeof(UnpackedRecord)) + sizeof(Mem) * (key_def->part_count +
-							    1);
+	uint32_t size = key_def->part_count + 1;
+	nByte = ROUND8(sizeof(UnpackedRecord)) + sizeof(Mem) * size;
 	p = (UnpackedRecord *) sqlDbMallocRaw(db, nByte);
 	if (!p)
 		return 0;
 	p->aMem = (Mem *) & ((char *)p)[ROUND8(sizeof(UnpackedRecord))];
+	for (uint32_t i = 0; i < size; ++i)
+		sqlVdbeMemInit(&p->aMem[i], db, MEM_Null);
 	p->key_def = key_def;
 	p->nField = key_def->part_count + 1;
 	return p;
