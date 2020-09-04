@@ -2801,8 +2801,7 @@ vdbe_decode_msgpack_into_mem(const char *buf, struct Mem *mem, uint32_t *len)
 		break;
 	}
 	case MP_BOOL: {
-		mem->u.b = mp_decode_bool(&buf);
-		mem->flags = MEM_Bool;
+		mem_set_bool(mem, mp_decode_bool(&buf));
 		break;
 	}
 	case MP_UINT: {
