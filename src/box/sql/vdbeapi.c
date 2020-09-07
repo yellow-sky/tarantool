@@ -565,6 +565,7 @@ columnNullValue(void)
 		/* .u          = */  {
 		0},
 		    /* .flags      = */ (u16) MEM_Null,
+		    /* .type       = */ MEM_NULL,
 		    /* .eSubtype   = */ (u8) 0,
 		    /* .field_type = */ field_type_MAX,
 		    /* .n          = */ (int)0,

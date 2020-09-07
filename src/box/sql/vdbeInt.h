@@ -157,6 +157,35 @@ struct VdbeFrame {
 
 #define VdbeFrameMem(p) ((Mem *)&((u8 *)p)[ROUND8(sizeof(VdbeFrame))])
 
+enum mem_type {
+	MEM_NULL = 0,
+	MEM_UINT,
+	MEM_INT,
+	MEM_STR,
+	MEM_BIN,
+	MEM_ARRAY,
+	MEM_MAP,
+	MEM_BOOL,
+	MEM_FLOAT,
+	MEM_DOUBLE,
+	MEM_FRAME,
+	MEM_PTR,
+	MEM_UNDEF,
+	MEM_AGG,
+	mem_type_MAX,
+};
+
+static_assert(MEM_NULL == (enum mem_type)MP_NIL);
+static_assert(MEM_UINT == (enum mem_type)MEM_UINT);
+static_assert(MEM_INT == (enum mem_type)MP_INT);
+static_assert(MEM_STR == (enum mem_type)MP_STR);
+static_assert(MEM_BIN == (enum mem_type)MP_BIN);
+static_assert(MEM_ARRAY == (enum mem_type)MP_ARRAY);
+static_assert(MEM_MAP == (enum mem_type)MP_MAP);
+static_assert(MEM_BOOL == (enum mem_type)MP_BOOL);
+static_assert(MEM_FLOAT == (enum mem_type)MP_FLOAT);
+static_assert(MEM_DOUBLE == (enum mem_type)MP_DOUBLE);
+
 /*
  * Internally, the vdbe manipulates nearly all SQL values as Mem
  * structures. Each Mem struct may cache multiple representations (string,
@@ -178,6 +207,8 @@ struct Mem {
 		VdbeFrame *pFrame;	/* Used when flags==MEM_Frame */
 	} u;
 	u32 flags;		/* Some combination of MEM_Null, MEM_Str, MEM_Dyn, etc. */
+	/* Type of the MEM. */
+	enum mem_type type;
 	/** Subtype for this value. */
 	enum sql_subtype subtype;
 	/**
@@ -251,7 +282,10 @@ struct Mem {
  * auxiliary flags.
  */
 enum {
-	MEM_PURE_TYPE_MASK = 0x7f
+	MEM_PURE_TYPE_MASK = 0x7f,
+	MEM_TYPE_MASK = MEM_Null | MEM_Str | MEM_Int | MEM_Real | MEM_Blob |
+			MEM_Bool | MEM_UInt | MEM_Frame | MEM_Undefined |
+			MEM_Agg | MEM_Ptr,
 };
 
 static_assert(MEM_PURE_TYPE_MASK == (MEM_Null | MEM_Str | MEM_Int | MEM_Real |
