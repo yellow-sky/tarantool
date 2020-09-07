@@ -386,6 +386,7 @@ vdbeMemClearExternAndSetNull(Mem * p)
 		pFrame->v->pDelFrame = pFrame;
 	}
 	p->flags = MEM_Null;
+	p->type = MEM_NULL;
 }
 
 /*
@@ -786,6 +787,7 @@ sqlVdbeMemSetNull(Mem * pMem)
 		vdbeMemClearExternAndSetNull(pMem);
 	} else {
 		pMem->flags = MEM_Null;
+		pMem->type = MEM_NULL;
 	}
 }
 
@@ -800,6 +802,8 @@ mem_set_ptr(struct Mem *mem, void *ptr)
 {
 	sqlVdbeMemRelease(mem);
 	mem->flags = MEM_Ptr;
+	mem->type = MEM_PTR;
+	mem->field_type = field_type_MAX;
 	mem->u.p = ptr;
 }
 
@@ -825,42 +829,48 @@ mem_set_bool(struct Mem *mem, bool value)
 	sqlVdbeMemSetNull(mem);
 	mem->u.b = value;
 	mem->flags = MEM_Bool;
+	mem->type = MEM_BOOL;
 	mem->field_type = FIELD_TYPE_BOOLEAN;
 }
 
 void
 mem_set_i64(struct Mem *mem, int64_t value)
 {
-	if (VdbeMemDynamic(mem))
-		sqlVdbeMemSetNull(mem);
+	sqlVdbeMemSetNull(mem);
 	mem->u.i = value;
-	int flag = value < 0 ? MEM_Int : MEM_UInt;
-	MemSetTypeFlag(mem, flag);
+	if (value < 0) {
+		mem->flags = MEM_Int;
+		mem->type = MEM_INT;
+	} else {
+		mem->flags = MEM_UInt;
+		mem->type = MEM_UINT;
+	}
 	mem->field_type = FIELD_TYPE_INTEGER;
 }
 
 void
 mem_set_u64(struct Mem *mem, uint64_t value)
 {
-	if (VdbeMemDynamic(mem))
-		sqlVdbeMemSetNull(mem);
+	sqlVdbeMemSetNull(mem);
 	mem->u.u = value;
-	MemSetTypeFlag(mem, MEM_UInt);
+	mem->flags = MEM_UInt;
+	mem->type = MEM_UINT;
 	mem->field_type = FIELD_TYPE_UNSIGNED;
 }
 
 void
 mem_set_int(struct Mem *mem, int64_t value, bool is_neg)
 {
-	if (VdbeMemDynamic(mem))
-		sqlVdbeMemSetNull(mem);
+	sqlVdbeMemSetNull(mem);
 	if (is_neg) {
 		assert(value < 0);
 		mem->u.i = value;
-		MemSetTypeFlag(mem, MEM_Int);
+		mem->flags = MEM_Int;
+		mem->type = MEM_INT;
 	} else {
 		mem->u.u = value;
-		MemSetTypeFlag(mem, MEM_UInt);
+		mem->flags = MEM_UInt;
+		mem->type = MEM_UINT;
 	}
 	mem->field_type = FIELD_TYPE_INTEGER;
 }
@@ -872,7 +882,8 @@ mem_set_double(struct Mem *mem, double value)
 	if (sqlIsNaN(value))
 		return;
 	mem->u.r = value;
-	MemSetTypeFlag(mem, MEM_Real);
+	mem->flags = MEM_Real;
+	mem->type = MEM_DOUBLE;
 	mem->field_type = FIELD_TYPE_DOUBLE;
 }
 
