@@ -805,6 +805,16 @@ mem_set_ptr(struct Mem *mem, void *ptr)
 	mem->u.p = ptr;
 }
 
+void
+mem_set_frame(struct Mem *mem, struct VdbeFrame *frame)
+{
+	sqlVdbeMemRelease(mem);
+	mem->flags = MEM_Frame;
+	mem->type = MEM_FRAME;
+	mem->field_type = field_type_MAX;
+	mem->u.pFrame = frame;
+}
+
 /*
  * Delete any previous value and set the value to be a BLOB of length
  * n containing all zeros.

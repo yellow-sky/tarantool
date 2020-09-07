@@ -530,6 +530,14 @@ void
 mem_set_ptr(struct Mem *mem, void *ptr);
 
 /**
+ * Set VDBE memory register with given frame as a data.
+ * @param mem VDBE memory register to update.
+ * @param frame Frame to use.
+ */
+void
+mem_set_frame(struct Mem *mem, struct VdbeFrame *frame);
+
+/**
  * Set integer value. Depending on its sign MEM_Int (in case
  * of negative value) or MEM_UInt flag is set.
  */

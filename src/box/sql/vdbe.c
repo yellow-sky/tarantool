@@ -4913,9 +4913,7 @@ case OP_Program: {        /* jump */
 		if (!pFrame) {
 			goto no_mem;
 		}
-		sqlVdbeMemRelease(pRt);
-		pRt->flags = MEM_Frame;
-		pRt->u.pFrame = pFrame;
+		mem_set_frame(pRt, pFrame);
 
 		pFrame->v = p;
 		pFrame->nChildMem = nMem;
