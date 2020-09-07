@@ -484,6 +484,30 @@ void sqlVdbeMemMove(Mem *, Mem *);
 int sqlVdbeMemNulTerminate(Mem *);
 int sqlVdbeMemSetStr(Mem *, const char *, int, u8, void (*)(void *));
 
+/**
+ * Initialize a new mem. After initializing the mem will hold a NULL value.
+ *
+ * @param mem VDBE memory register to initialize.
+ */
+void
+mem_init(struct Mem *mem);
+
+/**
+ * Set VDBE memory register as NULL.
+ *
+ * @param mem VDBE memory register to update.
+ */
+void
+mem_set_null(struct Mem *mem);
+
+/**
+ * Set VDBE memory register as Undefined. MEM is not cleared prior to that.
+ *
+ * @param mem VDBE memory register to update.
+ */
+void
+mem_set_undefined(struct Mem *mem);
+
 void
 mem_set_bool(struct Mem *mem, bool value);
 
@@ -494,6 +518,15 @@ mem_set_bool(struct Mem *mem, bool value);
  */
 void
 mem_set_ptr(struct Mem *mem, void *ptr);
+
+/**
+ * Set VDBE memory register as frame.
+ *
+ * @param mem VDBE memory register to update.
+ * @param frame Frame to set.
+ */
+void
+mem_set_frame(struct Mem *mem, struct VdbeFrame *frame);
 
 /**
  * Set integer value. Depending on its sign MEM_Int (in case
@@ -516,6 +549,177 @@ mem_set_int(struct Mem *mem, int64_t value, bool is_neg);
 /** Set double value and MEM_Real flag. */
 void
 mem_set_double(struct Mem *mem, double value);
+
+/**
+ * Set VDBE memory register as string. If is_null_terminated is true then
+ * sizeof(value) should be len + 1, otherwise sizeof(value) == len. If
+ * alloc_type is either MEM_Static or MEM_Ephem, then no more allocation,
+ * deallocation, or copying is required. In case it is MEM_Dyn, no need to
+ * allocate and copy, but MEM should be freed each time MEM changes or
+ * destroyed. If it is 0, the entire string should be copied into newly
+ * allocated memory, which should be freed when the memory is destroyed.
+ * However, in this case, there is no need to free memory every time the MEM
+ * changes. It should be deallocated in case this MEM is set a new string or
+ * binary string with alloc_type 0.
+ *
+ * @param mem VDBE memory register to update.
+ * @param value String to set.
+ * @param len Length of the string.
+ * @param alloc_type Type of allocation of binary string.
+ * @param is_null_terminated True if string is NULL-terminated.
+ */
+int
+mem_set_str(struct Mem *mem, char *value, uint32_t len, int alloc_type,
+	    bool is_null_terminated);
+
+/**
+ * Set VDBE memory register as binary. If is_zero is true then binary received
+ * from this MEM may have length more than given size, however this is done
+ * outside of this MEM. If alloc_type is either MEM_Static or MEM_Ephem, then no
+ * more allocation, deallocation, or copying is required. In case it is MEM_Dyn,
+ * no need to allocate and copy, but MEM should be freed each time MEM changes
+ * or destroyed. If it is 0, the entire binary string should be copied into
+ * newly allocated memory, which should be freed when the memory is destroyed.
+ * However, in this case, there is no need to free memory every time the MEM
+ * changes. It should be deallocated in case this MEM is set a new string or
+ * binary string with alloc_type 0.
+ *
+ * @param mem VDBE memory register to update.
+ * @param value Binary string to set.
+ * @param len Length of the string.
+ * @param alloc_type Type of allocation of binary string.
+ * @param is_zero True if binary string may be expanded with zeroes at the end.
+ */
+int
+mem_set_bin(struct Mem *mem, char *value, uint32_t size, int alloc_type,
+	    bool is_zero);
+
+/**
+ * Set VDBE memory register as MAP. See @a mem_set_bin with is_zero = 0 for
+ * more.
+ *
+ * @param mem VDBE memory register to update.
+ * @param value Binary string that contains msgpack with type MP_MAP to set.
+ * @param len Length of the binary string.
+ * @param alloc_type Type of allocation of binary string.
+ */
+int
+mem_set_map(struct Mem *mem, char *value, uint32_t size, int alloc_type);
+
+/**
+ * Set VDBE memory register as ARRAY. See @a mem_set_bin with is_zero = 0 for
+ * more.
+ *
+ * @param mem VDBE memory register to update.
+ * @param value Binary string that contains msgpack with type MP_ARRAY to set.
+ * @param len Length of the binary string.
+ * @param alloc_type Type of allocation of binary string.
+ */
+int
+mem_set_array(struct Mem *mem, char *value, uint32_t size, int alloc_type);
+
+static inline bool
+mem_is_null(const struct Mem *mem)
+{
+	return (mem->flags & MEM_PURE_TYPE_MASK) == MEM_Null;
+}
+
+static inline bool
+mem_is_undefined(const struct Mem *mem)
+{
+	return mem->flags == MEM_Undefined;
+}
+
+static inline bool
+mem_is_frame(const struct Mem *mem)
+{
+	return mem->flags == MEM_Frame;
+}
+
+static inline bool
+mem_is_neg_int(const struct Mem *mem)
+{
+	return (mem->flags & MEM_PURE_TYPE_MASK) == MEM_Int;
+}
+
+static inline bool
+mem_is_pos_int(const struct Mem *mem)
+{
+	return (mem->flags & MEM_PURE_TYPE_MASK) == MEM_UInt;
+}
+
+static inline bool
+mem_is_integer(const struct Mem *mem)
+{
+	return mem_is_neg_int(mem) || mem_is_pos_int(mem);
+}
+
+static inline bool
+mem_is_double(const struct Mem *mem)
+{
+	return (mem->flags & MEM_PURE_TYPE_MASK) == MEM_Real;
+}
+
+static inline bool
+mem_is_number(const struct Mem *mem)
+{
+	return mem_is_integer(mem) || mem_is_double(mem);
+}
+
+static inline bool
+mem_is_string(const struct Mem *mem)
+{
+	return (mem->flags & MEM_PURE_TYPE_MASK) == MEM_Str;
+}
+
+static inline bool
+mem_is_binary(const struct Mem *mem)
+{
+	return (mem->flags & MEM_PURE_TYPE_MASK) == MEM_Blob;
+}
+
+static inline bool
+mem_is_varstring(const struct Mem *mem)
+{
+	return mem_is_string(mem) || mem_is_binary(mem);
+}
+
+static inline bool
+mem_is_map(const struct Mem *mem)
+{
+	return mem_is_binary(mem) && ((mem->flags & MEM_Subtype) != 0) &&
+	       mem->subtype == SQL_SUBTYPE_MSGPACK &&
+	       mp_typeof(*mem->z) == MP_MAP;
+}
+
+static inline bool
+mem_is_array(const struct Mem *mem)
+{
+	return mem_is_binary(mem) && ((mem->flags & MEM_Subtype) != 0) &&
+	       mem->subtype == SQL_SUBTYPE_MSGPACK &&
+	       mp_typeof(*mem->z) == MP_ARRAY;
+}
+
+static inline bool
+mem_is_bool(const struct Mem *mem)
+{
+	return (mem->flags & MEM_PURE_TYPE_MASK) == MEM_Bool;
+}
+
+static inline bool
+mems_have_same_type(const struct Mem *mem1, const struct Mem *mem2)
+{
+	return (mem1->flags & MEM_PURE_TYPE_MASK) ==
+	       (mem2->flags & MEM_PURE_TYPE_MASK);
+}
+
+/**
+ * Cast MEM to varbinary according to explicit cast rules.
+ *
+ * @param mem VDBE memory register to convert.
+ */
+int
+mem_convert_to_binary(struct Mem *mem);
 
 void sqlVdbeMemInit(Mem *, sql *, u32);
 void sqlVdbeMemSetNull(Mem *);
