@@ -800,11 +800,43 @@ sqlValueSetNull(sql_value * p)
 }
 
 void
+mem_init(struct Mem *mem)
+{
+	memset(mem, 0, sizeof(*mem));
+	mem->db = sql_get();
+	mem->flags = MEM_Null;
+	mem->field_type = field_type_MAX;
+}
+
+void
+mem_set_null(struct Mem *mem)
+{
+	sqlVdbeMemSetNull(mem);
+	mem->field_type = field_type_MAX;
+}
+
+void
+mem_set_undefined(struct Mem *mem)
+{
+	mem->flags = MEM_Undefined;
+	mem->field_type = field_type_MAX;
+}
+
+void
 mem_set_ptr(struct Mem *mem, void *ptr)
 {
 	sqlVdbeMemRelease(mem);
 	mem->flags = MEM_Ptr;
 	mem->u.p = ptr;
+}
+
+void
+mem_set_frame(struct Mem *mem, struct VdbeFrame *frame)
+{
+	sqlVdbeMemSetNull(mem);
+	mem->u.pFrame = frame;
+	mem->flags = MEM_Frame;
+	mem->field_type = field_type_MAX;
 }
 
 /*
@@ -878,6 +910,75 @@ mem_set_double(struct Mem *mem, double value)
 	mem->u.r = value;
 	MemSetTypeFlag(mem, MEM_Real);
 	mem->field_type = FIELD_TYPE_DOUBLE;
+}
+
+int
+mem_set_str(struct Mem *mem, char *value, uint32_t len, int alloc_type,
+	    bool is_null_terminated)
+{
+	sqlVdbeMemSetNull(mem);
+	if (alloc_type != 0) {
+		mem->z = value;
+		if (alloc_type == MEM_Dyn)
+			mem->xDel = SQL_DYNAMIC;
+	} else {
+		uint32_t size = is_null_terminated ? len + 1 : len;
+		if (sqlVdbeMemClearAndResize(mem, size) != 0)
+			return -1;
+		memcpy(mem->z, value, size);
+	}
+	mem->n = len;
+	mem->flags = MEM_Str | alloc_type;
+	if (is_null_terminated)
+		mem->flags |= MEM_Term;
+	mem->field_type = FIELD_TYPE_STRING;
+	return 0;
+}
+
+int
+mem_set_bin(struct Mem *mem, char *value, uint32_t size, int alloc_type,
+	    bool is_zero)
+{
+	sqlVdbeMemSetNull(mem);
+	if (alloc_type != 0) {
+		mem->z = value;
+		if (alloc_type == MEM_Dyn)
+			mem->xDel = SQL_DYNAMIC;
+	} else {
+		if (sqlVdbeMemClearAndResize(mem, size) != 0)
+			return -1;
+		memcpy(mem->z, value, size);
+	}
+	mem->n = size;
+	mem->flags = MEM_Blob | alloc_type;
+	if (is_zero)
+		mem->flags |= MEM_Zero;
+	mem->field_type = FIELD_TYPE_VARBINARY;
+	return 0;
+}
+
+int
+mem_set_map(struct Mem *mem, char *value, uint32_t size, int alloc_type)
+{
+	assert(mp_typeof(*value) == MP_MAP);
+	if (mem_set_bin(mem, value, size, alloc_type, false) != 0)
+		return -1;
+	mem->subtype = SQL_SUBTYPE_MSGPACK;
+	mem->flags |= MEM_Subtype;
+	mem->field_type = FIELD_TYPE_MAP;
+	return 0;
+}
+
+int
+mem_set_array(struct Mem *mem, char *value, uint32_t size, int alloc_type)
+{
+	assert(mp_typeof(*value) == MP_ARRAY);
+	if (mem_set_bin(mem, value, size, alloc_type, false) != 0)
+		return -1;
+	mem->subtype = SQL_SUBTYPE_MSGPACK;
+	mem->flags |= MEM_Subtype;
+	mem->field_type = FIELD_TYPE_ARRAY;
+	return 0;
 }
 
 /*

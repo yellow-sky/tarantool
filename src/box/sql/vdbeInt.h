@@ -484,6 +484,30 @@ void sqlVdbeMemMove(Mem *, Mem *);
 int sqlVdbeMemNulTerminate(Mem *);
 int sqlVdbeMemSetStr(Mem *, const char *, int, u8, void (*)(void *));
 
+/**
+ * Initialize a new mem. After initializing the mem will hold a NULL value.
+ *
+ * @param mem VDBE memory register to initialize.
+ */
+void
+mem_init(struct Mem *mem);
+
+/**
+ * Set VDBE memory register as NULL.
+ *
+ * @param mem VDBE memory register to update.
+ */
+void
+mem_set_null(struct Mem *mem);
+
+/**
+ * Set VDBE memory register as Undefined. MEM is not cleared prior to that.
+ *
+ * @param mem VDBE memory register to update.
+ */
+void
+mem_set_undefined(struct Mem *mem);
+
 void
 mem_set_bool(struct Mem *mem, bool value);
 
@@ -494,6 +518,15 @@ mem_set_bool(struct Mem *mem, bool value);
  */
 void
 mem_set_ptr(struct Mem *mem, void *ptr);
+
+/**
+ * Set VDBE memory register as frame.
+ *
+ * @param mem VDBE memory register to update.
+ * @param frame Frame to set.
+ */
+void
+mem_set_frame(struct Mem *mem, struct VdbeFrame *frame);
 
 /**
  * Set integer value. Depending on its sign MEM_Int (in case
@@ -516,6 +549,74 @@ mem_set_int(struct Mem *mem, int64_t value, bool is_neg);
 /** Set double value and MEM_Real flag. */
 void
 mem_set_double(struct Mem *mem, double value);
+
+/**
+ * Set VDBE memory register as string. Length and way of allocation is also
+ * given. If is_null_terminated is true then sizeof(value) should be len + 1,
+ * otherwise sizeof(value) == len. If alloc_type is either MEM_Static or
+ * MEM_Ephem, then no more allocation, deallocation, or copying is required.
+ * In case it is MEM_Dyn, no need to allocate and copy, but MEM should be freed
+ * each time MEM changes or destroyed. If it is 0, the entire string should be
+ * copied into newly allocated memory, which should be freed when the memory is
+ * destroyed. However, in this case, there is no need to free memory every time
+ * the MEM changes. We only need to free memory if this MEM is given a new
+ * string or binary string with alloc_type 0.
+ *
+ * @param mem VDBE memory register to update.
+ * @param value String to set.
+ * @param len Length of the string.
+ * @param alloc_type Type of allocation of binary string.
+ * @param is_null_terminated True if string is NULL-terminated.
+ */
+int
+mem_set_str(struct Mem *mem, char *value, uint32_t len, int alloc_type,
+	    bool is_null_terminated);
+
+/**
+ * Set VDBE memory register as binary. Length and way of allocation is also
+ * given. If is_zero is true then binary received from this MEM may have length
+ * more than given size, however this is done outside of this MEM. If alloc_type
+ * is either MEM_Static or MEM_Ephem, then no more allocation, deallocation, or
+ * copying is required. In case it is MEM_Dyn, no need to allocate and copy, but
+ * MEM should be freed each time MEM changes or destroyed. If it is 0, the
+ * entire binary string should be copied into newly allocated memory, which
+ * should be freed when the memory is destroyed. However, in this case, there is
+ * no need to free memory every time the MEM changes. We only need to free
+ * memory if this MEM is given a new string or binary string with alloc_type 0.
+ *
+ * @param mem VDBE memory register to update.
+ * @param value Binary string to set.
+ * @param len Length of the string.
+ * @param alloc_type Type of allocation of binary string.
+ * @param is_zero True if binary string may be expanded with zeroes at the end.
+ */
+int
+mem_set_bin(struct Mem *mem, char *value, uint32_t size, int alloc_type,
+	    bool is_zero);
+
+/**
+ * Set VDBE memory register as MAP. See @a mem_set_bin with is_zero = 0 for
+ * more.
+ *
+ * @param mem VDBE memory register to update.
+ * @param value Binary string that contains msgpack with type MP_MAP to set.
+ * @param len Length of the binary string.
+ * @param alloc_type Type of allocation of binary string.
+ */
+int
+mem_set_map(struct Mem *mem, char *value, uint32_t size, int alloc_type);
+
+/**
+ * Set VDBE memory register as ARRAY. See @a mem_set_bin with is_zero = 0 for
+ * more.
+ *
+ * @param mem VDBE memory register to update.
+ * @param value Binary string that contains msgpack with type MP_ARRAY to set.
+ * @param len Length of the binary string.
+ * @param alloc_type Type of allocation of binary string.
+ */
+int
+mem_set_array(struct Mem *mem, char *value, uint32_t size, int alloc_type);
 
 void sqlVdbeMemInit(Mem *, sql *, u32);
 void sqlVdbeMemSetNull(Mem *);
