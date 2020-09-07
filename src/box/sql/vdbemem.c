@@ -151,18 +151,6 @@ sqlVdbeMemGrow(Mem * pMem, int n, int bPreserve)
 	return 0;
 }
 
-/*
- * Change the pMem->zMalloc allocation to be at least szNew bytes.
- * If pMem->zMalloc already meets or exceeds the requested size, this
- * routine is a no-op.
- *
- * Any prior string or blob content in the pMem object may be discarded.
- * The pMem->xDel destructor is called, if it exists.  Though MEM_Str
- * and MEM_Blob values may be discarded, MEM_Int, MEM_Real, and MEM_Null
- * values are preserved.
- *
- * Return 0 on success or -1 if unable to complete the resizing.
- */
 int
 sqlVdbeMemClearAndResize(Mem * pMem, int szNew)
 {
@@ -363,23 +351,13 @@ sql_vdbemem_finalize(struct Mem *mem, struct func *func)
 	return ctx.is_aborted ? -1 : 0;
 }
 
-/*
- * If the memory cell contains a value that must be freed by
- * invoking the external callback in Mem.xDel, then this routine
- * will free that value.  It also sets Mem.flags to MEM_Null.
- *
- * This is a helper routine for sqlVdbeMemSetNull() and
- * for sqlVdbeMemRelease().  Use those other routines as the
- * entry point for releasing Mem resources.
- */
-static SQL_NOINLINE void
+void
 vdbeMemClearExternAndSetNull(Mem * p)
 {
 	assert(VdbeMemDynamic(p));
 	if (p->flags & MEM_Agg) {
 		sql_vdbemem_finalize(p, p->u.func);
 		assert((p->flags & MEM_Agg) == 0);
-		testcase(p->flags & MEM_Dyn);
 	}
 	if (p->flags & MEM_Dyn) {
 		assert(p->xDel != SQL_DYNAMIC && p->xDel != 0);
@@ -390,6 +368,7 @@ vdbeMemClearExternAndSetNull(Mem * p)
 		pFrame->v->pDelFrame = pFrame;
 	}
 	p->flags = MEM_Null;
+	p->field_type = field_type_MAX;
 }
 
 /*
@@ -743,9 +722,8 @@ sqlVdbeMemCast(Mem * pMem, enum field_type type)
 		assert(MEM_Str == (MEM_Blob >> 3));
 		if ((pMem->flags & MEM_Bool) != 0) {
 			const char *str_bool = SQL_TOKEN_BOOLEAN(pMem->u.b);
-			sqlVdbeMemSetStr(pMem, str_bool, strlen(str_bool), 1,
-					 SQL_TRANSIENT);
-			return 0;
+			return mem_copy_str(pMem, str_bool, strlen(str_bool),
+					    true);
 		}
 		pMem->flags |= (pMem->flags & MEM_Blob) >> 3;
 			sql_value_apply_type(pMem, FIELD_TYPE_STRING);
@@ -799,14 +777,6 @@ sqlValueSetNull(sql_value * p)
 	sqlVdbeMemSetNull((Mem *) p);
 }
 
-void
-mem_set_ptr(struct Mem *mem, void *ptr)
-{
-	sqlVdbeMemRelease(mem);
-	mem->flags = MEM_Ptr;
-	mem->u.p = ptr;
-}
-
 /*
  * Delete any previous value and set the value to be a BLOB of length
  * n containing all zeros.
@@ -821,63 +791,6 @@ sqlVdbeMemSetZeroBlob(Mem * pMem, int n)
 		n = 0;
 	pMem->u.nZero = n;
 	pMem->z = 0;
-}
-
-void
-mem_set_bool(struct Mem *mem, bool value)
-{
-	sqlVdbeMemSetNull(mem);
-	mem->u.b = value;
-	mem->flags = MEM_Bool;
-	mem->field_type = FIELD_TYPE_BOOLEAN;
-}
-
-void
-mem_set_i64(struct Mem *mem, int64_t value)
-{
-	if (VdbeMemDynamic(mem))
-		sqlVdbeMemSetNull(mem);
-	mem->u.i = value;
-	int flag = value < 0 ? MEM_Int : MEM_UInt;
-	MemSetTypeFlag(mem, flag);
-	mem->field_type = FIELD_TYPE_INTEGER;
-}
-
-void
-mem_set_u64(struct Mem *mem, uint64_t value)
-{
-	if (VdbeMemDynamic(mem))
-		sqlVdbeMemSetNull(mem);
-	mem->u.u = value;
-	MemSetTypeFlag(mem, MEM_UInt);
-	mem->field_type = FIELD_TYPE_UNSIGNED;
-}
-
-void
-mem_set_int(struct Mem *mem, int64_t value, bool is_neg)
-{
-	if (VdbeMemDynamic(mem))
-		sqlVdbeMemSetNull(mem);
-	if (is_neg) {
-		assert(value < 0);
-		mem->u.i = value;
-		MemSetTypeFlag(mem, MEM_Int);
-	} else {
-		mem->u.u = value;
-		MemSetTypeFlag(mem, MEM_UInt);
-	}
-	mem->field_type = FIELD_TYPE_INTEGER;
-}
-
-void
-mem_set_double(struct Mem *mem, double value)
-{
-	sqlVdbeMemSetNull(mem);
-	if (sqlIsNaN(value))
-		return;
-	mem->u.r = value;
-	MemSetTypeFlag(mem, MEM_Real);
-	mem->field_type = FIELD_TYPE_DOUBLE;
 }
 
 /*

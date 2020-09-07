@@ -147,15 +147,15 @@ sqlVdbeExpandSql(Vdbe * p,	/* The prepared statement being evaluated */
 			nextIndex = idx + 1;
 			assert(idx > 0 && idx <= p->nVar);
 			pVar = &p->aVar[idx - 1];
-			if (pVar->flags & MEM_Null) {
+			if (mem_is_null(pVar)) {
 				sqlStrAccumAppend(&out, "NULL", 4);
-			} else if (pVar->flags & MEM_Int) {
+			} else if (mem_is_neg_int(pVar)) {
 				sqlXPrintf(&out, "%lld", pVar->u.i);
-			} else if (pVar->flags & MEM_UInt) {
+			} else if (mem_is_pos_int(pVar)) {
 				sqlXPrintf(&out, "%llu", pVar->u.u);
-			} else if (pVar->flags & MEM_Real) {
+			} else if (mem_is_double(pVar)) {
 				sqlXPrintf(&out, "%!.15g", pVar->u.r);
-			} else if (pVar->flags & MEM_Str) {
+			} else if (mem_is_string(pVar)) {
 				int nOut;	/* Number of bytes of the string text to include in output */
 				nOut = pVar->n;
 				sqlXPrintf(&out, "'%.*q'", nOut, pVar->z);
@@ -164,7 +164,7 @@ sqlVdbeExpandSql(Vdbe * p,	/* The prepared statement being evaluated */
 					       pVar->u.nZero);
 			} else {
 				int nOut;	/* Number of bytes of the blob to include in output */
-				assert(pVar->flags & MEM_Blob);
+				assert(mem_is_binary(pVar));
 				sqlStrAccumAppend(&out, "x'", 2);
 				nOut = pVar->n;
 				for (i = 0; i < nOut; i++) {

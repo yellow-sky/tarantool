@@ -1108,18 +1108,18 @@ displayP4(Op * pOp, char *zTemp, int nTemp)
 		}
 	case P4_MEM:{
 			Mem *pMem = pOp->p4.pMem;
-			if (pMem->flags & MEM_Str) {
+			if (mem_is_string(pMem)) {
 				zP4 = pMem->z;
-			} else if (pMem->flags & MEM_Int) {
+			} else if (mem_is_neg_int(pMem)) {
 				sqlXPrintf(&x, "%lld", pMem->u.i);
-			} else if (pMem->flags & MEM_UInt) {
+			} else if (mem_is_pos_int(pMem)) {
 				sqlXPrintf(&x, "%llu", pMem->u.u);
-			} else if (pMem->flags & MEM_Real) {
+			} else if (mem_is_double(pMem)) {
 				sqlXPrintf(&x, "%.16g", pMem->u.r);
-			} else if (pMem->flags & MEM_Null) {
+			} else if (mem_is_null(pMem)) {
 				zP4 = "NULL";
 			} else {
-				assert(pMem->flags & MEM_Blob);
+				assert(mem_is_binary(pMem));
 				zP4 = "(binary string)";
 			}
 			break;
@@ -1198,17 +1198,13 @@ sqlVdbePrintOp(FILE * pOut, int pc, Op * pOp)
  * Initialize an array of N Mem element.
  */
 static void
-initMemArray(Mem * p, int N, sql * db, u32 flags)
+initMemArray(Mem *p, int N, bool is_undefined)
 {
-	while ((N--) > 0) {
-		p->db = db;
-		p->flags = flags;
-		p->szMalloc = 0;
-		p->field_type = field_type_MAX;
-#ifdef SQL_DEBUG
-		p->pScopyFrom = 0;
-#endif
-		p++;
+	for (int i = 0; i < N; ++i) {
+		struct Mem *mem = &p[i];
+		mem_init(mem);
+		if (is_undefined)
+			mem_set_undefined(mem);
 	}
 }
 
@@ -1239,16 +1235,14 @@ releaseMemArray(Mem * p, int N)
 			 */
 			testcase(p->flags & MEM_Agg);
 			testcase(p->flags & MEM_Dyn);
-			testcase(p->flags & MEM_Frame);
-			if (p->
-			    flags & (MEM_Agg | MEM_Dyn | MEM_Frame)) {
+			if (p->flags & (MEM_Agg | MEM_Dyn) || mem_is_frame(p)) {
 				sqlVdbeMemRelease(p);
 			} else if (p->szMalloc) {
 				sqlDbFree(db, p->zMalloc);
 				p->szMalloc = 0;
 			}
 
-			p->flags = MEM_Undefined;
+			mem_set_undefined(p);
 		} while ((++p) < pEnd);
 	}
 }
@@ -1322,7 +1316,7 @@ sqlVdbeList(Vdbe * p)
 		 */
 		assert(p->nMem > 9);
 		pSub = &p->aMem[9];
-		if (pSub->flags & MEM_Blob) {
+		if (mem_is_binary(pSub)) {
 			/* On the first call to sql_step(), pSub will hold a NULL.  It is
 			 * initialized to a BLOB by the P4_SUBPROGRAM processing logic below
 			 */
@@ -1364,10 +1358,10 @@ sqlVdbeList(Vdbe * p)
 
 			pMem++;
 
-			pMem->flags = MEM_Static | MEM_Str | MEM_Term;
-			pMem->z = (char *)sqlOpcodeName(pOp->opcode);	/* Opcode */
+			char *str = (char *)sqlOpcodeName(pOp->opcode);
+			uint32_t len = strlen(str);
+			mem_set_str(pMem, str, len, MEM_Static, true);
 			assert(pMem->z != 0);
-			pMem->n = sqlStrlen30(pMem->z);
 			pMem++;
 
 			/* When an OP_Program opcode is encounter (the only opcode that has
@@ -1382,13 +1376,25 @@ sqlVdbeList(Vdbe * p)
 					if (apSub[j] == pOp->p4.pProgram)
 						break;
 				}
-				if (j == nSub &&
-				    sqlVdbeMemGrow(pSub, nByte,
-						   nSub != 0) == 0) {
-					apSub = (SubProgram **) pSub->z;
-					apSub[nSub++] = pOp->p4.pProgram;
-					pSub->flags |= MEM_Blob;
-					pSub->n = nSub * sizeof(SubProgram *);
+				if (j == nSub) {
+					size_t svp = region_used(&fiber()->gc);
+					struct SubProgram **buf = (SubProgram **)
+						region_aligned_alloc(&fiber()->gc,
+								     nByte,
+								     alignof(struct SubProgram));
+					if (buf == NULL) {
+						diag_set(OutOfMemory, nByte,
+							 "region_aligned_alloc",
+							 "buf");
+						p->is_aborted = true;
+						return -1;
+					}
+					if (nSub > 0)
+						memcpy(buf, pSub->z, pSub->n);
+					buf[nSub++] = pOp->p4.pProgram;
+					mem_copy_bin(pSub, (char *)buf, nByte,
+						    false);
+					region_truncate(&fiber()->gc, svp);
 				}
 			}
 		}
@@ -1402,41 +1408,39 @@ sqlVdbeList(Vdbe * p)
 		mem_set_i64(pMem, pOp->p3);
 		pMem++;
 
-		if (sqlVdbeMemClearAndResize(pMem, 256)) {
-			assert(p->db->mallocFailed);
+		size_t size = 256;
+		size_t svp = region_used(&fiber()->gc);
+		char *buf = (char *)region_alloc(&fiber()->gc, size);
+		if (buf == NULL) {
+			diag_set(OutOfMemory, size, "region_alloc", "buf");
+			p->is_aborted = true;
 			return -1;
 		}
-		pMem->flags = MEM_Str | MEM_Term;
-		zP4 = displayP4(pOp, pMem->z, pMem->szMalloc);
-
-		if (zP4 != pMem->z) {
-			pMem->n = 0;
-			sqlVdbeMemSetStr(pMem, zP4, -1, 1, 0);
-		} else {
-			assert(pMem->z != 0);
-			pMem->n = sqlStrlen30(pMem->z);
-		}
+		zP4 = displayP4(pOp, buf, size);
+		mem_copy_str(pMem, zP4, strlen(zP4), true);
+		region_truncate(&fiber()->gc, svp);
 		pMem++;
 
 		if (p->explain == 1) {
-			if (sqlVdbeMemClearAndResize(pMem, 4)) {
-				assert(p->db->mallocFailed);
-				return -1;
-			}
-			pMem->flags = MEM_Str | MEM_Term;
-			pMem->n = 2;
-			sql_snprintf(3, pMem->z, "%.2x", pOp->p5);	/* P5 */
+			char *str = (char *)tt_sprintf("%02hu", pOp->p5);
+			mem_copy_str(pMem, str, strlen(str), true);
 			pMem++;
 
 #ifdef SQL_ENABLE_EXPLAIN_COMMENTS
-			if (sqlVdbeMemClearAndResize(pMem, 500)) {
-				assert(p->db->mallocFailed);
+			size = 512;
+			svp = region_used(&fiber()->gc);
+			buf = (char *)region_alloc(&fiber()->gc, size);
+			if (buf == NULL) {
+				diag_set(OutOfMemory, size, "region_alloc",
+					 "buf");
+				p->is_aborted = true;
 				return -1;
 			}
-			pMem->flags = MEM_Str | MEM_Term;
-			pMem->n = displayComment(pOp, zP4, pMem->z, 500);
+			displayComment(pOp, zP4, buf, size);
+			mem_copy_str(pMem, buf, strlen(buf), true);
+			region_truncate(&fiber()->gc, svp);
 #else
-			pMem->flags = MEM_Null;	/* Comment */
+			mem_set_null(pMem);
 #endif
 		}
 
@@ -1658,9 +1662,9 @@ sqlVdbeMakeReady(Vdbe * p,	/* The VDBE */
 	} else {
 		p->nCursor = nCursor;
 		p->nVar = (ynVar) nVar;
-		initMemArray(p->aVar, nVar, db, MEM_Null);
+		initMemArray(p->aVar, nVar, false);
 		p->nMem = nMem;
-		initMemArray(p->aMem, nMem, db, MEM_Undefined);
+		initMemArray(p->aMem, nMem, true);
 		memset(p->apCsr, 0, nCursor * sizeof(VdbeCursor *));
 	}
 	sqlVdbeRewind(p);
@@ -1787,7 +1791,7 @@ Cleanup(Vdbe * p)
 			assert(p->apCsr[i] == 0);
 	if (p->aMem) {
 		for (i = 0; i < p->nMem; i++)
-			assert(p->aMem[i].flags == MEM_Undefined);
+			assert(mem_is_undefined(&p->aMem[i]));
 	}
 #endif
 
@@ -2330,7 +2334,7 @@ sqlVdbeAllocUnpackedRecord(struct sql *db, struct key_def *key_def)
 		return 0;
 	p->aMem = (Mem *) & ((char *)p)[ROUND8(sizeof(UnpackedRecord))];
 	for (uint32_t i = 0; i < key_def->part_count + 1; ++i)
-		sqlVdbeMemInit(&p->aMem[i], sql_get(), MEM_Null);
+		mem_init(&p->aMem[i]);
 	p->key_def = key_def;
 	p->nField = key_def->part_count + 1;
 	return p;
@@ -2418,80 +2422,72 @@ sqlBlobCompare(const Mem * pB1, const Mem * pB2)
 int
 sqlMemCompare(const Mem * pMem1, const Mem * pMem2, const struct coll * pColl)
 {
-	int f1, f2;
-	int combined_flags;
-
-	f1 = pMem1->flags;
-	f2 = pMem2->flags;
-	combined_flags = f1 | f2;
-
 	/* If one value is NULL, it is less than the other. If both values
 	 * are NULL, return 0.
 	 */
-	if (combined_flags & MEM_Null) {
-		return (f2 & MEM_Null) - (f1 & MEM_Null);
-	}
+	if (mem_is_null(pMem1) || mem_is_null(pMem2))
+		return (int)mem_is_null(pMem2) - (int)mem_is_null(pMem1);
 
-	if ((combined_flags & MEM_Bool) != 0) {
-		if ((f1 & f2 & MEM_Bool) != 0) {
+	if (mem_is_bool(pMem1) || mem_is_bool(pMem2)) {
+		if (mem_is_bool(pMem1) && mem_is_bool(pMem2)) {
 			if (pMem1->u.b == pMem2->u.b)
 				return 0;
 			if (pMem1->u.b)
 				return 1;
 			return -1;
 		}
-		if ((f2 & MEM_Bool) != 0)
+		if (mem_is_bool(pMem2))
 			return +1;
 		return -1;
 	}
 
 	/* At least one of the two values is a number
 	 */
-	if ((combined_flags & (MEM_Int | MEM_UInt | MEM_Real)) != 0) {
-		if ((f1 & f2 & MEM_Int) != 0) {
+	if (mem_is_number(pMem1) || mem_is_number(pMem2)) {
+		if (mem_is_neg_int(pMem1) && mem_is_neg_int(pMem2)) {
 			if (pMem1->u.i < pMem2->u.i)
 				return -1;
 			if (pMem1->u.i > pMem2->u.i)
 				return +1;
 			return 0;
 		}
-		if ((f1 & f2 & MEM_UInt) != 0) {
+		if (mem_is_pos_int(pMem1) && mem_is_pos_int(pMem2)) {
 			if (pMem1->u.u < pMem2->u.u)
 				return -1;
 			if (pMem1->u.u > pMem2->u.u)
 				return +1;
 			return 0;
 		}
-		if ((f1 & f2 & MEM_Real) != 0) {
+		if (mem_is_double(pMem1) && mem_is_double(pMem2)) {
 			if (pMem1->u.r < pMem2->u.r)
 				return -1;
 			if (pMem1->u.r > pMem2->u.r)
 				return +1;
 			return 0;
 		}
-		if ((f1 & MEM_Int) != 0) {
-			if ((f2 & MEM_Real) != 0) {
+		if (mem_is_neg_int(pMem1)) {
+			if (mem_is_double(pMem2)) {
 				return double_compare_nint64(pMem2->u.r,
 							     pMem1->u.i, -1);
 			} else {
 				return -1;
 			}
 		}
-		if ((f1 & MEM_UInt) != 0) {
-			if ((f2 & MEM_Real) != 0) {
+		if (mem_is_pos_int(pMem1)) {
+			if (mem_is_double(pMem2)) {
 				return double_compare_uint64(pMem2->u.r,
 							     pMem1->u.u, -1);
-			} else if ((f2 & MEM_Int) != 0) {
+			} else if (mem_is_neg_int(pMem2)) {
 				return +1;
 			} else {
 				return -1;
 			}
 		}
-		if ((f1 & MEM_Real) != 0) {
-			if ((f2 & MEM_Int) != 0) {
+		if (mem_is_double(pMem1)) {
+			if (mem_is_neg_int(pMem2)) {
 				return double_compare_nint64(pMem1->u.r,
 							     pMem2->u.i, 1);
-			} else if ((f2 & MEM_UInt) != 0) {
+			} else if (mem_is_pos_int(pMem2)) {
 				return double_compare_uint64(pMem1->u.r,
 							     pMem2->u.u, 1);
 			} else {
@@ -2504,11 +2500,11 @@ sqlMemCompare(const Mem * pMem1, const Mem * pMem2, const struct coll * pColl)
 	/* If one value is a string and the other is a blob, the string is less.
 	 * If both are strings, compare using the collating functions.
 	 */
-	if (combined_flags & MEM_Str) {
-		if ((f1 & MEM_Str) == 0) {
+	if (mem_is_string(pMem1) || mem_is_string(pMem2)) {
+		if (!mem_is_string(pMem1)) {
 			return 1;
 		}
-		if ((f2 & MEM_Str) == 0) {
+		if (!mem_is_string(pMem2)) {
 			return -1;
 		}
 		/* The collation sequence must be defined at this point, even if
@@ -2595,7 +2591,7 @@ sqlVdbeGetBoundValue(Vdbe * v, int iVar, u8 aff)
 	assert(iVar > 0);
 	if (v) {
 		Mem *pMem = &v->aVar[iVar - 1];
-		if (0 == (pMem->flags & MEM_Null)) {
+		if (!mem_is_null(pMem)) {
 			sql_value *pRet = sqlValueNew(v->db);
 			if (pRet) {
 				sqlVdbeMemCopy((Mem *) pRet, pMem);
@@ -2613,7 +2609,12 @@ sqlVdbeCompareMsgpack(const char **key1,
 {
 	const char *aKey1 = *key1;
 	Mem *pKey2 = unpacked->aMem + key2_idx;
-	Mem mem1;
+	bool b;
+	uint64_t u;
+	int64_t i;
+	double r;
+	const char *s;
+	size_t size;
 	int rc = 0;
 	switch (mp_typeof(*aKey1)) {
 	default:{
@@ -2622,35 +2623,34 @@ sqlVdbeCompareMsgpack(const char **key1,
 			break;
 		}
 	case MP_NIL:{
-			rc = -((pKey2->flags & MEM_Null) == 0);
+			rc = -(int)!mem_is_null(pKey2);
 			mp_decode_nil(&aKey1);
 			break;
 		}
 	case MP_BOOL:{
-			mem1.u.b = mp_decode_bool(&aKey1);
-			if ((pKey2->flags & MEM_Bool) != 0) {
-				if (mem1.u.b != pKey2->u.b)
-					rc = mem1.u.b ? 1 : -1;
+			b = mp_decode_bool(&aKey1);
+			if (mem_is_bool(pKey2)) {
+				if (b != pKey2->u.b)
+					rc = b ? 1 : -1;
 			} else {
-				rc = (pKey2->flags & MEM_Null) != 0 ? 1 : -1;
+				rc = mem_is_null(pKey2) ? 1 : -1;
 			}
 			break;
 		}
 	case MP_UINT:{
-			mem1.u.u = mp_decode_uint(&aKey1);
-			if ((pKey2->flags & MEM_Int) != 0) {
+			u = mp_decode_uint(&aKey1);
+			if (mem_is_neg_int(pKey2)) {
 				rc = +1;
-			} else if ((pKey2->flags & MEM_UInt) != 0) {
-				if (mem1.u.u < pKey2->u.u)
+			} else if (mem_is_pos_int(pKey2)) {
+				if (u < pKey2->u.u)
 					rc = -1;
-				else if (mem1.u.u > pKey2->u.u)
+				else if (u > pKey2->u.u)
 					rc = +1;
-			} else if ((pKey2->flags & MEM_Real) != 0) {
-				rc = double_compare_uint64(pKey2->u.r,
-							   mem1.u.u, -1);
-			} else if ((pKey2->flags & MEM_Null) != 0) {
+			} else if (mem_is_double(pKey2)) {
+				rc = double_compare_uint64(pKey2->u.r, u, -1);
+			} else if (mem_is_null(pKey2)) {
 				rc = 1;
-			} else if ((pKey2->flags & MEM_Bool) != 0) {
+			} else if (mem_is_bool(pKey2)) {
 				rc = 1;
 			} else {
 				rc = -1;
@@ -2658,21 +2658,20 @@ sqlVdbeCompareMsgpack(const char **key1,
 			break;
 		}
 	case MP_INT:{
-			mem1.u.i = mp_decode_int(&aKey1);
-			if ((pKey2->flags & MEM_UInt) != 0) {
+			i = mp_decode_int(&aKey1);
+			if (mem_is_pos_int(pKey2)) {
 				rc = -1;
-			} else if ((pKey2->flags & MEM_Int) != 0) {
-				if (mem1.u.i < pKey2->u.i) {
+			} else if (mem_is_neg_int(pKey2)) {
+				if (i < pKey2->u.i) {
 					rc = -1;
-				} else if (mem1.u.i > pKey2->u.i) {
+				} else if (i > pKey2->u.i) {
 					rc = +1;
 				}
-			} else if (pKey2->flags & MEM_Real) {
-				rc = double_compare_nint64(pKey2->u.r, mem1.u.i,
-							   -1);
-			} else if ((pKey2->flags & MEM_Null) != 0) {
+			} else if (mem_is_double(pKey2)) {
+				rc = double_compare_nint64(pKey2->u.r, i, -1);
+			} else if (mem_is_null(pKey2)) {
 				rc = 1;
-			} else if ((pKey2->flags & MEM_Bool) != 0) {
+			} else if (mem_is_bool(pKey2)) {
 				rc = 1;
 			} else {
 				rc = -1;
@@ -2680,27 +2679,25 @@ sqlVdbeCompareMsgpack(const char **key1,
 			break;
 		}
 	case MP_FLOAT:{
-			mem1.u.r = mp_decode_float(&aKey1);
+			r = mp_decode_float(&aKey1);
 			goto do_float;
 		}
 	case MP_DOUBLE:{
-			mem1.u.r = mp_decode_double(&aKey1);
+			r = mp_decode_double(&aKey1);
  do_float:
-			if ((pKey2->flags & MEM_Int) != 0) {
-				rc = double_compare_nint64(mem1.u.r, pKey2->u.i,
-							   1);
-			} else if (pKey2->flags & MEM_UInt) {
-				rc = double_compare_uint64(mem1.u.r,
-							   pKey2->u.u, 1);
-			} else if (pKey2->flags & MEM_Real) {
-				if (mem1.u.r < pKey2->u.r) {
+			if (mem_is_neg_int(pKey2)) {
+				rc = double_compare_nint64(r, pKey2->u.i, 1);
+			} else if (mem_is_pos_int(pKey2)) {
+				rc = double_compare_uint64(r, pKey2->u.u, 1);
+			} else if (mem_is_double(pKey2)) {
+				if (r < pKey2->u.r) {
 					rc = -1;
-				} else if (mem1.u.r > pKey2->u.r) {
+				} else if (r > pKey2->u.r) {
 					rc = +1;
 				}
-			} else if ((pKey2->flags & MEM_Null) != 0) {
+			} else if (mem_is_null(pKey2)) {
 				rc = 1;
-			} else if ((pKey2->flags & MEM_Bool) != 0) {
+			} else if (mem_is_bool(pKey2)) {
 				rc = 1;
 			} else {
 				rc = -1;
@@ -2708,45 +2705,43 @@ sqlVdbeCompareMsgpack(const char **key1,
 			break;
 		}
 	case MP_STR:{
-			if (pKey2->flags & MEM_Str) {
+			if (mem_is_string(pKey2)) {
 				struct key_def *key_def = unpacked->key_def;
-				mem1.n = mp_decode_strl(&aKey1);
-				mem1.z = (char *)aKey1;
-				aKey1 += mem1.n;
+				size = mp_decode_strl(&aKey1);
+				s = aKey1;
+				aKey1 += size;
 				struct coll *coll =
 					key_def->parts[key2_idx].coll;
 				if (coll != NULL) {
-					mem1.flags = MEM_Str;
-					rc = vdbeCompareMemString(&mem1, pKey2,
-								  coll);
+					rc = coll->cmp(s, size, pKey2->z,
+						       (size_t)pKey2->n, coll);
 				} else {
 					goto do_bin_cmp;
 				}
 			} else {
-				rc = (pKey2->flags & MEM_Blob) ? -1 : +1;
+				rc = mem_is_binary(pKey2) ? -1 : +1;
 			}
 			break;
 		}
 	case MP_BIN:{
-			mem1.n = mp_decode_binl(&aKey1);
-			mem1.z = (char *)aKey1;
-			aKey1 += mem1.n;
+			size = mp_decode_binl(&aKey1);
+			s = aKey1;
+			aKey1 += size;
  do_blob:
-			if (pKey2->flags & MEM_Blob) {
+			if (mem_is_binary(pKey2)) {
 				if (pKey2->flags & MEM_Zero) {
-					if (!isAllZero
-					    ((const char *)mem1.z, mem1.n)) {
+					if (!isAllZero(s, size)) {
 						rc = 1;
 					} else {
-						rc = mem1.n - pKey2->u.nZero;
+						rc = size - pKey2->u.nZero;
 					}
 				} else {
 					int nCmp;
  do_bin_cmp:
-					nCmp = MIN(mem1.n, pKey2->n);
-					rc = memcmp(mem1.z, pKey2->z, nCmp);
+					nCmp = MIN((int)size, pKey2->n);
+					rc = memcmp(s, pKey2->z, nCmp);
 					if (rc == 0)
-						rc = mem1.n - pKey2->n;
+						rc = size - pKey2->n;
 				}
 			} else {
 				rc = 1;
@@ -2756,9 +2751,9 @@ sqlVdbeCompareMsgpack(const char **key1,
 	case MP_ARRAY:
 	case MP_MAP:
 	case MP_EXT:{
-			mem1.z = (char *)aKey1;
+			s = aKey1;
 			mp_next(&aKey1);
-			mem1.n = aKey1 - (char *)mem1.z;
+			size = aKey1 - s;
 			goto do_blob;
 		}
 	}
@@ -2795,59 +2790,63 @@ vdbe_decode_msgpack_into_mem(const char *buf, struct Mem *mem, uint32_t *len)
 {
 	const char *start_buf = buf;
 	switch (mp_typeof(*buf)) {
-	case MP_ARRAY:
-	case MP_MAP:
-	case MP_EXT:
-	default: {
-		mem->flags = 0;
+	case MP_ARRAY: {
+		char *data = (char *)buf;
+		mp_next(&buf);
+		mem_set_array(mem, data, buf - data, MEM_Ephem);
+		break;
+	}
+	case MP_MAP: {
+		char *data = (char *)buf;
+		mp_next(&buf);
+		mem_set_map(mem, data, buf - data, MEM_Ephem);
+		break;
+	}
+	case MP_EXT: {
+		char *data = (char *)buf;
+		mp_next(&buf);
+		mem_set_bin(mem, data, buf - data, MEM_Ephem, false);
 		break;
 	}
 	case MP_NIL: {
 		mp_decode_nil(&buf);
-		mem->flags = MEM_Null;
+		mem_set_null(mem);
 		break;
 	}
 	case MP_BOOL: {
-		mem->u.b = mp_decode_bool(&buf);
-		mem->flags = MEM_Bool;
+		mem_set_bool(mem, mp_decode_bool(&buf));
 		break;
 	}
 	case MP_UINT: {
-		uint64_t v = mp_decode_uint(&buf);
-		mem->u.u = v;
-		mem->flags = MEM_UInt;
+		mem_set_u64(mem, mp_decode_uint(&buf));
 		break;
 	}
 	case MP_INT: {
-		mem->u.i = mp_decode_int(&buf);
-		mem->flags = MEM_Int;
+		mem_set_i64(mem, mp_decode_int(&buf));
 		break;
 	}
 	case MP_STR: {
-		/* XXX u32->int */
-		mem->n = (int) mp_decode_strl(&buf);
-		mem->flags = MEM_Str | MEM_Ephem;
-install_blob:
-		mem->z = (char *)buf;
-		buf += mem->n;
+		uint32_t len = mp_decode_strl(&buf);
+		mem_set_str(mem, (char *)buf, len, MEM_Ephem, false);
+		buf += len;
 		break;
 	}
 	case MP_BIN: {
-		/* XXX u32->int */
-		mem->n = (int) mp_decode_binl(&buf);
-		mem->flags = MEM_Blob | MEM_Ephem;
-		goto install_blob;
+		uint32_t size = mp_decode_binl(&buf);
+		mem_set_bin(mem, (char *)buf, size, MEM_Ephem, false);
+		buf += size;
+		break;
 	}
 	case MP_FLOAT: {
-		mem->u.r = mp_decode_float(&buf);
-		mem->flags = sqlIsNaN(mem->u.r) ? MEM_Null : MEM_Real;
+		mem_set_double(mem, mp_decode_float(&buf));
 		break;
 	}
 	case MP_DOUBLE: {
-		mem->u.r = mp_decode_double(&buf);
-		mem->flags = sqlIsNaN(mem->u.r) ? MEM_Null : MEM_Real;
+		mem_set_double(mem, mp_decode_double(&buf));
 		break;
 	}
+	default:
+		unreachable();
 	}
 	*len = (uint32_t)(buf - start_buf);
 	return 0;
@@ -2870,15 +2869,8 @@ sqlVdbeRecordUnpackMsgpack(struct key_def *key_def,	/* Information about the rec
 		pMem->z = 0;
 		uint32_t sz = 0;
 		vdbe_decode_msgpack_into_mem(zParse, pMem, &sz);
-		if (sz == 0) {
-			/* MsgPack array, map or ext. Treat as blob. */
-			pMem->z = (char *)zParse;
-			mp_next(&zParse);
-			pMem->n = zParse - pMem->z;
-			pMem->flags = MEM_Blob | MEM_Ephem;
-		} else {
-			zParse += sz;
-		}
+		assert(sz != 0);
+		zParse += sz;
 		pMem++;
 	}
 }
