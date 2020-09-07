@@ -2611,7 +2611,9 @@ sqlVdbeCompareMsgpack(const char **key1,
 {
 	const char *aKey1 = *key1;
 	Mem *pKey2 = unpacked->aMem + key2_idx;
-	Mem mem1;
+	char *z;
+	uint32_t n;
+	double r;
 	int rc = 0;
 	switch (mp_typeof(*aKey1)) {
 	default:{
@@ -2625,27 +2627,26 @@ sqlVdbeCompareMsgpack(const char **key1,
 			break;
 		}
 	case MP_BOOL:{
-			mem1.u.b = mp_decode_bool(&aKey1);
+			bool b = mp_decode_bool(&aKey1);
 			if ((pKey2->flags & MEM_Bool) != 0) {
-				if (mem1.u.b != pKey2->u.b)
-					rc = mem1.u.b ? 1 : -1;
+				if (b != pKey2->u.b)
+					rc = b ? 1 : -1;
 			} else {
 				rc = (pKey2->flags & MEM_Null) != 0 ? 1 : -1;
 			}
 			break;
 		}
 	case MP_UINT:{
-			mem1.u.u = mp_decode_uint(&aKey1);
+			uint64_t u = mp_decode_uint(&aKey1);
 			if ((pKey2->flags & MEM_Int) != 0) {
 				rc = +1;
 			} else if ((pKey2->flags & MEM_UInt) != 0) {
-				if (mem1.u.u < pKey2->u.u)
+				if (u < pKey2->u.u)
 					rc = -1;
-				else if (mem1.u.u > pKey2->u.u)
+				else if (u > pKey2->u.u)
 					rc = +1;
 			} else if ((pKey2->flags & MEM_Real) != 0) {
-				rc = double_compare_uint64(pKey2->u.r,
-							   mem1.u.u, -1);
+				rc = double_compare_uint64(pKey2->u.r, u, -1);
 			} else if ((pKey2->flags & MEM_Null) != 0) {
 				rc = 1;
 			} else if ((pKey2->flags & MEM_Bool) != 0) {
@@ -2656,18 +2657,17 @@ sqlVdbeCompareMsgpack(const char **key1,
 			break;
 		}
 	case MP_INT:{
-			mem1.u.i = mp_decode_int(&aKey1);
+			int64_t i = mp_decode_int(&aKey1);
 			if ((pKey2->flags & MEM_UInt) != 0) {
 				rc = -1;
 			} else if ((pKey2->flags & MEM_Int) != 0) {
-				if (mem1.u.i < pKey2->u.i) {
+				if (i < pKey2->u.i) {
 					rc = -1;
-				} else if (mem1.u.i > pKey2->u.i) {
+				} else if (i > pKey2->u.i) {
 					rc = +1;
 				}
 			} else if (pKey2->flags & MEM_Real) {
-				rc = double_compare_nint64(pKey2->u.r, mem1.u.i,
-							   -1);
+				rc = double_compare_nint64(pKey2->u.r, i, -1);
 			} else if ((pKey2->flags & MEM_Null) != 0) {
 				rc = 1;
 			} else if ((pKey2->flags & MEM_Bool) != 0) {
@@ -2678,22 +2678,20 @@ sqlVdbeCompareMsgpack(const char **key1,
 			break;
 		}
 	case MP_FLOAT:{
-			mem1.u.r = mp_decode_float(&aKey1);
+			r = mp_decode_float(&aKey1);
 			goto do_float;
 		}
 	case MP_DOUBLE:{
-			mem1.u.r = mp_decode_double(&aKey1);
+			r = mp_decode_double(&aKey1);
  do_float:
 			if ((pKey2->flags & MEM_Int) != 0) {
-				rc = double_compare_nint64(mem1.u.r, pKey2->u.i,
-							   1);
+				rc = double_compare_nint64(r, pKey2->u.i, 1);
 			} else if (pKey2->flags & MEM_UInt) {
-				rc = double_compare_uint64(mem1.u.r,
-							   pKey2->u.u, 1);
+				rc = double_compare_uint64(r, pKey2->u.u, 1);
 			} else if (pKey2->flags & MEM_Real) {
-				if (mem1.u.r < pKey2->u.r) {
+				if (r < pKey2->u.r) {
 					rc = -1;
-				} else if (mem1.u.r > pKey2->u.r) {
+				} else if (r > pKey2->u.r) {
 					rc = +1;
 				}
 			} else if ((pKey2->flags & MEM_Null) != 0) {
@@ -2708,15 +2706,14 @@ sqlVdbeCompareMsgpack(const char **key1,
 	case MP_STR:{
 			if (pKey2->flags & MEM_Str) {
 				struct key_def *key_def = unpacked->key_def;
-				mem1.n = mp_decode_strl(&aKey1);
-				mem1.z = (char *)aKey1;
-				aKey1 += mem1.n;
+				n = mp_decode_strl(&aKey1);
+				z = (char *)aKey1;
+				aKey1 += n;
 				struct coll *coll =
 					key_def->parts[key2_idx].coll;
 				if (coll != NULL) {
-					mem1.flags = MEM_Str;
-					rc = vdbeCompareMemString(&mem1, pKey2,
-								  coll);
+					rc = coll->cmp(z, n, pKey2->z, pKey2->n,
+						       coll);
 				} else {
 					goto do_bin_cmp;
 				}
@@ -2726,25 +2723,24 @@ sqlVdbeCompareMsgpack(const char **key1,
 			break;
 		}
 	case MP_BIN:{
-			mem1.n = mp_decode_binl(&aKey1);
-			mem1.z = (char *)aKey1;
-			aKey1 += mem1.n;
+			n = mp_decode_binl(&aKey1);
+			z = (char *)aKey1;
+			aKey1 += n;
  do_blob:
 			if (pKey2->flags & MEM_Blob) {
 				if (pKey2->flags & MEM_Zero) {
-					if (!isAllZero
-					    ((const char *)mem1.z, mem1.n)) {
+					if (!isAllZero((const char *)z, n)) {
 						rc = 1;
 					} else {
-						rc = mem1.n - pKey2->u.nZero;
+						rc = n - pKey2->u.nZero;
 					}
 				} else {
 					int nCmp;
  do_bin_cmp:
-					nCmp = MIN(mem1.n, pKey2->n);
-					rc = memcmp(mem1.z, pKey2->z, nCmp);
+					nCmp = MIN(n, (uint32_t)pKey2->n);
+					rc = memcmp(z, pKey2->z, nCmp);
 					if (rc == 0)
-						rc = mem1.n - pKey2->n;
+						rc = n - pKey2->n;
 				}
 			} else {
 				rc = 1;
@@ -2754,9 +2750,9 @@ sqlVdbeCompareMsgpack(const char **key1,
 	case MP_ARRAY:
 	case MP_MAP:
 	case MP_EXT:{
-			mem1.z = (char *)aKey1;
+			z = (char *)aKey1;
 			mp_next(&aKey1);
-			mem1.n = aKey1 - (char *)mem1.z;
+			n = aKey1 - (char *)z;
 			goto do_blob;
 		}
 	}
