@@ -94,7 +94,7 @@ vdbemem_alloc_on_region(uint32_t count)
 	}
 	memset(ret, 0, count * sizeof(*ret));
 	for (uint32_t i = 0; i < count; i++) {
-		sqlVdbeMemInit(&ret[i], sql_get(), MEM_Null);
+		mem_init(&ret[i]);
 		assert(memIsValid(&ret[i]));
 	}
 	return ret;
@@ -283,13 +283,12 @@ port_lua_get_vdbemem(struct port *base, uint32_t *size)
 			mem_set_u64(&val[i], field.ival);
 			break;
 		case MP_STR:
-			if (sqlVdbeMemSetStr(&val[i], field.sval.data,
-					     field.sval.len, 1,
-					     SQL_TRANSIENT) != 0)
+			if (mem_copy_str(&val[i], field.sval.data,
+					 field.sval.len, false) != 0)
 				goto error;
 			break;
 		case MP_NIL:
-			sqlVdbeMemSetNull(&val[i]);
+			mem_set_null(&val[i]);
 			break;
 		default:
 			diag_set(ClientError, ER_SQL_EXECUTE,
@@ -355,12 +354,11 @@ port_c_get_vdbemem(struct port *base, uint32_t *size)
 			break;
 		case MP_STR:
 			str = mp_decode_str(&data, &len);
-			if (sqlVdbeMemSetStr(&val[i], str, len,
-					     1, SQL_TRANSIENT) != 0)
+			if (mem_copy_str(&val[i], str, len, false) != 0)
 				goto error;
 			break;
 		case MP_NIL:
-			sqlVdbeMemSetNull(&val[i]);
+			mem_set_null(&val[i]);
 			break;
 		default:
 			diag_set(ClientError, ER_SQL_EXECUTE,

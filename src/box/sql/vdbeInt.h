@@ -484,41 +484,455 @@ void sqlVdbeMemMove(Mem *, Mem *);
 int sqlVdbeMemNulTerminate(Mem *);
 int sqlVdbeMemSetStr(Mem *, const char *, int, u8, void (*)(void *));
 
+/**
+ * Memory cell mem contains the context of an aggregate function.
+ * This routine calls the finalize method for that function. The
+ * result of the aggregate is stored back into mem.
+ *
+ * Returns -1 if the finalizer reports an error. 0 otherwise.
+ */
+int
+sql_vdbemem_finalize(struct Mem *mem, struct func *func);
+
+/*
+ * If the memory cell contains a value that must be freed by
+ * invoking the external callback in Mem.xDel, then this routine
+ * will free that value.  It also sets Mem.flags to MEM_Null.
+ */
 void
-mem_set_bool(struct Mem *mem, bool value);
+vdbeMemClearExternAndSetNull(Mem * p);
+
+/*
+ * Change the pMem->zMalloc allocation to be at least szNew bytes.
+ * If pMem->zMalloc already meets or exceeds the requested size, this
+ * routine is a no-op.
+ *
+ * Any prior string or blob content in the pMem object may be discarded.
+ * The pMem->xDel destructor is called, if it exists.  Though MEM_Str
+ * and MEM_Blob values may be discarded, MEM_Int, MEM_Real, and MEM_Null
+ * values are preserved.
+ *
+ * Return 0 on success or -1 if unable to complete the resizing.
+ */
+int
+sqlVdbeMemClearAndResize(Mem * pMem, int n);
+
+/**
+ * Initialize a new mem. After initializing the mem will hold a NULL value.
+ *
+ * @param mem VDBE memory register to initialize.
+ */
+static inline void
+mem_init(struct Mem *mem)
+{
+	memset(mem, 0, sizeof(*mem));
+	mem->db = sql_get();
+	mem->flags = MEM_Null;
+	mem->field_type = field_type_MAX;
+}
+
+/**
+ * Set VDBE memory register as NULL.
+ *
+ * @param mem VDBE memory register to update.
+ */
+static inline void
+mem_set_null(struct Mem *mem)
+{
+	if (unlikely(VdbeMemDynamic(mem)))
+		vdbeMemClearExternAndSetNull(mem);
+	else
+		mem->flags = MEM_Null;
+	mem->field_type = field_type_MAX;
+}
+
+/**
+ * Set VDBE memory register as Undefined.
+ *
+ * @param mem VDBE memory register to update.
+ */
+static inline void
+mem_set_undefined(struct Mem *mem)
+{
+	if (unlikely(VdbeMemDynamic(mem)))
+		vdbeMemClearExternAndSetNull(mem);
+	mem->flags = MEM_Undefined;
+	mem->field_type = field_type_MAX;
+}
 
 /**
  * Set VDBE memory register with given pointer as a data.
+ *
  * @param mem VDBE memory register to update.
- * @param ptr Pointer to use.
+ * @param ptr Pointer to set as the value.
  */
-void
-mem_set_ptr(struct Mem *mem, void *ptr);
+static inline void
+mem_set_ptr(struct Mem *mem, void *ptr)
+{
+	if (unlikely(VdbeMemDynamic(mem)))
+		vdbeMemClearExternAndSetNull(mem);
+	mem->flags = MEM_Ptr;
+	mem->u.p = ptr;
+	mem->field_type = FIELD_TYPE_BOOLEAN;
+}
 
 /**
- * Set integer value. Depending on its sign MEM_Int (in case
- * of negative value) or MEM_UInt flag is set.
+ * Set VDBE memory register as frame.
+ *
+ * @param mem VDBE memory register to update.
+ * @param frame Frame to set as the value.
  */
-void
-mem_set_i64(struct Mem *mem, int64_t value);
-
-/** Set unsigned value and MEM_UInt flag. */
-void
-mem_set_u64(struct Mem *mem, uint64_t value);
+static inline void
+mem_set_frame(struct Mem *mem, struct VdbeFrame *frame)
+{
+	if (unlikely(VdbeMemDynamic(mem)))
+		vdbeMemClearExternAndSetNull(mem);
+	mem->u.pFrame = frame;
+	mem->flags = MEM_Frame;
+	mem->field_type = field_type_MAX;
+}
 
 /**
- * Set integer value. According to is_neg flag value is considered
- * to be signed or unsigned.
+ * Set integer value. Depending on its sign MEM_Int (in case of negative value)
+ * or MEM_UInt flag is set.
+ *
+ * @param mem VDBE memory register to update.
+ * @param value Integer to set as the value.
  */
-void
-mem_set_int(struct Mem *mem, int64_t value, bool is_neg);
+static inline void
+mem_set_i64(struct Mem *mem, int64_t value)
+{
+	if (unlikely(VdbeMemDynamic(mem)))
+		vdbeMemClearExternAndSetNull(mem);
+	mem->u.i = value;
+	mem->flags = value < 0 ? MEM_Int : MEM_UInt;
+	mem->field_type = FIELD_TYPE_INTEGER;
+}
 
-/** Set double value and MEM_Real flag. */
-void
-mem_set_double(struct Mem *mem, double value);
+/**
+ * Set unsigned value.
+ *
+ * @param mem VDBE memory register to update.
+ * @param value Unsigned to set as the value.
+ */
+static inline void
+mem_set_u64(struct Mem *mem, uint64_t value)
+{
+	if (unlikely(VdbeMemDynamic(mem)))
+		vdbeMemClearExternAndSetNull(mem);
+	mem->u.u = value;
+	mem->flags = MEM_UInt;
+	mem->field_type = FIELD_TYPE_UNSIGNED;
+}
 
-void sqlVdbeMemInit(Mem *, sql *, u32);
-void sqlVdbeMemSetNull(Mem *);
+/**
+ * Set integer value. According to is_neg flag value is considered to be signed
+ * or unsigned.
+ *
+ * @param mem VDBE memory register to update.
+ * @param value Integer to set as the value.
+ * @param is_neg Flag to determine sign of the value.
+ */
+static inline void
+mem_set_int(struct Mem *mem, int64_t value, bool is_neg)
+{
+	if (unlikely(VdbeMemDynamic(mem)))
+		vdbeMemClearExternAndSetNull(mem);
+	mem->u.i = value;
+	mem->flags = is_neg ? MEM_Int : MEM_UInt;
+	mem->field_type = FIELD_TYPE_INTEGER;
+}
+
+/**
+ * Set double value.
+ *
+ * @param mem VDBE memory register to update.
+ * @param value Double to set as the value.
+ */
+static inline void
+mem_set_double(struct Mem *mem, double value)
+{
+	if (unlikely(VdbeMemDynamic(mem)))
+		vdbeMemClearExternAndSetNull(mem);
+	if (!sqlIsNaN(value))
+		mem->flags = MEM_Real;
+	else
+		mem->flags = MEM_Null;
+	mem->u.r = value;
+	mem->field_type = FIELD_TYPE_DOUBLE;
+}
+
+/**
+ * Set boolean value.
+ *
+ * @param mem VDBE memory register to update.
+ * @param value Bool to set as the value.
+ */
+static inline void
+mem_set_bool(struct Mem *mem, bool value)
+{
+	if (unlikely(VdbeMemDynamic(mem)))
+		vdbeMemClearExternAndSetNull(mem);
+	mem->u.b = value;
+	mem->flags = MEM_Bool;
+	mem->field_type = FIELD_TYPE_BOOLEAN;
+}
+
+/**
+ * Set string value. Given value is not freed by MEM.
+ *
+ * @param mem VDBE memory register to update.
+ * @param value String to set.
+ * @param len Length of the string, not including '\0'.
+ * @param alloc_type Type of allocation, either MEM_Static or MEM_Ephem.
+ * @param is_null_terminated True if string is NULL-terminated.
+ */
+static inline void
+mem_set_str(struct Mem *mem, char *value, uint32_t len, int alloc_type,
+	    bool is_null_terminated)
+{
+	if (unlikely(VdbeMemDynamic(mem)))
+		vdbeMemClearExternAndSetNull(mem);
+	assert(alloc_type == MEM_Ephem || alloc_type == MEM_Static);
+	mem->z = value;
+	mem->n = len;
+	mem->flags = MEM_Str | alloc_type;
+	if (is_null_terminated)
+		mem->flags |= MEM_Term;
+	mem->field_type = FIELD_TYPE_STRING;
+}
+
+/**
+ * Set string value by allocating memory and copying given value. Allocated
+ * memory should be freed by MEM.
+ *
+ * @param mem VDBE memory register to update.
+ * @param value String to set.
+ * @param len Length of the string, not including '\0'.
+ * @param is_null_terminated True if string is NULL-terminated.
+ */
+static inline int
+mem_copy_str(struct Mem *mem, const char *value, uint32_t len,
+	     bool is_null_terminated)
+{
+	uint32_t size = is_null_terminated ? len + 1 : len;
+	if (sqlVdbeMemClearAndResize(mem, size) != 0)
+		return -1;
+	memcpy(mem->z, value, size);
+	mem->n = len;
+	mem->flags = MEM_Str;
+	if (is_null_terminated)
+		mem->flags |= MEM_Term;
+	mem->field_type = FIELD_TYPE_STRING;
+	return 0;
+}
+
+/**
+ * Set binary string value. Given value is not freed by MEM. If is_zero is true
+ * then binary received from this MEM may be expanded to length that more than
+ * size of the value, however this is done outside of this MEM.
+ *
+ * @param mem VDBE memory register to update.
+ * @param value Binary string to set.
+ * @param size Length of the binary string.
+ * @param alloc_type Type of allocation, either MEM_Static or MEM_Ephem.
+ * @param is_zero True if binary string may be expanded with zeroes.
+ */
+static inline void
+mem_set_bin(struct Mem *mem, char *value, uint32_t size, int alloc_type,
+	    bool is_zero)
+{
+	if (unlikely(VdbeMemDynamic(mem)))
+		vdbeMemClearExternAndSetNull(mem);
+	assert(alloc_type == MEM_Ephem || alloc_type == MEM_Static);
+	mem->z = value;
+	mem->n = size;
+	mem->flags = MEM_Blob | alloc_type;
+	if (is_zero)
+		mem->flags |= MEM_Zero;
+	mem->field_type = FIELD_TYPE_VARBINARY;
+}
+
+/**
+ * Set binary string value by allocating memory and copying given value.
+ * Allocated memory should be freed by MEM.
+ *
+ * @param mem VDBE memory register to update.
+ * @param value Binary string to set.
+ * @param size Length of the binary string.
+ * @param is_zero True if binary string may be expanded with zeroes.
+ */
+static inline int
+mem_copy_bin(struct Mem *mem, const char *value, uint32_t size, bool is_zero)
+{
+	if (sqlVdbeMemClearAndResize(mem, size) != 0)
+		return -1;
+	memcpy(mem->z, value, size);
+	mem->n = size;
+	mem->flags = MEM_Blob;
+	if (is_zero)
+		mem->flags |= MEM_Zero;
+	mem->field_type = FIELD_TYPE_VARBINARY;
+	return 0;
+}
+
+/**
+ * Set VDBE memory register as MAP.
+ *
+ * @param mem VDBE memory register to update.
+ * @param value Binary string that contains msgpack with type MP_MAP to set.
+ * @param len Length of the binary string.
+ * @param alloc_type Type of allocation, either MEM_Static or MEM_Ephem.
+ */
+static inline void
+mem_set_map(struct Mem *mem, char *value, uint32_t size, int alloc_type)
+{
+	if (unlikely(VdbeMemDynamic(mem)))
+		vdbeMemClearExternAndSetNull(mem);
+	assert(alloc_type == MEM_Ephem || alloc_type == MEM_Static);
+	mem->z = value;
+	mem->n = size;
+	mem->flags = MEM_Blob | MEM_Subtype | alloc_type;
+	mem->subtype = SQL_SUBTYPE_MSGPACK;
+	mem->field_type = FIELD_TYPE_MAP;
+}
+
+/**
+ * Set VDBE memory register as ARRAY.
+ *
+ * @param mem VDBE memory register to update.
+ * @param value Binary string that contains msgpack with type MP_ARRAY to set.
+ * @param len Length of the binary string.
+ * @param alloc_type Type of allocation, either MEM_Static or MEM_Ephem.
+ */
+static inline void
+mem_set_array(struct Mem *mem, char *value, uint32_t size, int alloc_type)
+{
+	if (unlikely(VdbeMemDynamic(mem)))
+		vdbeMemClearExternAndSetNull(mem);
+	assert(alloc_type == MEM_Ephem || alloc_type == MEM_Static);
+	mem->z = value;
+	mem->n = size;
+	mem->flags = MEM_Blob | MEM_Subtype | alloc_type;
+	mem->subtype = SQL_SUBTYPE_MSGPACK;
+	mem->field_type = FIELD_TYPE_ARRAY;
+}
+
+static inline bool
+mem_is_null(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Null) != 0;
+}
+
+static inline bool
+mem_is_undefined(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Undefined) != 0;
+}
+
+static inline bool
+mem_is_frame(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Frame) != 0;
+}
+
+static inline bool
+mem_is_neg_int(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Int) != 0;
+}
+
+static inline bool
+mem_is_pos_int(const struct Mem *mem)
+{
+	return (mem->flags & MEM_UInt) != 0;
+}
+
+static inline bool
+mem_is_integer(const struct Mem *mem)
+{
+	return (mem->flags & (MEM_Int | MEM_UInt)) != 0;
+}
+
+static inline bool
+mem_is_double(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Real) != 0;
+}
+
+static inline bool
+mem_is_number(const struct Mem *mem)
+{
+	return (mem->flags & (MEM_Int | MEM_UInt | MEM_Real)) != 0;
+}
+
+static inline bool
+mem_is_string(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Str) != 0;
+}
+
+static inline bool
+mem_is_binary(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Blob) != 0;
+}
+
+static inline bool
+mem_is_varstring(const struct Mem *mem)
+{
+	return (mem->flags & (MEM_Str | MEM_Blob)) != 0;
+}
+
+static inline bool
+mem_is_map(const struct Mem *mem)
+{
+	return mem_is_binary(mem) && ((mem->flags & MEM_Subtype) != 0) &&
+	       mem->subtype == SQL_SUBTYPE_MSGPACK &&
+	       mp_typeof(*mem->z) == MP_MAP;
+}
+
+static inline bool
+mem_is_array(const struct Mem *mem)
+{
+	return mem_is_binary(mem) && ((mem->flags & MEM_Subtype) != 0) &&
+	       mem->subtype == SQL_SUBTYPE_MSGPACK &&
+	       mp_typeof(*mem->z) == MP_ARRAY;
+}
+
+static inline bool
+mem_is_bool(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Bool) != 0;
+}
+
+static inline bool
+mems_have_same_type(const struct Mem *mem1, const struct Mem *mem2)
+{
+	return (mem1->flags & MEM_PURE_TYPE_MASK) ==
+	       (mem2->flags & MEM_PURE_TYPE_MASK);
+}
+
+/**
+ * Cast MEM to varbinary according to explicit cast rules.
+ *
+ * @param mem VDBE memory register to convert.
+ */
+static inline int
+mem_convert_to_binary(struct Mem *mem)
+{
+	if (mem_is_null(mem) || mem_is_binary(mem))
+		return 0;
+	if (mem_is_string(mem)) {
+		mem->flags = (mem->flags & (MEM_Dyn | MEM_Static | MEM_Ephem)) |
+			     MEM_Blob;
+		return 0;
+	}
+	diag_set(ClientError, ER_SQL_TYPE_MISMATCH, sql_value_to_diag_str(mem),
+		 "varbinary");
+	return -1;
+}
+
 void sqlVdbeMemSetZeroBlob(Mem *, int);
 int sqlVdbeMemMakeWriteable(Mem *);
 int sqlVdbeMemStringify(Mem *);
@@ -566,19 +980,8 @@ mem_mp_type(struct Mem *mem);
 #define mp_type_is_numeric(X) ((X) == MP_INT || (X) == MP_UINT ||\
 			       (X) == MP_DOUBLE)
 
-/**
- * Memory cell mem contains the context of an aggregate function.
- * This routine calls the finalize method for that function. The
- * result of the aggregate is stored back into mem.
- *
- * Returns -1 if the finalizer reports an error. 0 otherwise.
- */
-int
-sql_vdbemem_finalize(struct Mem *mem, struct func *func);
-
 const char *sqlOpcodeName(int);
 int sqlVdbeMemGrow(Mem * pMem, int n, int preserve);
-int sqlVdbeMemClearAndResize(Mem * pMem, int n);
 int sqlVdbeCloseStatement(Vdbe *, int);
 void sqlVdbeFrameDelete(VdbeFrame *);
 int sqlVdbeFrameRestore(VdbeFrame *);

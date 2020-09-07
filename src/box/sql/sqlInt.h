@@ -4004,7 +4004,6 @@ const void *sqlValueText(sql_value *);
 int sqlValueBytes(sql_value *);
 void sqlValueSetStr(sql_value *, int, const void *,
 			void (*)(void *));
-void sqlValueSetNull(sql_value *);
 void sqlValueFree(sql_value *);
 sql_value *sqlValueNew(sql *);
 int sqlValueFromExpr(sql *, Expr *, enum field_type type,
