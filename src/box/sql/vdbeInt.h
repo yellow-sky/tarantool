@@ -580,6 +580,9 @@ void
 mem_set_bin_subtype(struct Mem *mem, char *value, uint32_t size,
 		    int alloc_type);
 
+int
+mem_convert_bin_to_str(struct Mem *mem);
+
 void sqlVdbeMemInit(Mem *, sql *, u32);
 void sqlVdbeMemSetNull(Mem *);
 void sqlVdbeMemSetZeroBlob(Mem *, int);

@@ -1018,6 +1018,18 @@ mem_set_bin(struct Mem *mem, char *value, uint32_t size, int alloc_type,
 	return;
 }
 
+int
+mem_convert_bin_to_str(struct Mem *mem)
+{
+	if (sqlVdbeMemGrow(mem, mem->n + 1, 1))
+		return -1;
+	mem->z[mem->n] = 0;
+	assert(mem->z == mem->zMalloc);
+	mem->flags = MEM_Str | MEM_Term;
+	mem->type = MEM_STR;
+	return 0;
+}
+
 /*
  * Return true if the Mem object contains a TEXT or BLOB that is
  * too large - whose size exceeds SQL_MAX_LENGTH.
