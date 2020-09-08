@@ -4006,8 +4006,6 @@ sql_rem_int(int64_t lhs, bool is_lhs_neg, int64_t rhs, bool is_rhs_neg,
 
 const void *sqlValueText(sql_value *);
 int sqlValueBytes(sql_value *);
-void sqlValueSetStr(sql_value *, int, const void *,
-			void (*)(void *));
 void sqlValueSetNull(sql_value *);
 void sqlValueFree(sql_value *);
 sql_value *sqlValueNew(sql *);

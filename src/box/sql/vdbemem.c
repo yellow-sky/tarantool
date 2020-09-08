@@ -290,9 +290,11 @@ sqlVdbeMemStringify(Mem * pMem)
 	int fg = pMem->flags;
 	int nByte = 32;
 
-	if ((fg & (MEM_Null | MEM_Str | MEM_Blob)) != 0 &&
-	    !mem_has_msgpack_subtype(pMem))
+	if ((fg & (MEM_Null | MEM_Str)) != 0)
 		return 0;
+
+	if ((fg & MEM_Blob) != 0 && !mem_has_msgpack_subtype(pMem))
+		return mem_convert_bin_to_str(pMem);
 
 	assert(!(fg & MEM_Zero));
 	assert((fg & (MEM_Int | MEM_UInt | MEM_Real | MEM_Bool |
@@ -319,18 +321,23 @@ sqlVdbeMemStringify(Mem * pMem)
 		r = pMem->u.r;
 	if (str != NULL)
 		nByte = strlen(str) + 1;
-	if (sqlVdbeMemClearAndResize(pMem, nByte))
+	struct region *region = &fiber()->gc;
+	uint32_t used = region_used(region);
+	char *buf = region_alloc(region, nByte);
+	if (buf == NULL) {
+		diag_set(OutOfMemory, nByte, "region_alloc", "buf");
 		return -1;
+	}
 	if (str != NULL)
-		sql_snprintf(nByte, pMem->z, "%s", str);
+		sql_snprintf(nByte, buf, "%s", str);
 	else if ((fg & MEM_Int) != 0)
-		sql_snprintf(nByte, pMem->z, "%lli", i);
+		sql_snprintf(nByte, buf, "%lli", i);
 	else if ((fg & MEM_UInt) != 0)
-		sql_snprintf(nByte, pMem->z, "%llu", u);
+		sql_snprintf(nByte, buf, "%llu", u);
 	else if ((fg & MEM_Real) != 0)
-		sql_snprintf(nByte, pMem->z, "%!.15g", r);
-	pMem->n = sqlStrlen30(pMem->z);
-	pMem->flags = MEM_Str | MEM_Term;
+		sql_snprintf(nByte, buf, "%!.15g", r);
+	mem_copy_str(pMem, buf, sqlStrlen30(buf), true);
+	region_truncate(region, used);
 	return 0;
 }
 
@@ -728,26 +735,12 @@ sqlVdbeMemCast(Mem * pMem, enum field_type type)
 	case FIELD_TYPE_VARBINARY:
 		if ((pMem->flags & MEM_Blob) != 0)
 			return 0;
-		if ((pMem->flags & MEM_Str) != 0) {
-			MemSetTypeFlag(pMem, MEM_Str);
-			return 0;
-		}
+		if ((pMem->flags & MEM_Str) != 0)
+			return mem_convert_str_to_bin(pMem);
 		return -1;
 	default:
 		assert(type == FIELD_TYPE_STRING);
-		assert(MEM_Str == (MEM_Blob >> 3));
-		if ((pMem->flags & MEM_Bool) != 0) {
-			const char *str_bool = SQL_TOKEN_BOOLEAN(pMem->u.b);
-			sqlVdbeMemSetStr(pMem, str_bool, strlen(str_bool), 1,
-					 SQL_TRANSIENT);
-			return 0;
-		}
-		pMem->flags |= (pMem->flags & MEM_Blob) >> 3;
-			sql_value_apply_type(pMem, FIELD_TYPE_STRING);
-		assert(pMem->flags & MEM_Str || pMem->db->mallocFailed);
-		pMem->flags &=
-			~(MEM_Int | MEM_UInt | MEM_Real | MEM_Blob | MEM_Zero);
-		return 0;
+		return sqlVdbeMemStringify(pMem);
 	}
 }
 
@@ -1152,102 +1145,6 @@ sqlVdbeMemMove(Mem * pTo, Mem * pFrom)
 }
 
 /*
- * Change the value of a Mem to be a string or a BLOB.
- *
- * The memory management strategy depends on the value of the xDel
- * parameter. If the value passed is SQL_TRANSIENT, then the
- * string is copied into a (possibly existing) buffer managed by the
- * Mem structure. Otherwise, any existing buffer is freed and the
- * pointer copied.
- *
- * If the string is too large (if it exceeds the SQL_LIMIT_LENGTH
- * size limit) then no memory allocation occurs.  If the string can be
- * stored without allocating memory, then it is.  If a memory allocation
- * is required to store the string, then value of pMem is unchanged.  In
- * either case, error is returned.
- */
-int
-sqlVdbeMemSetStr(Mem * pMem,	/* Memory cell to set to string value */
-		     const char *z,	/* String pointer */
-		     int n,	/* Bytes in string, or negative */
-		     u8 not_blob,	/* Encoding of z.  0 for BLOBs */
-		     void (*xDel) (void *)	/* Destructor function */
-    )
-{
-	int nByte = n;		/* New value for pMem->n */
-	int iLimit;		/* Maximum allowed string or blob size */
-	u16 flags = 0;		/* New value for pMem->flags */
-
-	/* If z is a NULL pointer, set pMem to contain an SQL NULL. */
-	if (!z) {
-		sqlVdbeMemSetNull(pMem);
-		return 0;
-	}
-
-	if (pMem->db) {
-		iLimit = pMem->db->aLimit[SQL_LIMIT_LENGTH];
-	} else {
-		iLimit = SQL_MAX_LENGTH;
-	}
-	flags = (not_blob == 0 ? MEM_Blob : MEM_Str);
-	if (nByte < 0) {
-		assert(not_blob != 0);
-		nByte = sqlStrlen30(z);
-		if (nByte > iLimit)
-			nByte = iLimit + 1;
-		flags |= MEM_Term;
-	}
-
-	/* The following block sets the new values of Mem.z and Mem.xDel. It
-	 * also sets a flag in local variable "flags" to indicate the memory
-	 * management (one of MEM_Dyn or MEM_Static).
-	 */
-	if (xDel == SQL_TRANSIENT) {
-		int nAlloc = nByte;
-		if (flags & MEM_Term) {
-			nAlloc += 1; //SQL_UTF8
-		}
-		if (nByte > iLimit) {
-			diag_set(ClientError, ER_SQL_EXECUTE, "string or binary"\
-				 "string is too big");
-			return -1;
-		}
-		testcase(nAlloc == 0);
-		testcase(nAlloc == 31);
-		testcase(nAlloc == 32);
-		if (sqlVdbeMemClearAndResize(pMem, MAX(nAlloc, 32))) {
-			return -1;
-		}
-		memcpy(pMem->z, z, nAlloc);
-	} else if (xDel == SQL_DYNAMIC) {
-		sqlVdbeMemRelease(pMem);
-		pMem->zMalloc = pMem->z = (char *)z;
-		pMem->szMalloc = sqlDbMallocSize(pMem->db, pMem->zMalloc);
-	} else {
-		sqlVdbeMemRelease(pMem);
-		pMem->z = (char *)z;
-		pMem->xDel = xDel;
-		flags |= ((xDel == SQL_STATIC) ? MEM_Static : MEM_Dyn);
-	}
-
-	pMem->n = nByte;
-	pMem->flags = flags;
-	assert((pMem->flags & (MEM_Str | MEM_Blob)) != 0);
-	if ((pMem->flags & MEM_Str) != 0)
-		pMem->field_type = FIELD_TYPE_STRING;
-	else
-		pMem->field_type = FIELD_TYPE_VARBINARY;
-
-	if (nByte > iLimit) {
-		diag_set(ClientError, ER_SQL_EXECUTE, "string or binary string"\
-			 "is too big");
-		return -1;
-	}
-
-	return 0;
-}
-
-/*
  * Move data out of a btree key or data field and into a Mem structure.
  * The data is payload from the entry that pCur is currently pointing
  * to.  offset and amt determine what portion of the data or key to retrieve.
@@ -1269,16 +1166,12 @@ vdbeMemFromBtreeResize(BtCursor * pCur,	/* Cursor pointing at record to retrieve
 		       Mem * pMem	/* OUT: Return data in this Mem structure. */
     )
 {
-	int rc;
-	pMem->flags = MEM_Null;
-	if (0 == (rc = sqlVdbeMemClearAndResize(pMem, amt + 2))) {
-		sqlCursorPayload(pCur, offset, amt, pMem->z);
-		pMem->z[amt] = 0;
-		pMem->z[amt + 1] = 0;
-		pMem->flags = MEM_Blob | MEM_Term;
-		pMem->n = (int) amt;
-	}
-	return rc;
+	char *buf = sqlMalloc(amt);
+	if (buf == NULL)
+		return -1;
+	sqlCursorPayload(pCur, offset, amt, buf);
+	mem_set_bin(pMem, buf, amt, 0, false);
+	return 0;
 }
 
 int
@@ -1322,12 +1215,15 @@ valueToText(sql_value * pVal)
 {
 	assert(pVal != 0);
 	assert((pVal->flags & (MEM_Null)) == 0);
-	if ((pVal->flags & (MEM_Blob | MEM_Str)) &&
-	    !mem_has_msgpack_subtype(pVal)) {
+	if ((pVal->flags & MEM_Blob) != 0 && !mem_has_msgpack_subtype(pVal)) {
 		if (ExpandBlob(pVal))
 			return 0;
-		pVal->flags |= MEM_Str;
-		sqlVdbeMemNulTerminate(pVal);	/* IMP: R-31275-44060 */
+		mem_convert_bin_to_str(pVal);
+	} else if ((pVal->flags & MEM_Str) != 0) {
+		if ((pVal->flags & MEM_Term) == 0) {
+			if (vdbeMemAddTerminator(pVal) != 0)
+				return NULL;
+		}
 	} else {
 		sqlVdbeMemStringify(pVal);
 		assert(0 == (1 & SQL_PTR_TO_INT(pVal->z)));
@@ -1609,7 +1505,7 @@ valueFromExpr(sql * db,	/* The database connection */
 			    sqlMPrintf(db, "%s%s", zNeg, pExpr->u.zToken);
 			if (zVal == 0)
 				goto no_mem;
-			sqlValueSetStr(pVal, -1, zVal, SQL_DYNAMIC);
+			mem_set_str(pVal, zVal, sqlStrlen30(zVal), 0, true);
 		}
 		if ((op == TK_INTEGER || op == TK_FLOAT) &&
 		    type == FIELD_TYPE_SCALAR) {
@@ -1665,8 +1561,8 @@ valueFromExpr(sql * db,	/* The database connection */
 		zVal = &pExpr->u.zToken[2];
 		nVal = sqlStrlen30(zVal) - 1;
 		assert(zVal[nVal] == '\'');
-		sqlVdbeMemSetStr(pVal, sqlHexToBlob(db, zVal, nVal),
-				     nVal / 2, 0, SQL_DYNAMIC);
+		char *str = sqlHexToBlob(db, zVal, nVal);
+		mem_set_bin(pVal, str, nVal / 2, 0, false);
 	}
 #endif
 
@@ -1905,20 +1801,6 @@ sqlStat4ProbeFree(UnpackedRecord * pRec)
 			sqlVdbeMemRelease(&aMem[i]);
 		sqlDbFree(aMem[0].db, pRec);
 	}
-}
-
-/*
- * Change the string value of an sql_value object
- */
-void
-sqlValueSetStr(sql_value * v,	/* Value to be set */
-		   int n,	/* Length of string z */
-		   const void *z,	/* Text of the new string */
-		   void (*xDel) (void *)	/* Destructor for the string */
-    )
-{
-	if (v)
-		sqlVdbeMemSetStr((Mem *) v, z, n, 1, xDel);
 }
 
 /*

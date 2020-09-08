@@ -516,7 +516,6 @@ int sqlVdbeMemCopy(Mem *, const Mem *);
 void sqlVdbeMemShallowCopy(Mem *, const Mem *, int);
 void sqlVdbeMemMove(Mem *, Mem *);
 int sqlVdbeMemNulTerminate(Mem *);
-int sqlVdbeMemSetStr(Mem *, const char *, int, u8, void (*)(void *));
 
 void
 mem_set_bool(struct Mem *mem, bool value);

@@ -1361,13 +1361,9 @@ sqlVdbeList(Vdbe * p)
 		if (p->explain == 1) {
 			assert(i >= 0);
 			mem_set_u64(pMem, i);
-
-			pMem++;
-
-			pMem->flags = MEM_Static | MEM_Str | MEM_Term;
-			pMem->z = (char *)sqlOpcodeName(pOp->opcode);	/* Opcode */
-			assert(pMem->z != 0);
-			pMem->n = sqlStrlen30(pMem->z);
+			char *str = (char *)sqlOpcodeName(pOp->opcode);
+			uint32_t len = sqlStrlen30(str);
+			mem_set_str(++pMem, str, len, MEM_Static, true);
 			pMem++;
 
 			/* When an OP_Program opcode is encounter (the only opcode that has
@@ -1382,12 +1378,14 @@ sqlVdbeList(Vdbe * p)
 					if (apSub[j] == pOp->p4.pProgram)
 						break;
 				}
-				if (j == nSub &&
-				    sqlVdbeMemGrow(pSub, nByte,
-						   nSub != 0) == 0) {
+				if (nSub == 0) {
+					char *buf = (char *)&pOp->p4.pProgram;
+					mem_copy_bin(pSub, buf, nByte, false);
+				} else if (j == nSub &&
+					   sqlVdbeMemGrow(pSub, nByte, 1) ==
+					   0) {
 					apSub = (SubProgram **) pSub->z;
 					apSub[nSub++] = pOp->p4.pProgram;
-					pSub->flags |= MEM_Blob;
 					pSub->n = nSub * sizeof(SubProgram *);
 				}
 			}
@@ -1402,43 +1400,46 @@ sqlVdbeList(Vdbe * p)
 		mem_set_i64(pMem, pOp->p3);
 		pMem++;
 
-		if (sqlVdbeMemClearAndResize(pMem, 256)) {
-			assert(p->db->mallocFailed);
+		struct region *region = &fiber()->gc;
+		uint32_t used = region_used(region);
+		uint32_t size = 256;
+		char *buf = region_alloc(region, size);
+		if (buf == NULL) {
+			diag_set(OutOfMemory, size, "region_alloc", "buf");
 			return -1;
 		}
-		pMem->flags = MEM_Str | MEM_Term;
-		zP4 = displayP4(pOp, pMem->z, pMem->szMalloc);
-
-		if (zP4 != pMem->z) {
-			pMem->n = 0;
-			sqlVdbeMemSetStr(pMem, zP4, -1, 1, 0);
-		} else {
-			assert(pMem->z != 0);
-			pMem->n = sqlStrlen30(pMem->z);
-		}
+		zP4 = displayP4(pOp, buf, size);
+		mem_copy_str(pMem, zP4, sqlStrlen30(zP4), true);
 		pMem++;
 
 		if (p->explain == 1) {
-			if (sqlVdbeMemClearAndResize(pMem, 4)) {
-				assert(p->db->mallocFailed);
+			size = 3;
+			buf = region_alloc(region, size);
+			if (buf == NULL) {
+				diag_set(OutOfMemory, size, "region_alloc",
+					 "buf");
 				return -1;
 			}
-			pMem->flags = MEM_Str | MEM_Term;
-			pMem->n = 2;
-			sql_snprintf(3, pMem->z, "%.2x", pOp->p5);	/* P5 */
+			sql_snprintf(size, buf, "%.2x", pOp->p5);
+			uint32_t len = size - 1;
+			mem_copy_str(pMem, buf, len, true);
 			pMem++;
 
 #ifdef SQL_ENABLE_EXPLAIN_COMMENTS
-			if (sqlVdbeMemClearAndResize(pMem, 500)) {
-				assert(p->db->mallocFailed);
+			size = 500;
+			buf = region_alloc(region, size);
+			if (buf == NULL) {
+				diag_set(OutOfMemory, size, "region_alloc",
+					 "buf");
 				return -1;
 			}
-			pMem->flags = MEM_Str | MEM_Term;
-			pMem->n = displayComment(pOp, zP4, pMem->z, 500);
+			len = displayComment(pOp, zP4, buf, size);
+			mem_copy_str(pMem, buf, len, true);
 #else
 			pMem->flags = MEM_Null;	/* Comment */
 #endif
 		}
+		region_truncate(region, used);
 
 		p->nResColumn = 8 - 4 * (p->explain - 1);
 		p->pResultSet = &p->aMem[1];
@@ -2814,31 +2815,30 @@ vdbe_decode_msgpack_into_mem(const char *buf, struct Mem *mem, uint32_t *len)
 	}
 	case MP_STR: {
 		/* XXX u32->int */
-		mem->n = (int) mp_decode_strl(&buf);
-		mem->flags = MEM_Str | MEM_Ephem;
-install_blob:
-		mem->z = (char *)buf;
-		buf += mem->n;
+		uint32_t len = mp_decode_strl(&buf);
+		mem_set_str(mem, (char *)buf, len, MEM_Ephem, false);
+		buf += len;
 		break;
 	}
 	case MP_EXT:
 	case MP_ARRAY:
 	case MP_MAP: {
-		mem->z = (char *)buf;
 		mp_next(&buf);
-		mem->n = buf - mem->z;
-		mem->flags = MEM_Blob | MEM_Ephem;
 		if (type == MP_MAP || type == MP_ARRAY) {
-			mem->flags |= MEM_Subtype;
-			mem->subtype = SQL_SUBTYPE_MSGPACK;
+			mem_set_bin_subtype(mem, (char *)start_buf,
+					    buf - start_buf, MEM_Ephem);
+		} else {
+			mem_set_bin(mem, (char *)start_buf, buf - start_buf,
+				    MEM_Ephem, false);
 		}
 		break;
 	}
 	case MP_BIN: {
 		/* XXX u32->int */
-		mem->n = (int) mp_decode_binl(&buf);
-		mem->flags = MEM_Blob | MEM_Ephem;
-		goto install_blob;
+		uint32_t size = mp_decode_binl(&buf);
+		mem_set_bin(mem, (char *)buf, size, MEM_Ephem, false);
+		buf += size;
+		break;
 	}
 	case MP_FLOAT: {
 		mem_set_double(mem, mp_decode_float(&buf));

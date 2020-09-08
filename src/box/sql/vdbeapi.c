@@ -130,13 +130,16 @@ const void *
 sql_value_blob(sql_value * pVal)
 {
 	Mem *p = (Mem *) pVal;
-	if (p->flags & (MEM_Blob | MEM_Str)) {
+	if ((p->flags & MEM_Blob) != 0) {
 		if (ExpandBlob(p) != 0) {
 			assert(p->flags == MEM_Null && p->z == 0);
 			return 0;
 		}
-		p->flags |= MEM_Blob;
 		return p->n ? p->z : 0;
+	} else if ((p->flags & MEM_Str) != 0) {
+		if (mem_convert_str_to_bin(p) != 0)
+			return NULL;
+		return p->n > 0 ? p->z : NULL;
 	} else {
 		return sql_value_text(pVal);
 	}
@@ -287,7 +290,12 @@ sql_result_blob(sql_context * pCtx,
     )
 {
 	assert(n >= 0);
-	if (sqlVdbeMemSetStr(pCtx->pOut, z, n, 0, xDel) != 0)
+	if (xDel == SQL_DYNAMIC)
+		return mem_set_bin(pCtx->pOut, (char *)z, n, 0, false);
+	if (xDel == SQL_STATIC)
+		return mem_set_bin(pCtx->pOut, (char *)z, n, MEM_Static, false);
+	assert(xDel == SQL_TRANSIENT);
+	if (mem_copy_bin(pCtx->pOut, z, n, false) != 0)
 		pCtx->is_aborted = true;
 }
 
@@ -326,7 +334,21 @@ sql_result_text(sql_context * pCtx,
 		    const char *z, int n, void (*xDel) (void *)
     )
 {
-	if (sqlVdbeMemSetStr(pCtx->pOut, z, n, 1, xDel) != 0)
+	bool is_null_terminated = false;
+	if (n < 0) {
+		n = sqlStrlen30(z);
+		is_null_terminated = true;
+	}
+	if (xDel == SQL_DYNAMIC) {
+		return mem_set_str(pCtx->pOut, (char *)z, n, 0,
+				   is_null_terminated);
+	}
+	if (xDel == SQL_STATIC) {
+		return mem_set_str(pCtx->pOut, (char *)z, n, MEM_Static,
+				   is_null_terminated);
+	}
+	assert(xDel == SQL_TRANSIENT);
+	if (mem_copy_str(pCtx->pOut, z, n, is_null_terminated) != 0)
 		pCtx->is_aborted = true;
 }
 
@@ -924,8 +946,15 @@ bindText(sql_stmt * pStmt,	/* The statement to bind against */
 	if (zData == NULL)
 		return 0;
 	pVar = &p->aVar[i - 1];
-	if (sqlVdbeMemSetStr(pVar, zData, nData, 1, xDel) != 0)
-		return -1;
+	if (xDel == SQL_DYNAMIC) {
+		mem_set_str(pVar, (char *)zData, nData, 0, false);
+	} else if (xDel == SQL_STATIC) {
+		mem_set_str(pVar, (char *)zData, nData, MEM_Static, false);
+	} else {
+		assert(xDel == SQL_TRANSIENT);
+		if (mem_copy_str(pVar, zData, nData, false) != 0)
+			return -1;
+	}
 	return sql_bind_type(p, i, "text");
 }
 
@@ -946,8 +975,15 @@ sql_bind_blob(sql_stmt * pStmt,
 	if (zData == NULL)
 		return 0;
 	struct Mem *var = &p->aVar[i - 1];
-	if (sqlVdbeMemSetStr(var, zData, nData, 0, xDel) != 0)
-		return -1;
+	if (xDel == SQL_DYNAMIC) {
+		mem_set_bin(var, (char *)zData, nData, 0, false);
+	} else if (xDel == SQL_STATIC) {
+		mem_set_bin(var, (char *)zData, nData, MEM_Static, false);
+	} else {
+		assert(xDel == SQL_TRANSIENT);
+		if (mem_copy_bin(var, zData, nData, false) != 0)
+			return -1;
+	}
 	return sql_bind_type(p, i, "varbinary");
 }
 

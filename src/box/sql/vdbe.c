@@ -368,10 +368,8 @@ mem_apply_type(struct Mem *record, enum field_type type)
 		 * an integer or real representation (BLOB and
 		 * NULL do not get converted).
 		 */
-		if ((record->flags & MEM_Str) == 0 &&
-		    (record->flags & (MEM_Real | MEM_Int | MEM_UInt)) != 0)
+		if ((record->flags & MEM_Str) == 0)
 			sqlVdbeMemStringify(record);
-		record->flags &= ~(MEM_Real | MEM_Int | MEM_UInt);
 		return 0;
 	case FIELD_TYPE_VARBINARY:
 		if ((record->flags & MEM_Blob) == 0)
@@ -1318,10 +1316,8 @@ case OP_String8: {         /* same as TK_STRING, out2 */
  */
 case OP_String: {          /* out2 */
 	assert(pOp->p4.z!=0);
-	pOut = vdbe_prepare_null_out(p, pOp->p2);
-	pOut->flags = MEM_Str|MEM_Static|MEM_Term;
-	pOut->z = pOp->p4.z;
-	pOut->n = pOp->p1;
+	pOut = &aMem[pOp->p2];
+	mem_set_str(pOut, pOp->p4.z, pOp->p1, MEM_Static, true);
 	UPDATE_MAX_BLOBSIZE(pOut);
 	break;
 }
@@ -1366,12 +1362,11 @@ case OP_Null: {           /* out2 */
  */
 case OP_Blob: {                /* out2 */
 	assert(pOp->p1 <= SQL_MAX_LENGTH);
-	pOut = vdbe_prepare_null_out(p, pOp->p2);
-	sqlVdbeMemSetStr(pOut, pOp->p4.z, pOp->p1, 0, 0);
-	if (pOp->p3!=0) {
-		pOut->flags |= MEM_Subtype;
-		pOut->subtype = pOp->p3;
-	}
+	pOut = &aMem[pOp->p2];
+	if (pOp->p3 != 0)
+		mem_set_bin_subtype(pOut, pOp->p4.z, pOp->p1, MEM_Static);
+	else
+		mem_set_bin(pOut, pOp->p4.z, pOp->p1, MEM_Static, false);
 	UPDATE_MAX_BLOBSIZE(pOut);
 	break;
 }
@@ -1595,21 +1590,22 @@ case OP_Concat: {           /* same as TK_CONCAT, in1, in2, out3 */
 	if (nByte>db->aLimit[SQL_LIMIT_LENGTH]) {
 		goto too_big;
 	}
-	if (sqlVdbeMemGrow(pOut, (int)nByte+2, pOut==pIn2)) {
-		goto no_mem;
+	struct region *region = &fiber()->gc;
+	uint32_t used = region_used(region);
+	char *buf = region_alloc(region, nByte + 1);
+	if (buf == NULL) {
+		diag_set(OutOfMemory, nByte, "region_alloc", "buf");
+		goto abort_due_to_error;
 	}
-	if (pIn1->flags & MEM_Str)
-		MemSetTypeFlag(pOut, MEM_Str);
-	else
-		MemSetTypeFlag(pOut, MEM_Blob);
-	if (pOut!=pIn2) {
-		memcpy(pOut->z, pIn2->z, pIn2->n);
+	memcpy(buf, pIn2->z, pIn2->n);
+	memcpy(&buf[pIn2->n], pIn1->z, pIn1->n);
+	if ((pIn1->flags & MEM_Str) != 0) {
+		buf[nByte] = 0;
+		mem_copy_str(pOut, buf, nByte, true);
+	} else {
+		mem_copy_bin(pOut, buf, nByte, false);
 	}
-	memcpy(&pOut->z[pIn2->n], pIn1->z, pIn1->n);
-	pOut->z[nByte]=0;
-	pOut->z[nByte+1] = 0;
-	pOut->flags |= MEM_Term;
-	pOut->n = (int)nByte;
+	region_truncate(region, used);
 	UPDATE_MAX_BLOBSIZE(pOut);
 	break;
 }
@@ -2912,7 +2908,7 @@ case OP_MakeRecord: {
 
 	/* Identify the output register */
 	assert(pOp->p3<pOp->p1 || pOp->p3>=pOp->p1+pOp->p2);
-	pOut = vdbe_prepare_null_out(p, pOp->p3);
+	pOut = &aMem[pOp->p3];
 
 	/* Apply the requested types to all inputs */
 	assert(pData0<=pLast);
@@ -2945,21 +2941,15 @@ case OP_MakeRecord: {
 	 * routine.
 	 */
 	if (bIsEphemeral) {
-		if (sqlVdbeMemClearAndResize(pOut, tuple_size) != 0)
+		if (mem_copy_bin(pOut, tuple, tuple_size, false) != 0)
 			goto abort_due_to_error;
-		pOut->flags = MEM_Blob;
-		pOut->n = tuple_size;
-		memcpy(pOut->z, tuple, tuple_size);
 		region_truncate(region, used);
 	} else {
 		/* Allocate memory on the region for the tuple
 		 * to be passed to Tarantool. Before that, make
 		 * sure previously allocated memory has gone.
 		 */
-		sqlVdbeMemRelease(pOut);
-		pOut->flags = MEM_Blob | MEM_Ephem;
-		pOut->n = tuple_size;
-		pOut->z = tuple;
+		mem_set_bin(pOut, tuple, tuple_size, MEM_Ephem, false);
 	}
 	assert(sqlVdbeCheckMemInvariants(pOut));
 	assert(pOp->p3>0 && pOp->p3<=(p->nMem+1 - p->nCursor));
@@ -4014,7 +4004,7 @@ case OP_RowData: {
 	}
 #endif
 
-	pOut = vdbe_prepare_null_out(p, pOp->p2);
+	pOut = &aMem[pOp->p2];
 
 	assert(pOp->p1>=0 && pOp->p1<p->nCursor);
 	pC = p->apCsr[pOp->p1];
@@ -4047,9 +4037,7 @@ case OP_RowData: {
 		goto abort_due_to_error;
 	}
 	sqlCursorPayload(pCrsr, 0, n, str);
-	pOut->n = n;
-	pOut->z = str;
-	pOut->flags = MEM_Ephem | MEM_Blob;
+	mem_set_bin(pOut, str, n, MEM_Ephem, false);
 	assert(sqlVdbeCheckMemInvariants(pOut));
 	UPDATE_MAX_BLOBSIZE(pOut);
 	REGISTER_TRACE(p, pOp->p2, pOut);
