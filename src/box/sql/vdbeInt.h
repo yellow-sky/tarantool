@@ -568,6 +568,13 @@ void
 mem_set_str(struct Mem *mem, char *value, uint32_t len, int alloc_type,
 	    bool is_null_terminated);
 
+int
+mem_copy_bin(struct Mem *mem, const char *value, uint32_t len, bool is_zero);
+
+/** Set binary value and MEM_Blob flag. */
+void
+mem_set_bin(struct Mem *mem, char *value, uint32_t size, int alloc_type,
+	    bool is_zero);
 
 void sqlVdbeMemInit(Mem *, sql *, u32);
 void sqlVdbeMemSetNull(Mem *);

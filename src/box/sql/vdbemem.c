@@ -943,6 +943,52 @@ mem_set_str(struct Mem *mem, char *value, uint32_t len, int alloc_type,
 	return;
 }
 
+int
+mem_copy_bin(struct Mem *mem, const char *value, uint32_t size, bool is_zero)
+{
+	assert(value != NULL);
+	if (size == 0) {
+		mem_set_bin(mem, "", 0, MEM_Static, false);
+		return 0;
+	}
+	if (sqlVdbeMemClearAndResize(mem, size) != 0)
+		return -1;
+	memcpy(mem->z, value, size);
+	mem->n = size;
+	mem->flags = MEM_Blob;
+	if (is_zero)
+		mem->flags |= MEM_Zero;
+	mem->type = MEM_BIN;
+	mem->field_type = FIELD_TYPE_VARBINARY;
+	return 0;
+}
+
+void
+mem_set_bin(struct Mem *mem, char *value, uint32_t size, int alloc_type,
+	    bool is_zero)
+{
+	assert(value != NULL);
+	sqlVdbeMemSetNull(mem);
+	if (size == 0) {
+		alloc_type = MEM_Static;
+		value = "";
+	}
+	mem->z = value;
+	if (alloc_type == 0) {
+		sqlVdbeMemRelease(mem);
+		mem->z = value;
+		mem->zMalloc = value;
+		mem->szMalloc = sqlDbMallocSize(mem->db, mem->zMalloc);
+	}
+	mem->n = size;
+	mem->flags = MEM_Blob | alloc_type;
+	if (is_zero)
+		mem->flags |= MEM_Zero;
+	mem->type = MEM_BIN;
+	mem->field_type = FIELD_TYPE_VARBINARY;
+	return;
+}
+
 /*
  * Return true if the Mem object contains a TEXT or BLOB that is
  * too large - whose size exceeds SQL_MAX_LENGTH.
