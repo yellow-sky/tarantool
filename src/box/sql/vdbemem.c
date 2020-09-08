@@ -1030,6 +1030,15 @@ mem_convert_bin_to_str(struct Mem *mem)
 	return 0;
 }
 
+int
+mem_convert_str_to_bin(struct Mem *mem)
+{
+	int alloc_type = mem->flags & (MEM_Static | MEM_Dyn | MEM_Ephem);
+	mem->flags = MEM_Blob | alloc_type;
+	mem->type = MEM_BIN;
+	return 0;
+}
+
 /*
  * Return true if the Mem object contains a TEXT or BLOB that is
  * too large - whose size exceeds SQL_MAX_LENGTH.
