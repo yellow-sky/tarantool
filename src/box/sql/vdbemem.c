@@ -964,6 +964,35 @@ mem_copy_bin(struct Mem *mem, const char *value, uint32_t size, bool is_zero)
 }
 
 void
+mem_set_bin_subtype(struct Mem *mem, char *value, uint32_t size, int alloc_type)
+{
+	assert(value != NULL);
+	sqlVdbeMemSetNull(mem);
+	if (size == 0) {
+		alloc_type = MEM_Static;
+		value = "";
+	}
+	mem->z = value;
+	if (alloc_type == 0) {
+		sqlVdbeMemRelease(mem);
+		mem->z = value;
+		mem->zMalloc = value;
+		mem->szMalloc = sqlDbMallocSize(mem->db, mem->zMalloc);
+	}
+	mem->n = size;
+	mem->flags = MEM_Blob | MEM_Subtype | alloc_type;
+	mem->subtype = SQL_SUBTYPE_MSGPACK;
+	if (mp_typeof(*value) == MP_MAP) {
+		mem->type = MEM_MAP;
+		mem->field_type = FIELD_TYPE_MAP;
+	} else {
+		mem->type = MEM_ARRAY;
+		mem->field_type = FIELD_TYPE_ARRAY;
+	}
+	return;
+}
+
+void
 mem_set_bin(struct Mem *mem, char *value, uint32_t size, int alloc_type,
 	    bool is_zero)
 {
