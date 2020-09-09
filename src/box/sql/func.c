@@ -947,7 +947,7 @@ case_type##ICUFunc(sql_context *context, int argc, sql_value **argv)   \
 		ucasemap_utf8To##case_type(case_map, z1, len, z2, n, &status); \
 	}                                                                      \
 	ucasemap_close(case_map);                                              \
-	sql_result_text(context, z1, len, sql_free);                   \
+	sql_result_text(context, z1, len, SQL_DYNAMIC);                   \
 }                                                                              \
 
 ICU_CASE_CONVERT(Lower);
@@ -999,7 +999,7 @@ randomBlob(sql_context * context, int argc, sql_value ** argv)
 	p = contextMalloc(context, n);
 	if (p) {
 		sql_randomness(n, p);
-		sql_result_blob(context, (char *)p, n, sql_free);
+		sql_result_blob(context, (char *)p, n, SQL_DYNAMIC);
 	}
 }
 
@@ -1426,7 +1426,7 @@ quoteFunc(sql_context * context, int argc, sql_value ** argv)
 				z[j++] = '\'';
 				z[j] = 0;
 				sql_result_text(context, z, j,
-						    sql_free);
+						    SQL_DYNAMIC);
 			}
 			break;
 		}
@@ -1498,7 +1498,7 @@ charFunc(sql_context * context, int argc, sql_value ** argv)
 			*zOut++ = 0x80 + (u8) (c & 0x3F);
 		}
 	}
-	sql_result_text(context, (char *)z, zOut - z, sql_free);
+	sql_result_text(context, (char *)z, zOut - z, SQL_DYNAMIC);
 }
 
 /*
@@ -1524,7 +1524,7 @@ hexFunc(sql_context * context, int argc, sql_value ** argv)
 			*(z++) = hexdigits[c & 0xf];
 		}
 		*z = 0;
-		sql_result_text(context, zHex, n * 2, sql_free);
+		sql_result_text(context, zHex, n * 2, SQL_DYNAMIC);
 	}
 }
 
@@ -1633,7 +1633,7 @@ replaceFunc(sql_context * context, int argc, sql_value ** argv)
 	j += nStr - i;
 	assert(j <= nOut);
 	zOut[j] = 0;
-	sql_result_text(context, (char *)zOut, j, sql_free);
+	sql_result_text(context, (char *)zOut, j, SQL_DYNAMIC);
 }
 
 /**
@@ -2162,7 +2162,7 @@ groupConcatFinalize(sql_context * context)
 		} else {
 			sql_result_text(context,
 					    sqlStrAccumFinish(pAccum),
-					    pAccum->nChar, sql_free);
+					    pAccum->nChar, SQL_DYNAMIC);
 		}
 	}
 }

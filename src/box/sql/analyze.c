@@ -661,7 +661,7 @@ statGet(sql_context * context, int argc, sql_value ** argv)
 		}
 		assert(z[0] == '\0' && z > zRet);
 
-		sql_result_text(context, zRet, -1, sql_free);
+		sql_result_text(context, zRet, -1, SQL_DYNAMIC);
 	} else if (eCall == STAT_GET_KEY) {
 		if (p->iGet < 0) {
 			samplePushPrevious(p, 0);
@@ -702,7 +702,7 @@ statGet(sql_context * context, int argc, sql_value ** argv)
 		}
 		assert(z[0] == '\0' && z > zRet);
 		z[-1] = '\0';
-		sql_result_text(context, zRet, -1, sql_free);
+		sql_result_text(context, zRet, -1, SQL_DYNAMIC);
 	}
 
 }
