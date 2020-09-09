@@ -256,24 +256,9 @@ sql_value_free(sql_value * pOld)
  * The following routines are used by user-defined functions to specify
  * the function result.
  *
- * The setStrOrError() function calls sqlVdbeMemSetStr() to store the
- * result as a string or blob but if the string or blob is too large, it
- * then sets the error code.
- *
  * The invokeValueDestructor(P,X) routine invokes destructor function X()
  * on value P is not going to be used and need to be destroyed.
  */
-static void
-setResultStrOrError(sql_context * pCtx,	/* Function context */
-		    const char *z,	/* String pointer */
-		    int n,	/* Bytes in string, or negative */
-		    void (*xDel) (void *)	/* Destructor function */
-    )
-{
-	if (sqlVdbeMemSetStr(pCtx->pOut, z, n, 1, xDel) != 0)
-		pCtx->is_aborted = true;
-}
-
 static int
 invokeValueDestructor(const void *p,	/* Value to destroy */
 		      void (*xDel) (void *),	/* The destructor */
@@ -304,19 +289,6 @@ sql_result_blob(sql_context * pCtx,
 	assert(n >= 0);
 	if (sqlVdbeMemSetStr(pCtx->pOut, z, n, 0, xDel) != 0)
 		pCtx->is_aborted = true;
-}
-
-void
-sql_result_blob64(sql_context * pCtx,
-		      const void *z, sql_uint64 n, void (*xDel) (void *)
-    )
-{
-	assert(xDel != SQL_DYNAMIC);
-	if (n > 0x7fffffff) {
-		(void)invokeValueDestructor(z, xDel, pCtx);
-	} else {
-		setResultStrOrError(pCtx, z, (int)n, xDel);
-	}
 }
 
 void
@@ -354,21 +326,8 @@ sql_result_text(sql_context * pCtx,
 		    const char *z, int n, void (*xDel) (void *)
     )
 {
-	setResultStrOrError(pCtx, z, n, xDel);
-}
-
-void
-sql_result_text64(sql_context * pCtx,
-		      const char *z,
-		      sql_uint64 n,
-		      void (*xDel) (void *))
-{
-	assert(xDel != SQL_DYNAMIC);
-	if (n > 0x7fffffff) {
-		(void)invokeValueDestructor(z, xDel, pCtx);
-	} else {
-		setResultStrOrError(pCtx, z, (int)n, xDel);
-	}
+	if (sqlVdbeMemSetStr(pCtx->pOut, z, n, 1, xDel) != 0)
+		pCtx->is_aborted = true;
 }
 
 void

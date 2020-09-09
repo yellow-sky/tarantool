@@ -809,15 +809,14 @@ substrFunc(sql_context * context, int argc, sql_value ** argv)
 			cnt++;
 		}
 		z2 += i;
-		sql_result_text64(context, (char *)z, z2 - z,
-				      SQL_TRANSIENT);
+		sql_result_text(context, (char *)z, z2 - z, SQL_TRANSIENT);
 	} else {
 		if (p1 + p2 > len) {
 			p2 = len - p1;
 			if (p2 < 0)
 				p2 = 0;
 		}
-		sql_result_blob64(context, (char *)&z[p1], (u64) p2,
+		sql_result_blob(context, (char *)&z[p1], (u64) p2,
 				      SQL_TRANSIENT);
 	}
 }
@@ -1499,7 +1498,7 @@ charFunc(sql_context * context, int argc, sql_value ** argv)
 			*zOut++ = 0x80 + (u8) (c & 0x3F);
 		}
 	}
-	sql_result_text64(context, (char *)z, zOut - z, sql_free);
+	sql_result_text(context, (char *)z, zOut - z, sql_free);
 }
 
 /*
