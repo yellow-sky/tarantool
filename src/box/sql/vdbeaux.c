@@ -2789,12 +2789,10 @@ int
 vdbe_decode_msgpack_into_mem(const char *buf, struct Mem *mem, uint32_t *len)
 {
 	const char *start_buf = buf;
-	switch (mp_typeof(*buf)) {
-	case MP_ARRAY:
-	case MP_MAP:
-	case MP_EXT:
+	enum mp_type type = mp_typeof(*buf);
+	switch (type) {
 	default: {
-		mem->flags = 0;
+		unreachable();
 		break;
 	}
 	case MP_NIL: {
@@ -2825,6 +2823,19 @@ vdbe_decode_msgpack_into_mem(const char *buf, struct Mem *mem, uint32_t *len)
 install_blob:
 		mem->z = (char *)buf;
 		buf += mem->n;
+		break;
+	}
+	case MP_EXT:
+	case MP_ARRAY:
+	case MP_MAP: {
+		mem->z = (char *)buf;
+		mp_next(&buf);
+		mem->n = buf - mem->z;
+		mem->flags = MEM_Blob | MEM_Ephem;
+		if (type == MP_MAP || type == MP_ARRAY) {
+			mem->flags |= MEM_Subtype;
+			mem->subtype = SQL_SUBTYPE_MSGPACK;
+		}
 		break;
 	}
 	case MP_BIN: {
@@ -2865,15 +2876,8 @@ sqlVdbeRecordUnpackMsgpack(struct key_def *key_def,	/* Information about the rec
 		pMem->z = 0;
 		uint32_t sz = 0;
 		vdbe_decode_msgpack_into_mem(zParse, pMem, &sz);
-		if (sz == 0) {
-			/* MsgPack array, map or ext. Treat as blob. */
-			pMem->z = (char *)zParse;
-			mp_next(&zParse);
-			pMem->n = zParse - pMem->z;
-			pMem->flags = MEM_Blob | MEM_Ephem;
-		} else {
-			zParse += sz;
-		}
+		assert(sz > 0);
+		zParse += sz;
 		pMem++;
 	}
 }
