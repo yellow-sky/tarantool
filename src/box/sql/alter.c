@@ -136,6 +136,7 @@ sql_alter_ck_constraint_enable(struct Parse *parse)
 		      tuple_reg + field_count);
 	sqlVdbeAddOp4(v, OP_IdxReplace, tuple_reg + field_count, 0, 0,
 		      (char *)ck_space, P4_SPACEPTR);
+	sqlReleaseTempRange(parse, tuple_reg, field_count + 1);
 exit_alter_ck_constraint:
 	sqlDbFree(db, constraint_name);
 	sqlSrcListDelete(db, src_tab);
