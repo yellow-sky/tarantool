@@ -1464,6 +1464,34 @@ test_key_def_validate_key(struct lua_State *L)
 	return 1;
 }
 
+static int
+test_key_def_dup(lua_State *L)
+{
+	box_key_def_t *key_def = NULL;
+	box_key_part_def_t part;
+	box_key_part_def_t *dump = NULL;
+	uint32_t dump_part_count = 0;
+
+	key_part_def_set_nondefault(&part);
+	key_def = box_key_def_new_v2(&part, 1);
+	assert(key_def != NULL);
+	box_key_def_t *key_def_dup = box_key_def_dup(key_def);
+	assert(key_def_dup != NULL);
+
+	dump = box_key_def_dump_parts(key_def_dup, &dump_part_count);
+	assert(dump != NULL);
+	assert(dump_part_count == 1);
+
+	key_part_def_check_equal(&part, &dump[0]);
+	key_part_def_check_zeros(&dump[0]);
+
+	box_key_def_delete(key_def_dup);
+	box_key_def_delete(key_def);
+
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
 /* }}} key_def api v2 */
 
 static int
@@ -1883,6 +1911,7 @@ luaopen_module_api(lua_State *L)
 		{"test_key_def_merge", test_key_def_merge},
 		{"test_key_def_extract_key", test_key_def_extract_key},
 		{"test_key_def_validate_key", test_key_def_validate_key},
+		{"test_key_def_dup", test_key_def_dup},
 		{"tuple_validate_def", test_tuple_validate_default},
 		{"tuple_validate_fmt", test_tuple_validate_formatted},
 		{NULL, NULL}
