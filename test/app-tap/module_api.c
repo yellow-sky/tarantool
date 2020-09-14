@@ -1155,6 +1155,52 @@ test_tuple_new(struct lua_State *L)
 
 /* }}} test_tuple_new */
 
+/*
+ * Check that argument is a tuple of any format, without
+ * its verification
+ */
+static int
+test_tuple_validate_default(lua_State *L)
+{
+	int valid = 0;
+	box_tuple_t *tuple = luaT_istuple(L, -1);
+
+	if (tuple != NULL) {
+		box_tuple_format_t *format = box_tuple_format_default();
+		valid = box_tuple_validate(tuple, format) == 0;
+	}
+	lua_pushboolean(L, valid);
+
+	return 1;
+}
+
+/*
+ * Validate tuple with format of single boolean field
+ */
+static int
+test_tuple_validate_formatted(lua_State *L)
+{
+	int valid = 0;
+	box_tuple_t *tuple = luaT_istuple(L, -1);
+
+	if (tuple != NULL) {
+		uint32_t fields[] = { 0 };
+		uint32_t types[] = { FIELD_TYPE_BOOLEAN };
+		box_key_def_t *key_defs[] = {
+			box_key_def_new(fields, types, 1)
+		};
+		assert(key_defs[0] != NULL);
+		struct tuple_format *format =
+			box_tuple_format_new(key_defs, 1);
+		assert(format);
+
+		valid = box_tuple_validate(tuple, format) == 0;
+	}
+	lua_pushboolean(L, valid);
+
+	return 1;
+}
+
 LUA_API int
 luaopen_module_api(lua_State *L)
 {
@@ -1190,6 +1236,8 @@ luaopen_module_api(lua_State *L)
 		{"test_key_def_new_v2", test_key_def_new_v2},
 		{"test_key_def_dump_parts", test_key_def_dump_parts},
 		{"test_key_def_validate_tuple", test_key_def_validate_tuple},
+		{"tuple_validate_def", test_tuple_validate_default},
+		{"tuple_validate_fmt", test_tuple_validate_formatted},
 		{NULL, NULL}
 	};
 	luaL_register(L, "module_api", lib);
