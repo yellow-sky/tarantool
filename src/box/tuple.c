@@ -577,6 +577,14 @@ box_tuple_new(box_tuple_format_t *format, const char *data, const char *end)
 }
 
 int
+box_tuple_validate(box_tuple_t *tuple, box_tuple_format_t *format)
+{
+	return tuple_validate(format, tuple);
+}
+
+/* }}} box_tuple_* */
+
+int
 tuple_snprint(char *buf, int size, const struct tuple *tuple)
 {
 	int total = 0;
