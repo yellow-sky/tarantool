@@ -1155,6 +1155,21 @@ test_tuple_new(struct lua_State *L)
 
 /* }}} test_tuple_new */
 
+static int
+test_tuple_validate(lua_State *L)
+{
+	int valid = 0;
+	box_tuple_t *tuple = luaT_istuple(L, -1);
+
+	if (tuple != NULL) {
+		box_tuple_format_t *format = box_tuple_format_default();
+                valid = box_tuple_validate(tuple, format) == 0;
+        }
+	lua_pushboolean(L, valid);
+
+	return 1;
+}
+
 LUA_API int
 luaopen_module_api(lua_State *L)
 {
@@ -1190,6 +1205,7 @@ luaopen_module_api(lua_State *L)
 		{"test_key_def_new_v2", test_key_def_new_v2},
 		{"test_key_def_dump_parts", test_key_def_dump_parts},
 		{"test_key_def_validate_tuple", test_key_def_validate_tuple},
+		{"tuple_validate", test_tuple_validate},
 		{NULL, NULL}
 	};
 	luaL_register(L, "module_api", lib);
