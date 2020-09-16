@@ -41,7 +41,29 @@ struct fiber;
 struct wal_writer;
 struct tt_uuid;
 
-enum wal_mode { WAL_NONE = 0, WAL_WRITE, WAL_FSYNC, WAL_MODE_MAX };
+enum wal_mode {
+	/**
+	 * Do not write data at all.
+	 */
+	WAL_NONE,
+
+	/**
+	 * Write without waiting the data to be
+	 * flushed to the storage device.
+	 */
+	WAL_WRITE,
+
+	/**
+	 * Write data and wait the record to be
+	 * flushed to the storage device.
+	 */
+	WAL_FSYNC,
+
+	WAL_MODE_MAX
+};
+
+/** String constants for the supported modes. */
+extern const char *wal_mode_STRS[WAL_MODE_MAX];
 
 enum {
 	/**
@@ -51,9 +73,6 @@ enum {
 	 */
 	WAL_ROWS_PER_YIELD = 32000,
 };
-
-/** String constants for the supported modes. */
-extern const char *wal_mode_STRS[];
 
 extern int wal_dir_lock;
 
