@@ -42,15 +42,15 @@
 #include "coll_id_def.h"
 #include "txn.h"
 #include "tuple.h"
-#include "fiber.h" /* for gc_pool */
+#include "fiber.h"
 #include "scoped_guard.h"
 #include "third_party/base64.h"
-#include <new> /* for placement new */
-#include <stdio.h> /* snprintf() */
+#include <new>
+#include <stdio.h>
 #include <ctype.h>
-#include "replication.h" /* for replica_set_id() */
-#include "session.h" /* to fetch the current user. */
-#include "vclock.h" /* VCLOCK_MAX */
+#include "replication.h"
+#include "session.h"
+#include "vclock.h"
 #include "xrow.h"
 #include "iproto_constants.h"
 #include "identifier.h"

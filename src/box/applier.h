@@ -47,6 +47,7 @@
 
 enum { APPLIER_SOURCE_MAXLEN = 1024 }; /* enough to fit URI with passwords */
 
+/* clang-format off */
 #define applier_STATE(_)                                             \
 	_(APPLIER_OFF, 0)                                            \
 	_(APPLIER_CONNECT, 1)                                        \
@@ -65,6 +66,7 @@ enum { APPLIER_SOURCE_MAXLEN = 1024 }; /* enough to fit URI with passwords */
 	_(APPLIER_FETCHED_SNAPSHOT, 14)                              \
 	_(APPLIER_REGISTER, 15)                                      \
 	_(APPLIER_REGISTERED, 16)                                    \
+/* clang-format on */
 
 /** States for the applier */
 ENUM(applier_state, applier_STATE);
