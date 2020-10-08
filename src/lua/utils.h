@@ -34,6 +34,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <math.h> /* modf, isfinite */
+#include "assoc.h"
 
 #include <msgpuck.h> /* enum mp_type */
 #include "trigger.h"
@@ -397,6 +398,7 @@ struct luaL_field {
  */
 int
 luaL_tofield(struct lua_State *L, struct luaL_serializer *cfg,
+	     struct mh_strnptr_t *visited_set,
 	     const struct serializer_opts *opts, int index,
 	     struct luaL_field *field);
 
@@ -433,15 +435,17 @@ luaL_convertfield(struct lua_State *L, struct luaL_serializer *cfg, int idx,
  * (tostring) -> (nil) -> exception
  */
 static inline void
-luaL_checkfield(struct lua_State *L, struct luaL_serializer *cfg, int idx,
+luaL_checkfield(struct lua_State *L, struct luaL_serializer *cfg,
+		struct mh_strnptr_t *visited_set, int idx,
 		struct luaL_field *field)
 {
-	if (luaL_tofield(L, cfg, NULL, idx, field) < 0)
+	if (luaL_tofield(L, cfg, visited_set, NULL, idx, field) < 0)
 		luaT_error(L);
 	if (field->type != MP_EXT || field->ext_type != MP_UNKNOWN_EXTENSION)
 		return;
 	luaL_convertfield(L, cfg, idx, field);
 }
+
 
 void
 luaL_register_type(struct lua_State *L, const char *type_name,

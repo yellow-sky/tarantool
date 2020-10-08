@@ -215,7 +215,7 @@ trace_node(struct lua_dumper *d)
 	struct luaL_field field;
 
 	memset(&field, 0, sizeof(field));
-	luaL_checkfield(d->L, d->cfg, lua_gettop(d->L), &field);
+	luaL_checkfield(d->L, d->cfg, NULL, lua_gettop(d->L), &field);
 
 	if (field.type < lengthof(mp_type_names)) {
 		if (field.type == MP_EXT) {
@@ -234,7 +234,7 @@ trace_node(struct lua_dumper *d)
 
 	memset(&field, 0, sizeof(field));
 
-	luaL_checkfield(d->L, d->cfg, top, &field);
+	luaL_checkfield(d->L, d->cfg, NULL, top, &field);
 	say_info("serializer-trace: node    :\tfield type %s (%d)",
 		 type_str, field.type);
 }
@@ -783,7 +783,7 @@ dump_node(struct lua_dumper *d, struct node *nd, int indent)
 		return -1;
 
 	memset(field, 0, sizeof(*field));
-	luaL_checkfield(d->L, d->cfg, lua_gettop(d->L), field);
+	luaL_checkfield(d->L, d->cfg, NULL, lua_gettop(d->L), field);
 
 	switch (field->type) {
 	case MP_NIL:
@@ -935,7 +935,7 @@ dump_root(struct lua_dumper *d)
 	};
 	int ret;
 
-	luaL_checkfield(d->L, d->cfg, lua_gettop(d->L), &nd.field);
+	luaL_checkfield(d->L, d->cfg, NULL, lua_gettop(d->L), &nd.field);
 
 	if (nd.field.type != MP_ARRAY || nd.field.size != 1) {
 		d->err = EINVAL;

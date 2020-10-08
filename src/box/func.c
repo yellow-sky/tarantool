@@ -31,7 +31,6 @@
 #include "func.h"
 #include "fiber.h"
 #include "trivia/config.h"
-#include "assoc.h"
 #include "lua/utils.h"
 #include "lua/call.h"
 #include "error.h"

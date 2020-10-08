@@ -433,6 +433,27 @@ luaL_newserializer(struct lua_State *L, const char *modname, const luaL_Reg *reg
 }
 
 static int
+add_address(struct lua_State *L, struct mh_strnptr_t *set)
+{
+	if (set == NULL)
+		return 0;
+	const void *address = lua_topointer(L, -1);
+	mh_int_t pos = mh_strnptr_find_inp(set, address, sizeof(const void *));
+	if (pos != mh_end(set)) {
+		diag_set(LuajitError, "Bad __serialize function. It generates a"
+			 " recursion.");
+		return -1;
+	}
+	uint32_t hash = mh_strn_hash(address, sizeof(const void *));
+	const struct mh_strnptr_node_t node = {address, sizeof(const void *), hash, (void *) address};
+	if (mh_strnptr_put(set, &node, NULL, NULL) == mh_end(set)) {
+		diag_set(OutOfMemory, sizeof(node), "malloc", "node");
+		return -1;
+	}
+	return 0;
+}
+
+static int
 lua_gettable_wrapper(lua_State *L)
 {
 	lua_gettable(L, -2);
@@ -463,7 +484,7 @@ lua_field_inspect_ucdata(struct lua_State *L, struct luaL_serializer *cfg,
 		lua_pcall(L, 1, 1, 0);
 		/* replace obj with the unpacked value */
 		lua_replace(L, idx);
-		if (luaL_tofield(L, cfg, NULL, idx, field) < 0)
+		if (luaL_tofield(L, cfg, NULL, NULL, idx, field) < 0)
 			luaT_error(L);
 	} /* else ignore lua_gettable exceptions */
 	lua_settop(L, top); /* remove temporary objects */
@@ -496,7 +517,7 @@ lua_field_inspect_ucdata(struct lua_State *L, struct luaL_serializer *cfg,
  *      proceed with default table encoding.
  */
 static int
-lua_field_try_serialize(struct lua_State *L, struct luaL_serializer *cfg,
+lua_field_try_serialize(struct lua_State *L, struct luaL_serializer *cfg, struct mh_strnptr_t *visited_set,
 			int idx, struct luaL_field *field)
 {
 	if (luaL_getmetafield(L, idx, LUAL_SERIALIZE) == 0)
@@ -508,7 +529,7 @@ lua_field_try_serialize(struct lua_State *L, struct luaL_serializer *cfg,
 			diag_set(LuajitError, lua_tostring(L, -1));
 			return -1;
 		}
-		if (luaL_tofield(L, cfg, NULL, -1, field) != 0)
+		if (luaL_tofield(L, cfg, visited_set, NULL, -1, field) != 0)
 			return -1;
 		lua_replace(L, idx);
 		return 0;
@@ -541,7 +562,7 @@ lua_field_try_serialize(struct lua_State *L, struct luaL_serializer *cfg,
 }
 
 static int
-lua_field_inspect_table(struct lua_State *L, struct luaL_serializer *cfg,
+lua_field_inspect_table(struct lua_State *L, struct luaL_serializer *cfg, struct mh_strnptr_t *visited_set,
 			int idx, struct luaL_field *field)
 {
 	assert(lua_type(L, idx) == LUA_TTABLE);
@@ -550,7 +571,7 @@ lua_field_inspect_table(struct lua_State *L, struct luaL_serializer *cfg,
 
 	if (cfg->encode_load_metatables) {
 		int top = lua_gettop(L);
-		int res = lua_field_try_serialize(L, cfg, idx, field);
+		int res = lua_field_try_serialize(L, cfg, visited_set, idx, field);
 		if (res == -1)
 			return -1;
 		assert(lua_gettop(L) == top);
@@ -612,12 +633,13 @@ lua_field_tostring(struct lua_State *L, struct luaL_serializer *cfg, int idx,
 	lua_call(L, 1, 1);
 	lua_replace(L, idx);
 	lua_settop(L, top);
-	if (luaL_tofield(L, cfg, NULL, idx, field) < 0)
+	if (luaL_tofield(L, cfg, NULL, NULL, idx, field) < 0)
 		luaT_error(L);
 }
 
 int
 luaL_tofield(struct lua_State *L, struct luaL_serializer *cfg,
+	     struct mh_strnptr_t *visited_set,
 	     const struct serializer_opts *opts, int index,
 	     struct luaL_field *field)
 {
@@ -657,6 +679,8 @@ luaL_tofield(struct lua_State *L, struct luaL_serializer *cfg,
 		return 0;
 	case LUA_TCDATA:
 	{
+		if (add_address(L, visited_set) == -1)
+			return -1;
 		GCcdata *cd = cdataV(L->base + index - 1);
 		void *cdata = (void *)cdataptr(cd);
 
@@ -752,8 +776,10 @@ luaL_tofield(struct lua_State *L, struct luaL_serializer *cfg,
 		return 0;
 	case LUA_TTABLE:
 	{
+		if (add_address(L, visited_set) == -1)
+			return -1;
 		field->compact = false;
-		return lua_field_inspect_table(L, cfg, index, field);
+		return lua_field_inspect_table(L, cfg, visited_set, index, field);
 	}
 	case LUA_TLIGHTUSERDATA:
 	case LUA_TUSERDATA:

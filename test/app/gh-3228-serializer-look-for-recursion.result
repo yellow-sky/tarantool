@@ -1,0 +1,26 @@
+-- test-run result file version 2
+test_run = require('test_run').new()
+ | ---
+ | ...
+
+--
+-- gh-3228: Check the error message in the case of a __serialize
+-- function generating infinite recursion.
+--
+setmetatable({}, {__serialize = function(a) return a end})
+ | ---
+ | - error: 'console: an exception occurred when formatting the output: Bad __serialize
+ |     function. It generates a recursion.'
+ | ...
+
+--
+--Check that __eq metamethod is ignored.
+--
+local table = setmetatable({}, {__eq = function(a, b) error('__eq is called') end})
+ | ---
+ | ...
+setmetatable(table, {__serialize = function(a) return a end})
+ | ---
+ | - error: 'console: an exception occurred when formatting the output: Bad __serialize
+ |     function. It generates a recursion.'
+ | ...

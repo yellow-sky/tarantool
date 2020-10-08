@@ -96,6 +96,7 @@ struct lua_yaml_dumper {
 
    lua_State *outputL;
    luaL_Buffer yamlbuf;
+   struct mh_strnptr_t *visited_set;
 };
 
 /**
@@ -622,7 +623,7 @@ static int dump_node(struct lua_yaml_dumper *dumper)
    (void) unused;
 
    int top = lua_gettop(dumper->L);
-   luaL_checkfield(dumper->L, dumper->cfg, top, &field);
+   luaL_checkfield(dumper->L, dumper->cfg, dumper->visited_set, top, &field);
    switch(field.type) {
    case MP_UINT:
       snprintf(buf, sizeof(buf) - 1, "%" PRIu64, field.ival);
@@ -795,6 +796,7 @@ lua_yaml_encode(lua_State *L, struct luaL_serializer *serializer,
       dumper.end_tag = &dumper.begin_tag;
    dumper.cfg = serializer;
    dumper.error = 0;
+   dumper.visited_set = mh_strnptr_new();
    /* create thread to use for YAML buffer */
    dumper.outputL = luaT_newthread(L);
    if (dumper.outputL == NULL) {
@@ -837,6 +839,9 @@ lua_yaml_encode(lua_State *L, struct luaL_serializer *serializer,
       goto error;
 
    yaml_emitter_delete(&dumper.emitter);
+   mh_strnptr_clear(dumper.visited_set);
+   assert(mh_size(dumper.visited_set) == 0);
+   mh_strnptr_delete(dumper.visited_set);
    /* move buffer to original thread */
    lua_xmove(dumper.outputL, L, 1);
    return 1;
@@ -845,11 +850,17 @@ error:
    if (dumper.emitter.error == YAML_NO_ERROR ||
        dumper.emitter.error == YAML_MEMORY_ERROR) {
       yaml_emitter_delete(&dumper.emitter);
+   mh_strnptr_clear(dumper.visited_set);
+   assert(mh_size(dumper.visited_set) == 0);
+   mh_strnptr_delete(dumper.visited_set);
       return luaL_error(L, OOM_ERRMSG);
    } else {
       lua_pushnil(L);
       lua_pushstring(L, dumper.emitter.problem);
       yaml_emitter_delete(&dumper.emitter);
+   mh_strnptr_clear(dumper.visited_set);
+   assert(mh_size(dumper.visited_set) == 0);
+   mh_strnptr_delete(dumper.visited_set);
       return 2;
    }
 }
