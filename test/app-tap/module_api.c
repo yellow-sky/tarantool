@@ -156,6 +156,15 @@ test_checkint64(lua_State *L)
 }
 
 static int
+test_checkibuf(lua_State *L)
+{
+	struct ibuf *buf;
+	buf = luaL_checkibuf(L, -1);
+	lua_pushboolean(L, buf != NULL);
+	return 1;
+}
+
+static int
 test_touint64(lua_State *L)
 {
 	lua_pushliteral(L, "xxx");
@@ -1183,6 +1192,7 @@ luaopen_module_api(lua_State *L)
 		{"test_pushint64", test_pushint64 },
 		{"test_checkuint64", test_checkuint64 },
 		{"test_checkint64", test_checkint64 },
+		{"checkibuf", test_checkibuf},
 		{"test_touint64", test_touint64 },
 		{"test_toint64", test_toint64 },
 		{"test_fiber", test_fiber },
