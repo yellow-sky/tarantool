@@ -36,6 +36,24 @@ local function test_pushcdata(test, module)
     test:is(gc_counter, 1, 'pushcdata gc')
 end
 
+local function test_buffers(test, module)
+    test:plan(8)
+    local ffi = require('ffi')
+    local buffer = require('buffer')
+
+    local ibuf = buffer.ibuf()
+    local pbuf = ibuf:alloc(128)
+
+    test:ok(not module.toibuf(nil), 'toibuf of nil')
+    test:ok(not module.toibuf({}), 'toibuf of {}')
+    test:ok(not module.toibuf(1LL), 'toibuf of 1LL')
+    test:ok(not module.toibuf(box.NULL), 'toibuf of box.NULL')
+    test:ok(not module.toibuf(buffer.reg1), 'toibuf of reg1')
+    test:ok(module.toibuf(buffer.IBUF_SHARED), "toibuf of ibuf*")
+    test:ok(module.toibuf(ibuf), 'toibuf of ibuf')
+    test:ok(not module.toibuf(pbuf), 'toibuf of pointer to ibuf data')
+end
+
 local function test_tuple_validate(test, module)
     test:plan(12)
 
@@ -123,7 +141,7 @@ local function test_iscdata(test, module)
 end
 
 local test = require('tap').test("module_api", function(test)
-    test:plan(35)
+    test:plan(36)
     local status, module = pcall(require, 'module_api')
     test:is(status, true, "module")
     test:ok(status, "module is loaded")
@@ -149,6 +167,7 @@ local test = require('tap').test("module_api", function(test)
 
     test:test("pushcdata", test_pushcdata, module)
     test:test("iscdata", test_iscdata, module)
+    test:test("buffers", test_buffers, module)
     test:test("tuple_validate", test_tuple_validate, module)
 
     space:drop()
