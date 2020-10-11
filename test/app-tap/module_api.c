@@ -556,6 +556,21 @@ test_luaT_tuple_encode(struct lua_State *L)
 
 /* }}} test_luaT_tuple_encode */
 
+static int
+test_tuple_validate(lua_State *L)
+{
+	int valid = 0;
+	box_tuple_t *tuple = luaT_istuple(L, -1);
+
+	if (tuple != NULL) {
+		box_tuple_format_t *format = box_tuple_format_default();
+		valid = box_tuple_validate(tuple, format) == 0;
+	}
+	lua_pushboolean(L, valid);
+
+	return 1;
+}
+
 LUA_API int
 luaopen_module_api(lua_State *L)
 {
@@ -584,6 +599,7 @@ luaopen_module_api(lua_State *L)
 		{"test_state", test_state},
 		{"test_tostring", test_tostring},
 		{"test_luaT_tuple_encode", test_luaT_tuple_encode},
+		{"tuple_validate", test_tuple_validate},
 		{NULL, NULL}
 	};
 	luaL_register(L, "module_api", lib);

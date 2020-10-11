@@ -36,8 +36,30 @@ local function test_pushcdata(test, module)
     test:is(gc_counter, 1, 'pushcdata gc')
 end
 
+local function test_tuples(test, module)
+    test:plan(8)
+
+    local nottuple1 = {}
+    local nottuple2 = {1, 2}
+    local nottuple3 = {1, nil, 2}
+    local nottuple4 = {1, box.NULL, 2, 3}
+    local tuple1 = box.tuple.new(nottuple1)
+    local tuple2 = box.tuple.new(nottuple2)
+    local tuple3 = box.tuple.new(nottuple3)
+    local tuple4 = box.tuple.new(nottuple4)
+
+    test:ok(not module.tuple_validate(nottuple1), "not tuple 1")
+    test:ok(not module.tuple_validate(nottuple2), "not tuple 2")
+    test:ok(not module.tuple_validate(nottuple3), "not tuple 3")
+    test:ok(not module.tuple_validate(nottuple4), "not tuple 4")
+    test:ok(module.tuple_validate(tuple1), "tuple 1")
+    test:ok(module.tuple_validate(tuple2), "tuple 2")
+    test:ok(module.tuple_validate(tuple3), "tuple 3")
+    test:ok(module.tuple_validate(tuple4), "tuple 4")
+end
+
 local test = require('tap').test("module_api", function(test)
-    test:plan(24)
+    test:plan(25)
     local status, module = pcall(require, 'module_api')
     test:is(status, true, "module")
     test:ok(status, "module is loaded")
@@ -62,6 +84,7 @@ local test = require('tap').test("module_api", function(test)
     test:like(msg, 'luaT_error', 'luaT_error')
 
     test:test("pushcdata", test_pushcdata, module)
+    test:test("validate", test_tuples, module)
 
     space:drop()
 end)
