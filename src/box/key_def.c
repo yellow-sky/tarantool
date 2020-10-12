@@ -466,6 +466,18 @@ box_key_def_validate_key(const box_key_def_t *key_def, const char *key)
 	return key_validate_parts(key_def, key, part_count, true);
 }
 
+int
+box_key_def_validate_full_key(const box_key_def_t *key_def, const char *key)
+{
+	uint32_t part_count = mp_decode_array(&key);
+	if (part_count != key_def->part_count) {
+		diag_set(ClientError, ER_EXACT_MATCH, key_def->part_count,
+			 part_count);
+		return -1;
+	}
+	return key_validate_parts(key_def, key, part_count, true);
+}
+
 /* }}} Module API functions */
 
 int
