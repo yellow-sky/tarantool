@@ -120,6 +120,7 @@ luaL_pushcdata
 luaL_iscdata
 luaL_checkcdata
 luaL_setcdatagc
+luaL_checkibuf
 luaL_ctypeid
 luaL_cdef
 luaL_pushuint64

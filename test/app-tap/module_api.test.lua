@@ -36,6 +36,23 @@ local function test_pushcdata(test, module)
     test:is(gc_counter, 1, 'pushcdata gc')
 end
 
+local function test_buffers(test, module)
+    test:plan(7)
+    local ffi = require('ffi')
+    local buffer = require('buffer')
+
+    local ibuf = buffer.ibuf()
+    local pbuf = ibuf:alloc(128)
+
+    test:ok(not module.checkibuf(nil), 'checkibuf of nil')
+    test:ok(not module.checkibuf({}), 'checkibuf of {}')
+    test:ok(not module.checkibuf(1LL), 'checkibuf of 1LL')
+    test:ok(not module.checkibuf(box.NULL), 'checkibuf of box.NULL')
+    test:ok(not module.checkibuf(buffer.reg1), 'checkibuf of reg1')
+    test:ok(module.checkibuf(ibuf), 'checkibuf of ibuf')
+    test:ok(not module.checkibuf(pbuf), 'checkibuf of pointer to ibuf data')
+end
+
 local function test_tuples(test, module)
     test:plan(8)
 
@@ -59,7 +76,7 @@ local function test_tuples(test, module)
 end
 
 local test = require('tap').test("module_api", function(test)
-    test:plan(25)
+    test:plan(26)
     local status, module = pcall(require, 'module_api')
     test:is(status, true, "module")
     test:ok(status, "module is loaded")
@@ -84,6 +101,7 @@ local test = require('tap').test("module_api", function(test)
     test:like(msg, 'luaT_error', 'luaT_error')
 
     test:test("pushcdata", test_pushcdata, module)
+    test:test("buffers", test_buffers, module)
     test:test("validate", test_tuples, module)
 
     space:drop()

@@ -505,6 +505,14 @@ luaT_state(void);
 LUA_API const char *
 luaT_tolstring(lua_State *L, int idx, size_t *ssize);
 
+/**
+ * Check if a value on @a L stack by index @a idx is an ibuf
+ * object. Both 'struct ibuf' and 'struct ibuf *' are accepted.
+ * Returns NULL, if can't convert - not an ibuf object.
+ */
+LUA_API struct ibuf *
+luaL_checkibuf(struct lua_State *L, int idx);
+
 /** \endcond public */
 
 void
@@ -587,14 +595,6 @@ luaL_checkfinite(struct lua_State *L, struct luaL_serializer *cfg,
 	if (!cfg->decode_invalid_numbers && !isfinite(number))
 		luaL_error(L, "number must not be NaN or Inf");
 }
-
-/**
- * Check if a value on @a L stack by index @a idx is an ibuf
- * object. Both 'struct ibuf' and 'struct ibuf *' are accepted.
- * Returns NULL, if can't convert - not an ibuf object.
- */
-struct ibuf *
-luaL_checkibuf(struct lua_State *L, int idx);
 
 /**
  * Check if a value on @a L stack by index @a idx is pointer at
