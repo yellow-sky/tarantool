@@ -20,9 +20,10 @@ include(FindPackageMessage)
 
 find_program(ECHO echo)
 find_program(CAT cat)
+find_program(CLANG_FORMAT clang-format-11)
+find_program(FIND find)
 find_program(GIT git)
 find_program(LD ld)
-find_program(CTAGS ctags)
 find_program(LUACHECK luacheck ENV PATH)
 
 # Define PACKAGE macro in tarantool/config.h
@@ -161,6 +162,38 @@ add_custom_command(TARGET luacheck
     COMMAND ${LUACHECK} --codes --config "${PROJECT_SOURCE_DIR}/.luacheckrc" "${PROJECT_SOURCE_DIR}"
     COMMENT "Perform static analysis of Lua code"
 )
+
+if(CLANG_FORMAT)
+    #
+    # Enable 'make format-set' target.
+    #
+    add_custom_target(format-set
+	COMMAND ${FIND} "${PROJECT_SOURCE_DIR}/src/box"
+	        -iname "*.h" -o -iname "*.c" -o -iname "*.cc" |grep -v sql
+		|xargs ${CLANG_FORMAT} -i
+	COMMENT "Perform code style update w/ clang-format over code base"
+    )
+
+    #
+    # Enable 'make format-check' target.
+    #
+    add_custom_target(format-check
+	COMMAND ${FIND} "${PROJECT_SOURCE_DIR}/src/box"
+                -iname "*.h" -o -iname "*.c" -o -iname "*.cc"
+	        |grep -v sql
+	        |xargs ${CLANG_FORMAT} -output-replacements-xml
+	        |tee
+	        ${CMAKE_BINARY_DIR}/check_clang_format_file.txt |
+                grep -c "replacement " | tr -d "[:cntrl:]" && echo
+                " replacements necessary"
+        COMMAND ! grep -c "replacement "
+                ${CMAKE_BINARY_DIR}/check_clang_format_file.txt >
+                /dev/null
+	COMMENT "Check code style w/ clang-format over code base"
+    )
+else()
+    message(WARNING "Clang formatter v11 (clang-format-11) wasn't found")
+endif()
 
 #
 # Get version
