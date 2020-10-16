@@ -179,6 +179,13 @@ luacheck:
   script:
     - ${GITLAB_MAKE} test_debian_docker_luacheck
 
+clang-format:
+  <<: *docker_test_definition
+  stage: static_analysis
+  image: "${CI_REGISTRY}/${CI_PROJECT_PATH}/testing/debian-buster:latest"
+  script:
+    - ${GITLAB_MAKE} test_debian_clang_format
+
 # Tests
 
 out_of_source:
