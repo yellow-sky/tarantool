@@ -90,7 +90,7 @@ deps_buster_clang_11: deps_debian
 	echo "deb-src http://apt.llvm.org/buster/ llvm-toolchain-buster-11 main" >> /etc/apt/sources.list.d/clang_11.list
 	wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -
 	apt-get update
-	apt-get install -y clang-11 llvm-11-dev
+	apt-get install -y clang-11 llvm-11-dev clang-format-11
 
 deps_debian_jepsen: $(BIN_DIR)/clojure $(BIN_DIR)/lein $(BIN_DIR)/terraform
 	apt-get update ${APT_EXTRA_FLAGS} && apt-get install -y -f \
@@ -208,6 +208,10 @@ test_debian_install_luacheck:
 
 test_debian_luacheck: test_debian_install_luacheck configure_debian
 	make luacheck
+
+test_debian_clang_format:
+	cmake .
+	make format-check
 
 # Out-Of-Source build
 
