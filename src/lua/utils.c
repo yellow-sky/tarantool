@@ -1309,6 +1309,11 @@ tarantool_lua_utils_init(struct lua_State *L)
  */
 void cord_on_yield(void)
 {
+	struct lua_State *L = fiber()->storage.lua.stack;
+
+	if (L == NULL)
+		return;
+
 	struct global_State *g = G(tarantool_L);
 	/*
 	 * XXX: Switching fibers while running the trace leads to
@@ -1328,7 +1333,6 @@ void cord_on_yield(void)
 				fiber()->fid);
 		if (g->panic)
 			g->panic(L);
-		exit(EXIT_FAILURE);
 	}
 	/*
 	 * Unconditionally abort trace recording whether fibers
@@ -1357,6 +1361,5 @@ void cord_on_yield(void)
 				fiber()->fid);
 		if (g->panic)
 			g->panic(L);
-		exit(EXIT_FAILURE);
 	}
 }
