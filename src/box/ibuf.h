@@ -40,19 +40,42 @@ extern "C" {
 
 /** \cond public */
 
+/**
+ * "@p box_ibuf_t is an opaque alias for struct @p ibuf
+ * defined in the small library.
+ *
+ * The structure is a buffer composing of several pointers and
+ * counters, which serve purpose of keeping 2 joint areas
+ * in buffer:
+ * - useful area [rpos, wpos)
+ * - and one, which is unused yet [wpos, end)
+ *
+ *        +---+--------+---------+
+ * buf -> |   |..used..|.unused..|
+ *        +---+--------+---------+
+ *            ^        ^         ^
+ *            rpos     wpos      end
+ *
+ */
 typedef struct ibuf box_ibuf_t;
 
 /**
- * Reserve requested amount of bytes in ibuf buffer
+ * Reserve requested amount of bytes in ibuf buffer.
+ *
  * @param ibuf buffer used for allocation
  * @param size allocated bytes
+ *
  * @retval NULL on error, check diag.
  */
 API_EXPORT void *
 box_ibuf_reserve(box_ibuf_t *ibuf, size_t size);
 
 /**
- * Return pointers to read range pointers used [rpos..wpos)
+ * Return pointers to read range pointers used [rpos..wpos).
+ *
+ * All arguments should be non-NULL, with exception of last one
+ * @p wpos which is optional and allows NULL.
+ *
  * @param ibuf ibuf structure
  * @param rpos where to place ibuf.rpos address
  * @param wpos where to place ibuf.wpos address
@@ -61,7 +84,11 @@ API_EXPORT void
 box_ibuf_read_range(box_ibuf_t *ibuf, char ***rpos, char ***wpos);
 
 /**
- * Return pointers to write range pointers used [wpos..end)
+ * Return pointers to write range pointers used [wpos..end).
+ *
+ * All arguments should be non-NULL, with exception of last one
+ * @p end which is optional and allows NULL.
+ *
  * @param ibuf ibuf structure
  * @param wpos where to place ibuf.rpos address
  * @param end where to place ibuf.wpos address
