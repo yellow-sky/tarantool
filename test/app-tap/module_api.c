@@ -2287,9 +2287,9 @@ test_tuple_new(struct lua_State *L)
 
 /* }}} test_tuple_new */
 
-/*
+/**
  * Check that argument is a tuple of any format, without
- * its verification
+ * its verification.
  */
 static int
 test_tuple_validate_default(lua_State *L)
@@ -2306,8 +2306,8 @@ test_tuple_validate_default(lua_State *L)
 	return 1;
 }
 
-/*
- * Validate tuple with format of single boolean field
+/**
+ * Validate tuple with format of single boolean field.
  */
 static int
 test_tuple_validate_formatted(lua_State *L)
