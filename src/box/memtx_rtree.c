@@ -68,8 +68,8 @@ mp_decode_num(const char **data, uint32_t fieldno, double *ret)
  * There must be <count> or <count * 2> numbers in that string.
  */
 static inline int
-mp_decode_rect(struct rtree_rect *rect, unsigned dimension,
-	       const char *mp, unsigned count, const char *what)
+mp_decode_rect(struct rtree_rect *rect, unsigned dimension, const char *mp,
+	       unsigned count, const char *what)
 {
 	coord_t c = 0;
 	if (count == dimension) { /* point */
@@ -91,8 +91,8 @@ mp_decode_rect(struct rtree_rect *rect, unsigned dimension,
 			rect->coords[i * 2 + 1] = c;
 		}
 	} else {
-		diag_set(ClientError, ER_RTREE_RECT,
-			 what, dimension, dimension * 2);
+		diag_set(ClientError, ER_RTREE_RECT, what, dimension,
+			 dimension * 2);
 		return -1;
 	}
 	rtree_rect_normalize(rect, dimension);
@@ -122,7 +122,8 @@ extract_rectangle(struct rtree_rect *rect, struct tuple *tuple,
 	assert(index_def->key_def->part_count == 1);
 	assert(!index_def->key_def->is_multikey);
 	const char *elems = tuple_field_by_part(tuple,
-				index_def->key_def->parts, MULTIKEY_NONE);
+						index_def->key_def->parts,
+						MULTIKEY_NONE);
 	unsigned dimension = index_def->opts.dimension;
 	uint32_t count = mp_decode_array(&elems);
 	return mp_decode_rect(rect, dimension, elems, count, "Field");
@@ -130,8 +131,8 @@ extract_rectangle(struct rtree_rect *rect, struct tuple *tuple,
 /* {{{ MemtxRTree Iterators ****************************************/
 
 struct index_rtree_iterator {
-        struct iterator base;
-        struct rtree_iterator impl;
+	struct iterator base;
+	struct rtree_iterator impl;
 	/** Memory pool the iterator was allocated from. */
 	struct mempool *pool;
 };
@@ -174,7 +175,6 @@ memtx_rtree_index_def_change_requires_rebuild(struct index *index,
 	    index->def->opts.dimension != new_def->opts.dimension)
 		return true;
 	return false;
-
 }
 
 static ssize_t
@@ -201,8 +201,8 @@ memtx_rtree_index_count(struct index *base, enum iterator_type type,
 }
 
 static int
-memtx_rtree_index_get(struct index *base, const char *key,
-		      uint32_t part_count, struct tuple **result)
+memtx_rtree_index_get(struct index *base, const char *key, uint32_t part_count,
+		      struct tuple **result)
 {
 	struct memtx_rtree_index *index = (struct memtx_rtree_index *)base;
 	struct rtree_iterator iterator;
@@ -257,11 +257,12 @@ memtx_rtree_index_reserve(struct index *base, uint32_t size_hint)
 		return -1;
 	});
 	struct memtx_engine *memtx = (struct memtx_engine *)base->engine;
-	return memtx_index_extent_reserve(memtx, RESERVE_EXTENTS_BEFORE_REPLACE);
+	return memtx_index_extent_reserve(memtx,
+					  RESERVE_EXTENTS_BEFORE_REPLACE);
 }
 
 static struct iterator *
-memtx_rtree_index_create_iterator(struct index *base,  enum iterator_type type,
+memtx_rtree_index_create_iterator(struct index *base, enum iterator_type type,
 				  const char *key, uint32_t part_count)
 {
 	struct memtx_rtree_index *index = (struct memtx_rtree_index *)base;
@@ -274,8 +275,8 @@ memtx_rtree_index_create_iterator(struct index *base,  enum iterator_type type,
 				 "empty keys for requested iterator type");
 			return NULL;
 		}
-	} else if (mp_decode_rect_from_key(&rect, index->dimension,
-					   key, part_count)) {
+	} else if (mp_decode_rect_from_key(&rect, index->dimension, key,
+					   part_count)) {
 		return NULL;
 	}
 
@@ -311,7 +312,8 @@ memtx_rtree_index_create_iterator(struct index *base,  enum iterator_type type,
 		return NULL;
 	}
 
-	struct index_rtree_iterator *it = mempool_alloc(&memtx->rtree_iterator_pool);
+	struct index_rtree_iterator *it =
+		mempool_alloc(&memtx->rtree_iterator_pool);
 	if (it == NULL) {
 		diag_set(OutOfMemory, sizeof(struct index_rtree_iterator),
 			 "memtx_rtree_index", "iterator");
@@ -342,7 +344,7 @@ static const struct index_vtab memtx_rtree_index_vtab = {
 	/* .update_def = */ generic_index_update_def,
 	/* .depends_on_pk = */ generic_index_depends_on_pk,
 	/* .def_change_requires_rebuild = */
-		memtx_rtree_index_def_change_requires_rebuild,
+	memtx_rtree_index_def_change_requires_rebuild,
 	/* .size = */ memtx_rtree_index_size,
 	/* .bsize = */ memtx_rtree_index_bsize,
 	/* .min = */ generic_index_min,
@@ -353,7 +355,7 @@ static const struct index_vtab memtx_rtree_index_vtab = {
 	/* .replace = */ memtx_rtree_index_replace,
 	/* .create_iterator = */ memtx_rtree_index_create_iterator,
 	/* .create_snapshot_iterator = */
-		generic_index_create_snapshot_iterator,
+	generic_index_create_snapshot_iterator,
 	/* .stat = */ generic_index_stat,
 	/* .compact = */ generic_index_compact,
 	/* .reset_stat = */ generic_index_reset_stat,
@@ -375,13 +377,15 @@ memtx_rtree_index_new(struct memtx_engine *memtx, struct index_def *def)
 	    def->opts.dimension > RTREE_MAX_DIMENSION) {
 		diag_set(UnsupportedIndexFeature, def,
 			 tt_sprintf("dimension (%lld): must belong to "
-				    "range [%u, %u]", def->opts.dimension,
-				    1, RTREE_MAX_DIMENSION));
+				    "range [%u, %u]",
+				    def->opts.dimension, 1,
+				    RTREE_MAX_DIMENSION));
 		return NULL;
 	}
 
 	assert((int)RTREE_EUCLID == (int)RTREE_INDEX_DISTANCE_TYPE_EUCLID);
-	assert((int)RTREE_MANHATTAN == (int)RTREE_INDEX_DISTANCE_TYPE_MANHATTAN);
+	assert((int)RTREE_MANHATTAN ==
+	       (int)RTREE_INDEX_DISTANCE_TYPE_MANHATTAN);
 	enum rtree_distance_type distance_type =
 		(enum rtree_distance_type)def->opts.distance;
 
@@ -393,8 +397,8 @@ memtx_rtree_index_new(struct memtx_engine *memtx, struct index_def *def)
 	struct memtx_rtree_index *index =
 		(struct memtx_rtree_index *)calloc(1, sizeof(*index));
 	if (index == NULL) {
-		diag_set(OutOfMemory, sizeof(*index),
-			 "malloc", "struct memtx_rtree_index");
+		diag_set(OutOfMemory, sizeof(*index), "malloc",
+			 "struct memtx_rtree_index");
 		return NULL;
 	}
 	if (index_create(&index->base, (struct engine *)memtx,
