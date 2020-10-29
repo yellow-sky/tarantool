@@ -119,7 +119,7 @@ vy_apply_upsert_on_terminal_stmt(struct tuple *upsert, struct tuple *stmt,
 					       result_mp_end, format, &mp_size,
 					       0, suppress_error, &column_mask);
 		if (exec_res == NULL) {
-			if (! suppress_error) {
+			if (!suppress_error) {
 				struct error *e = diag_last_error(diag_get());
 				assert(e != NULL);
 				/* Bail out immediately in case of OOM. */
@@ -140,7 +140,7 @@ vy_apply_upsert_on_terminal_stmt(struct tuple *upsert, struct tuple *stmt,
 						  exec_res + mp_size, cmp_def,
 						  column_mask)) {
 			if (!suppress_error) {
-				say_error("upsert operations %s are not applied"\
+				say_error("upsert operations %s are not applied"
 					  " due to primary key modification",
 					  mp_str(ups_ops));
 			}
@@ -155,15 +155,15 @@ vy_apply_upsert_on_terminal_stmt(struct tuple *upsert, struct tuple *stmt,
 		 */
 		struct tuple_format *format = tuple_format(upsert);
 		if (tuple_validate_raw(format, exec_res) != 0) {
-			if (! suppress_error)
+			if (!suppress_error)
 				diag_log();
 			continue;
 		}
 		result_mp = exec_res;
 		result_mp_end = exec_res + mp_size;
 	}
-	struct tuple *new_terminal_stmt = vy_stmt_new_replace(format, result_mp,
-							      result_mp_end);
+	struct tuple *new_terminal_stmt =
+		vy_stmt_new_replace(format, result_mp, result_mp_end);
 	region_truncate(region, region_svp);
 	if (new_terminal_stmt == NULL)
 		return NULL;
@@ -180,9 +180,9 @@ upsert_ops_to_iovec(const char *ops, uint32_t ops_cnt, struct iovec *iov_arr)
 {
 	for (uint32_t i = 0; i < ops_cnt; ++i) {
 		assert(mp_typeof(*ops) == MP_ARRAY);
-		iov_arr[i].iov_base = (char *) ops;
+		iov_arr[i].iov_base = (char *)ops;
 		mp_next(&ops);
-		iov_arr[i].iov_len = ops - (char *) iov_arr[i].iov_base;
+		iov_arr[i].iov_len = ops - (char *)iov_arr[i].iov_base;
 	}
 }
 
@@ -202,7 +202,8 @@ vy_apply_upsert(struct tuple *new_stmt, struct tuple *old_stmt,
 	struct tuple *result_stmt = NULL;
 	if (old_stmt == NULL || vy_stmt_type(old_stmt) != IPROTO_UPSERT) {
 		return vy_apply_upsert_on_terminal_stmt(new_stmt, old_stmt,
-						        cmp_def, suppress_error);
+							cmp_def,
+							suppress_error);
 	}
 
 	assert(old_stmt != NULL);

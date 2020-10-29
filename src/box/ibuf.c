@@ -39,7 +39,7 @@
 void *
 box_ibuf_reserve(box_ibuf_t *ibuf, size_t size)
 {
-	void * p = ibuf_reserve(ibuf, size);
+	void *p = ibuf_reserve(ibuf, size);
 	if (p == NULL)
 		diag_set(OutOfMemory, size, "ibuf_reserve", "box_ibuf_reserve");
 	return p;
@@ -62,4 +62,3 @@ box_ibuf_write_range(box_ibuf_t *ibuf, char ***wpos, char ***end)
 	if (end != NULL)
 		*end = &ibuf->end;
 }
-
