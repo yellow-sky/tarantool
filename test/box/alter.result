@@ -675,9 +675,11 @@ s.index.pk
 - unique: true
   parts:
   - type: unsigned
+    exclude_null: false
     is_nullable: false
     fieldno: 1
   - type: unsigned
+    exclude_null: false
     is_nullable: false
     fieldno: 2
   type: TREE
@@ -708,6 +710,7 @@ s.index.pk
 - unique: true
   parts:
   - type: unsigned
+    exclude_null: false
     is_nullable: false
     fieldno: 1
   space_id: 731
@@ -720,6 +723,7 @@ s.index.secondary
 - unique: true
   parts:
   - type: unsigned
+    exclude_null: false
     is_nullable: false
     fieldno: 2
   type: TREE

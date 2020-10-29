@@ -287,6 +287,8 @@ memtx_space_replace_all_keys(struct space *space, struct tuple *old_tuple,
 	for (i++; i < space->index_count; i++) {
 		struct tuple *unused;
 		struct index *index = space->index[i];
+		if (index_tuple_is_excluded(index, new_tuple))
+			continue;
 		if (index_replace(index, old_tuple, new_tuple,
 				  DUP_INSERT, &unused) != 0)
 			goto rollback;
@@ -1087,6 +1089,8 @@ memtx_space_build_index(struct space *src_space, struct index *new_index,
 	struct tuple *tuple;
 	size_t count = 0;
 	while ((rc = iterator_next(it, &tuple)) == 0 && tuple != NULL) {
+		if (index_tuple_is_excluded(new_index, tuple))
+			continue;
 		/*
 		 * Check that the tuple is OK according to the
 		 * new format.

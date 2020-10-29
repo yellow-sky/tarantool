@@ -619,6 +619,8 @@ memtx_tree_index_replace(struct index *base, struct tuple *old_tuple,
 	struct memtx_tree_index *index = (struct memtx_tree_index *)base;
 	struct key_def *cmp_def = memtx_tree_cmp_def(&index->tree);
 	if (new_tuple) {
+		if (index_tuple_is_excluded(base, new_tuple))
+			return 0;
 		struct memtx_tree_data new_data;
 		new_data.tuple = new_tuple;
 		new_data.hint = tuple_hint(new_tuple, cmp_def);
@@ -802,6 +804,8 @@ memtx_tree_index_replace_multikey(struct index *base, struct tuple *old_tuple,
 	struct key_def *cmp_def = memtx_tree_cmp_def(&index->tree);
 	*result = NULL;
 	if (new_tuple != NULL) {
+		if (index_tuple_is_excluded(base, new_tuple))
+			return 0;
 		int multikey_idx = 0, err = 0;
 		uint32_t multikey_count =
 			tuple_multikey_count(new_tuple, cmp_def);
@@ -930,6 +934,8 @@ memtx_tree_func_index_replace(struct index *base, struct tuple *old_tuple,
 	*result = NULL;
 	struct key_list_iterator it;
 	if (new_tuple != NULL) {
+		if (index_tuple_is_excluded(base, new_tuple))
+			return 0;
 		struct rlist old_keys, new_keys;
 		rlist_create(&old_keys);
 		rlist_create(&new_keys);

@@ -612,3 +612,79 @@ s:insert{1, -1, 1}
 sk2 = s:create_index('sk2', {parts={{2, 'number', is_nullable=true}}})
 s:insert{2, nil, 2} --error
 s:drop()
+
+--
+-- gh-4480: Introduce exclude_null option
+--
+
+-- Basic functionality
+s = box.schema.space.create('test', {engine=engine})
+pk = s:create_index('primary', {parts={1, 'number'}})
+sk1 = s:create_index('sk1', {parts={{2, 'number', is_nullable=true, exclude_null=true}}})
+sk1.parts
+sk2 = s:create_index('sk2', {parts={{2, 'number', is_nullable=true, exclude_null=false}}})
+sk2.parts
+
+s:insert{1, 1}
+s:insert{2, box.NULL}
+pk:select{}
+sk1:select{} -- [1, 1] only
+sk2:select{}
+
+-- Error
+sk3 = s:create_index('sk3', {parts={{2, 'number', is_nullable=false}}})
+s:truncate()
+
+-- Ok
+sk3 = s:create_index('sk3', {parts={{2, 'number', is_nullable=false}}})
+
+s:insert{1, 1}
+s:insert{2, box.NULL} -- error
+
+-- exclude_null=true is useless without is_nullable=true
+s:drop()
+s = box.schema.space.create('test', {engine=engine})
+pk = s:create_index('primary', {parts={1, 'number'}})
+sk1 = s:create_index('sk1', {parts={{2, 'number', exclude_null=true}}})
+
+-- Multipart
+s:drop()
+s = box.schema.space.create('test', {engine=engine})
+pk = s:create_index('primary', {parts={1, 'number'}})
+parts = {}
+parts[1] = {2, 'number', is_nullable=true, exclude_null=true}
+parts[2] = {3, 'number', is_nullable=true}
+sk1 = s:create_index('sk1', {parts=parts})
+
+s:insert{1, 1, 1}
+s:insert{2, box.NULL, 2}
+s:insert{3, 3, box.NULL}
+s:select{}
+sk1:select{}
+
+-- Insert, then create index
+s:drop()
+s = box.schema.space.create('test', {engine=engine})
+pk = s:create_index('primary', {parts={1, 'number'}})
+
+s:insert{1, 1}
+s:insert{2, box.NULL}
+s:insert{3, box.NULL}
+
+sk1 = s:create_index('sk1', {parts={{2, 'number', is_nullable=true, exclude_null=true}}})
+sk1.parts
+s:select{}
+sk1:select{}
+
+-- Alter to exclude_null=false
+sk1:alter({parts={{2, 'number', is_nullable=true, exclude_null=false}}})
+sk1.parts
+sk1:select{}
+
+-- Alter back to exclude_null=true
+sk1:alter({parts={{2, 'number', is_nullable=true, exclude_null=true}}})
+sk1.parts
+sk1:select{}
+
+-- Alter to the wrong format
+sk1:alter({parts={{2, 'number', is_nullable=false, exclude_null=true}}})

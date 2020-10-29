@@ -173,6 +173,7 @@ end;
 t;
 ---
 - - 'type : unsigned'
+  - 'exclude_null : false'
   - 'is_nullable : false'
   - 'fieldno : 1'
 ...
@@ -836,15 +837,17 @@ not not s:create_index('test3', {parts = {{3, 'string', collation = 'UnIcOdE'}}}
 s:create_index('test4', {parts = {{4, 'string'}}}).parts
 ---
 - - type: string
+    exclude_null: false
     is_nullable: false
     fieldno: 4
 ...
 s:create_index('test5', {parts = {{5, 'string', collation = 'Unicode'}}}).parts
 ---
-- - type: string
-    is_nullable: false
+- - fieldno: 5
+    type: string
+    exclude_null: false
     collation: unicode
-    fieldno: 5
+    is_nullable: false
 ...
 s:drop()
 ---

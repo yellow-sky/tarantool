@@ -686,6 +686,8 @@ index_end_build(struct index *index)
 	index->vtab->end_build(index);
 }
 
+bool index_tuple_is_excluded(struct index *index, struct tuple *tuple);
+
 /*
  * Virtual method stubs.
  */
