@@ -60,8 +60,8 @@ _ = fiber.create(insert_loop);
 fiber.sleep(3);
 
 stop = true;
-for i = 1, ch:size() do
-    ch:get()
+for i = 1, test_run:wait_cond(function() return ch:size() end) do
+    test_run:wait_cond(function() return ch:get() end)
 end;
 
 test_run:cmd("setopt delimiter ''");
