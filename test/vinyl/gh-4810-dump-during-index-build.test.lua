@@ -60,13 +60,28 @@ _ = fiber.create(insert_loop);
 fiber.sleep(3);
 
 stop = true;
-for i = 1, ch:size() do
-    ch:get()
+
+function read_from_channel()
+    for i = 1, ch:size() do
+        local ret = fiber.create(function()
+            local ok, err = pcall(ch:get())
+            if ok == false then
+                require('log').error("error: ch:get() failed with error " .. err)
+                return false
+            end
+            return true
+        end)
+        if ret == false then return false end
+    end
+    return true
 end;
 
 test_run:cmd("setopt delimiter ''");
-assert(box.stat.vinyl().scheduler.dump_count > 0)
-assert(s.index.i1 ~= nil)
+
+read_from_channel()
+
+assert(test_run:wait_cond(function() return box.stat.vinyl().scheduler.dump_count > 0 end))
+assert(test_run:wait_cond(function() return s.index.i1 ~= nil end))
 s:drop()
 
 test_run:cmd('switch default')
