@@ -54,17 +54,15 @@
 #include "say.h"
 #include "vclock.h"
 #include "cbus.h"
-#include "engine.h"		/* engine_collect_garbage() */
-#include "wal.h"		/* wal_collect_garbage() */
+#include "engine.h" /* engine_collect_garbage() */
+#include "wal.h"    /* wal_collect_garbage() */
 #include "checkpoint_schedule.h"
 #include "txn_limbo.h"
 
 struct gc_state gc;
 
-static int
-gc_cleanup_fiber_f(va_list);
-static int
-gc_checkpoint_fiber_f(va_list);
+static int gc_cleanup_fiber_f(va_list);
+static int gc_checkpoint_fiber_f(va_list);
 
 /**
  * Comparator used for ordering gc_consumer objects
@@ -83,8 +81,8 @@ gc_consumer_cmp(const struct gc_consumer *a, const struct gc_consumer *b)
 	return 0;
 }
 
-rb_gen(MAYBE_UNUSED static inline, gc_tree_, gc_tree_t,
-       struct gc_consumer, node, gc_consumer_cmp);
+rb_gen(MAYBE_UNUSED static inline, gc_tree_, gc_tree_t, struct gc_consumer,
+       node, gc_consumer_cmp);
 
 /** Free a consumer object. */
 static void
@@ -173,7 +171,8 @@ gc_run_cleanup(void)
 	struct gc_checkpoint *checkpoint = NULL;
 	while (true) {
 		checkpoint = rlist_first_entry(&gc.checkpoints,
-				struct gc_checkpoint, in_checkpoints);
+					       struct gc_checkpoint,
+					       in_checkpoints);
 		if (gc.checkpoint_count <= gc.min_checkpoint_count)
 			break;
 		if (!rlist_empty(&checkpoint->refs))
@@ -496,8 +495,8 @@ gc_checkpoint_fiber_f(va_list ap)
 
 	struct checkpoint_schedule *sched = &gc.checkpoint_schedule;
 	while (!fiber_is_cancelled()) {
-		double timeout = checkpoint_schedule_timeout(sched,
-					ev_monotonic_now(loop()));
+		double timeout = checkpoint_schedule_timeout(
+			sched, ev_monotonic_now(loop()));
 		if (timeout > 0) {
 			char buf[128];
 			struct tm tm;
@@ -556,8 +555,8 @@ gc_consumer_register(const struct vclock *vclock, const char *format, ...)
 {
 	struct gc_consumer *consumer = calloc(1, sizeof(*consumer));
 	if (consumer == NULL) {
-		diag_set(OutOfMemory, sizeof(*consumer),
-			 "malloc", "struct gc_consumer");
+		diag_set(OutOfMemory, sizeof(*consumer), "malloc",
+			 "struct gc_consumer");
 		return NULL;
 	}
 

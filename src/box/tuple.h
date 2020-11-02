@@ -69,8 +69,8 @@ tuple_free(void);
  */
 void
 tuple_arena_create(struct slab_arena *arena, struct quota *quota,
-		   uint64_t arena_max_size, uint32_t slab_size,
-		   bool dontdump, const char *arena_name);
+		   uint64_t arena_max_size, uint32_t slab_size, bool dontdump,
+		   const char *arena_name);
 
 void
 tuple_arena_destroy(struct slab_arena *arena);
@@ -308,8 +308,7 @@ box_tuple_validate(box_tuple_t *tuple, box_tuple_format_t *format);
  *
  * Each 'off_i' is the offset to the i-th indexed field.
  */
-struct PACKED tuple
-{
+struct PACKED tuple {
 	union {
 		/** Reference counter. */
 		uint16_t refs;
@@ -360,7 +359,7 @@ tuple_size(struct tuple *tuple)
 static inline const char *
 tuple_data(struct tuple *tuple)
 {
-	return (const char *) tuple + tuple->data_offset;
+	return (const char *)tuple + tuple->data_offset;
 }
 
 /**
@@ -382,7 +381,7 @@ static inline const char *
 tuple_data_range(struct tuple *tuple, uint32_t *p_size)
 {
 	*p_size = tuple->bsize;
-	return (const char *) tuple + tuple->data_offset;
+	return (const char *)tuple + tuple->data_offset;
 }
 
 /**
@@ -535,7 +534,7 @@ tuple_validate(struct tuple_format *format, struct tuple *tuple)
 static inline const uint32_t *
 tuple_field_map(struct tuple *tuple)
 {
-	return (const uint32_t *) ((const char *) tuple + tuple->data_offset);
+	return (const uint32_t *)((const char *)tuple + tuple->data_offset);
 }
 
 /**
@@ -658,7 +657,7 @@ tuple_field_raw_by_path(struct tuple_format *format, const char *tuple,
 			 */
 			goto parse;
 		}
-offset_slot_access:
+	offset_slot_access:
 		/* Indexed field */
 		offset = field_map_get_offset(field_map, offset_slot,
 					      multikey_idx);
@@ -667,7 +666,7 @@ offset_slot_access:
 		tuple += offset;
 	} else {
 		uint32_t field_count;
-parse:
+	parse:
 		ERROR_INJECT(ERRINJ_TUPLE_FIELD, return NULL);
 		field_count = mp_decode_array(&tuple);
 		if (unlikely(fieldno >= field_count))
@@ -697,8 +696,8 @@ static inline const char *
 tuple_field_raw(struct tuple_format *format, const char *tuple,
 		const uint32_t *field_map, uint32_t field_no)
 {
-	return tuple_field_raw_by_path(format, tuple, field_map, field_no,
-				       NULL, 0, NULL, MULTIKEY_NONE);
+	return tuple_field_raw_by_path(format, tuple, field_map, field_no, NULL,
+				       0, NULL, MULTIKEY_NONE);
 }
 
 /**
@@ -748,8 +747,8 @@ tuple_field_raw_by_full_path(struct tuple_format *format, const char *tuple,
  */
 static inline const char *
 tuple_field_raw_by_part(struct tuple_format *format, const char *data,
-			const uint32_t *field_map,
-			struct key_part *part, int multikey_idx)
+			const uint32_t *field_map, struct key_part *part,
+			int multikey_idx)
 {
 	if (unlikely(part->format_epoch != format->epoch)) {
 		assert(format->epoch != 0);
@@ -848,7 +847,7 @@ tuple_rewind(struct tuple_iterator *it, struct tuple *tuple)
 	uint32_t bsize;
 	const char *data = tuple_data_range(tuple, &bsize);
 	it->pos = data;
-	(void) mp_decode_array(&it->pos); /* Skip array header */
+	(void)mp_decode_array(&it->pos); /* Skip array header */
 	it->fieldno = 0;
 	it->end = data + bsize;
 }
@@ -932,8 +931,8 @@ mp_tuple_assert(const char *tuple, const char *tuple_end)
 	mp_next(&tuple);
 #endif
 	assert(tuple == tuple_end);
-	(void) tuple;
-	(void) tuple_end;
+	(void)tuple;
+	(void)tuple_end;
 }
 
 static inline const char *
@@ -1169,4 +1168,3 @@ tuple_field_u32_xc(struct tuple *tuple, uint32_t fieldno)
 #endif /* defined(__cplusplus) */
 
 #endif /* TARANTOOL_BOX_TUPLE_H_INCLUDED */
-

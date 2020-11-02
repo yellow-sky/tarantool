@@ -82,8 +82,8 @@ vy_history_apply(struct vy_history *history, struct key_def *cmp_def,
 		return 0;
 
 	struct vy_entry curr = vy_entry_none();
-	struct vy_history_node *node = rlist_last_entry(&history->stmts,
-					struct vy_history_node, link);
+	struct vy_history_node *node =
+		rlist_last_entry(&history->stmts, struct vy_history_node, link);
 	if (vy_history_is_terminal(history)) {
 		if (!keep_delete &&
 		    vy_stmt_type(node->entry.stmt) == IPROTO_DELETE) {

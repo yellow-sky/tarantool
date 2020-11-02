@@ -104,7 +104,7 @@ txn_limbo_remove(struct txn_limbo *limbo, struct txn_limbo_entry *entry)
 {
 	assert(!rlist_empty(&entry->in_queue));
 	assert(txn_limbo_first_entry(limbo) == entry);
-	(void) limbo;
+	(void)limbo;
 	rlist_del_entry(entry, in_queue);
 }
 
@@ -141,7 +141,7 @@ txn_limbo_assign_remote_lsn(struct txn_limbo *limbo,
 	assert(entry->lsn == -1);
 	assert(lsn > 0);
 	assert(txn_has_flag(entry->txn, TXN_WAIT_ACK));
-	(void) limbo;
+	(void)limbo;
 	entry->lsn = lsn;
 }
 
@@ -165,8 +165,7 @@ txn_limbo_assign_local_lsn(struct txn_limbo *limbo,
 	struct vclock_iterator iter;
 	vclock_iterator_init(&iter, &limbo->vclock);
 	int ack_count = 0;
-	vclock_foreach(&iter, vc)
-		ack_count += vc.lsn >= lsn;
+	vclock_foreach(&iter, vc) ack_count += vc.lsn >= lsn;
 	assert(ack_count >= entry->ack_count);
 	entry->ack_count = ack_count;
 }
@@ -234,8 +233,8 @@ txn_limbo_wait_complete(struct txn_limbo *limbo, struct txn_limbo_entry *entry)
 
 	txn_limbo_write_rollback(limbo, entry->lsn);
 	struct txn_limbo_entry *e, *tmp;
-	rlist_foreach_entry_safe_reverse(e, &limbo->queue,
-					 in_queue, tmp) {
+	rlist_foreach_entry_safe_reverse(e, &limbo->queue, in_queue, tmp)
+	{
 		e->txn->signature = TXN_SIGNATURE_QUORUM_TIMEOUT;
 		txn_limbo_abort(limbo, e);
 		txn_clear_flag(e->txn, TXN_WAIT_SYNC);
@@ -292,9 +291,9 @@ txn_limbo_write_synchro(struct txn_limbo *limbo, uint32_t type, int64_t lsn)
 	assert(lsn > 0);
 
 	struct synchro_request req = {
-		.type		= type,
-		.replica_id	= limbo->instance_id,
-		.lsn		= lsn,
+		.type = type,
+		.replica_id = limbo->instance_id,
+		.lsn = lsn,
 	};
 
 	/*
@@ -303,8 +302,7 @@ txn_limbo_write_synchro(struct txn_limbo *limbo, uint32_t type, int64_t lsn)
 	 */
 	struct synchro_body_bin body;
 	struct xrow_header row;
-	char buf[sizeof(struct journal_entry) +
-		 sizeof(struct xrow_header *)];
+	char buf[sizeof(struct journal_entry) + sizeof(struct xrow_header *)];
 
 	struct journal_entry *entry = (struct journal_entry *)buf;
 	entry->rows[0] = &row;
@@ -326,8 +324,8 @@ txn_limbo_write_synchro(struct txn_limbo *limbo, uint32_t type, int64_t lsn)
 		 * Or retry automatically with some period.
 		 */
 		panic("Could not write a synchro request to WAL: "
-		      "lsn = %lld, type = %s\n", lsn,
-		      iproto_type_name(type));
+		      "lsn = %lld, type = %s\n",
+		      lsn, iproto_type_name(type));
 	}
 }
 
@@ -405,7 +403,8 @@ txn_limbo_read_rollback(struct txn_limbo *limbo, int64_t lsn)
 	assert(limbo->instance_id != REPLICA_ID_NIL);
 	struct txn_limbo_entry *e, *tmp;
 	struct txn_limbo_entry *last_rollback = NULL;
-	rlist_foreach_entry_reverse(e, &limbo->queue, in_queue) {
+	rlist_foreach_entry_reverse(e, &limbo->queue, in_queue)
+	{
 		if (!txn_has_flag(e->txn, TXN_WAIT_ACK))
 			continue;
 		if (e->lsn < lsn)
@@ -414,7 +413,8 @@ txn_limbo_read_rollback(struct txn_limbo *limbo, int64_t lsn)
 	}
 	if (last_rollback == NULL)
 		return;
-	rlist_foreach_entry_safe_reverse(e, &limbo->queue, in_queue, tmp) {
+	rlist_foreach_entry_safe_reverse(e, &limbo->queue, in_queue, tmp)
+	{
 		txn_limbo_abort(limbo, e);
 		txn_clear_flag(e->txn, TXN_WAIT_SYNC);
 		txn_clear_flag(e->txn, TXN_WAIT_ACK);

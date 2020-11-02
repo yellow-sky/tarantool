@@ -47,9 +47,8 @@ vy_apply_result_does_cross_pk(struct tuple *old_stmt, const char *result,
 			      uint64_t col_mask)
 {
 	if (!key_update_can_be_skipped(cmp_def->column_mask, col_mask)) {
-		struct tuple *tuple =
-			vy_stmt_new_replace(tuple_format(old_stmt), result,
-					    result_end);
+		struct tuple *tuple = vy_stmt_new_replace(
+			tuple_format(old_stmt), result, result_end);
 		int cmp_res = vy_stmt_compare(old_stmt, HINT_NONE, tuple,
 					      HINT_NONE, cmp_def);
 		tuple_unref(tuple);
@@ -119,7 +118,7 @@ vy_apply_upsert_on_terminal_stmt(struct tuple *upsert, struct tuple *stmt,
 					       result_mp_end, format, &mp_size,
 					       0, suppress_error, &column_mask);
 		if (exec_res == NULL) {
-			if (! suppress_error) {
+			if (!suppress_error) {
 				struct error *e = diag_last_error(diag_get());
 				assert(e != NULL);
 				/* Bail out immediately in case of OOM. */
@@ -140,7 +139,7 @@ vy_apply_upsert_on_terminal_stmt(struct tuple *upsert, struct tuple *stmt,
 						  exec_res + mp_size, cmp_def,
 						  column_mask)) {
 			if (!suppress_error) {
-				say_error("upsert operations %s are not applied"\
+				say_error("upsert operations %s are not applied"
 					  " due to primary key modification",
 					  mp_str(ups_ops));
 			}
@@ -155,7 +154,7 @@ vy_apply_upsert_on_terminal_stmt(struct tuple *upsert, struct tuple *stmt,
 		 */
 		struct tuple_format *format = tuple_format(upsert);
 		if (tuple_validate_raw(format, exec_res) != 0) {
-			if (! suppress_error)
+			if (!suppress_error)
 				diag_log();
 			continue;
 		}
@@ -180,9 +179,9 @@ upsert_ops_to_iovec(const char *ops, uint32_t ops_cnt, struct iovec *iov_arr)
 {
 	for (uint32_t i = 0; i < ops_cnt; ++i) {
 		assert(mp_typeof(*ops) == MP_ARRAY);
-		iov_arr[i].iov_base = (char *) ops;
+		iov_arr[i].iov_base = (char *)ops;
 		mp_next(&ops);
-		iov_arr[i].iov_len = ops - (char *) iov_arr[i].iov_base;
+		iov_arr[i].iov_len = ops - (char *)iov_arr[i].iov_base;
 	}
 }
 
@@ -202,7 +201,8 @@ vy_apply_upsert(struct tuple *new_stmt, struct tuple *old_stmt,
 	struct tuple *result_stmt = NULL;
 	if (old_stmt == NULL || vy_stmt_type(old_stmt) != IPROTO_UPSERT) {
 		return vy_apply_upsert_on_terminal_stmt(new_stmt, old_stmt,
-						        cmp_def, suppress_error);
+							cmp_def,
+							suppress_error);
 	}
 
 	assert(old_stmt != NULL);
@@ -226,9 +226,8 @@ vy_apply_upsert(struct tuple *new_stmt, struct tuple *old_stmt,
 	uint32_t new_ops_cnt = mp_decode_array(&new_ops);
 	uint32_t total_ops_cnt = old_ops_cnt + new_ops_cnt;
 	size_t ops_size;
-	struct iovec *operations =
-		region_alloc_array(region, typeof(operations[0]),
-				   total_ops_cnt + 1, &ops_size);
+	struct iovec *operations = region_alloc_array(
+		region, typeof(operations[0]), total_ops_cnt + 1, &ops_size);
 	if (operations == NULL) {
 		region_truncate(region, region_svp);
 		diag_set(OutOfMemory, ops_size, "region_alloc_array",

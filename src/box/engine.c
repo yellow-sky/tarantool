@@ -43,7 +43,8 @@ RLIST_HEAD(engines);
 enum { MAX_ENGINE_COUNT = 10 };
 
 /** Register engine instance. */
-void engine_register(struct engine *engine)
+void
+engine_register(struct engine *engine)
 {
 	static int n_engines;
 	rlist_add_tail_entry(&engines, engine, link);
@@ -96,7 +97,7 @@ engine_begin_initial_recovery(const struct vclock *recovery_vclock)
 	struct engine *engine;
 	engine_foreach(engine) {
 		if (engine->vtab->begin_initial_recovery(engine,
-					recovery_vclock) != 0)
+							 recovery_vclock) != 0)
 			return -1;
 	}
 	return 0;

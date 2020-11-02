@@ -118,8 +118,7 @@ vy_tx_conflict_iterator_next(struct vy_tx_conflict_iterator *it)
 		assert(left == NULL || left->lsm == curr->lsm);
 		assert(right == NULL || right->lsm == curr->lsm);
 
-		int cmp_right = vy_entry_compare(it->key, last->right,
-						 cmp_def);
+		int cmp_right = vy_entry_compare(it->key, last->right, cmp_def);
 		if (cmp_right == 0 && !last->right_belongs)
 			cmp_right = 1;
 

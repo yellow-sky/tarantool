@@ -136,7 +136,8 @@ fk_constraint_def_sizeof(uint32_t link_count, uint32_t name_len,
 			 uint32_t *links_offset)
 {
 	*links_offset = small_align(sizeof(struct fk_constraint_def) +
-				    name_len + 1, alignof(struct field_link));
+					    name_len + 1,
+				    alignof(struct field_link));
 	return *links_offset + link_count * sizeof(struct field_link);
 }
 

@@ -102,8 +102,7 @@
  */
 
 /** Update internal state */
-struct xrow_update
-{
+struct xrow_update {
 	/** Operations array. */
 	struct xrow_update_op *ops;
 	/** Length of ops. */
@@ -168,9 +167,8 @@ xrow_update_read_ops(struct xrow_update *update, const char *expr,
 	}
 
 	int size = update->op_count * sizeof(update->ops[0]);
-	update->ops = (struct xrow_update_op *)
-		region_aligned_alloc(&fiber()->gc, size,
-				     alignof(struct xrow_update_op));
+	update->ops = (struct xrow_update_op *)region_aligned_alloc(
+		&fiber()->gc, size, alignof(struct xrow_update_op));
 	if (update->ops == NULL) {
 		diag_set(OutOfMemory, size, "region_aligned_alloc",
 			 "update->ops");
@@ -253,7 +251,7 @@ xrow_update_read_ops(struct xrow_update *update, const char *expr,
 			if (opcode == '!')
 				++field_count_hint;
 			else if (opcode == '#')
-				field_count_hint -= (int32_t) op->arg.del.count;
+				field_count_hint -= (int32_t)op->arg.del.count;
 
 			if (opcode == '!' || opcode == '#')
 				/*
@@ -349,7 +347,7 @@ xrow_update_finish(struct xrow_update *update, struct tuple_format *format,
 		   uint32_t *p_tuple_len)
 {
 	uint32_t tuple_len = xrow_update_array_sizeof(&update->root);
-	char *buffer = (char *) region_alloc(&fiber()->gc, tuple_len);
+	char *buffer = (char *)region_alloc(&fiber()->gc, tuple_len);
 	if (buffer == NULL) {
 		diag_set(OutOfMemory, tuple_len, "region_alloc", "buffer");
 		return NULL;
@@ -371,7 +369,7 @@ xrow_update_check_ops(const char *expr, const char *expr_end,
 }
 
 const char *
-xrow_update_execute(const char *expr,const char *expr_end,
+xrow_update_execute(const char *expr, const char *expr_end,
 		    const char *old_data, const char *old_data_end,
 		    struct tuple_format *format, uint32_t *p_tuple_len,
 		    int index_base, uint64_t *column_mask)
@@ -394,7 +392,7 @@ xrow_update_execute(const char *expr,const char *expr_end,
 }
 
 const char *
-xrow_upsert_execute(const char *expr,const char *expr_end,
+xrow_upsert_execute(const char *expr, const char *expr_end,
 		    const char *old_data, const char *old_data_end,
 		    struct tuple_format *format, uint32_t *p_tuple_len,
 		    int index_base, bool suppress_error, uint64_t *column_mask)

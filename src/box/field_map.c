@@ -34,8 +34,7 @@
 
 int
 field_map_builder_create(struct field_map_builder *builder,
-			 uint32_t minimal_field_map_size,
-			 struct region *region)
+			 uint32_t minimal_field_map_size, struct region *region)
 {
 	builder->extents_size = 0;
 	builder->slot_count = minimal_field_map_size / sizeof(uint32_t);
@@ -65,8 +64,8 @@ field_map_builder_slot_extent_new(struct field_map_builder *builder,
 	assert(!builder->slots[offset_slot].has_extent);
 	uint32_t sz = sizeof(*extent) +
 		      multikey_count * sizeof(extent->offset[0]);
-	extent = (struct field_map_builder_slot_extent *)
-		region_aligned_alloc(region, sz, alignof(*extent));
+	extent = (struct field_map_builder_slot_extent *)region_aligned_alloc(
+		region, sz, alignof(*extent));
 	if (extent == NULL) {
 		diag_set(OutOfMemory, sz, "region_aligned_alloc", "extent");
 		return NULL;
@@ -97,8 +96,8 @@ field_map_build(struct field_map_builder *builder, char *buffer)
 	 * The buffer size is assumed to be sufficient to write
 	 * field_map_build_size(builder) bytes there.
 	 */
-	uint32_t *field_map =
-		(uint32_t *)(buffer + field_map_build_size(builder));
+	uint32_t *field_map = (uint32_t *)(buffer +
+					   field_map_build_size(builder));
 	char *extent_wptr = buffer;
 	for (int32_t i = -1; i >= -(int32_t)builder->slot_count; i--) {
 		/*
@@ -112,13 +111,13 @@ field_map_build(struct field_map_builder *builder, char *buffer)
 			continue;
 		}
 		struct field_map_builder_slot_extent *extent =
-						builder->slots[i].extent;
+			builder->slots[i].extent;
 		/** Retrive memory for the extent. */
 		store_u32(&field_map[i], extent_wptr - (char *)field_map);
 		store_u32(extent_wptr, extent->size);
 		uint32_t extent_offset_sz = extent->size * sizeof(uint32_t);
-		memcpy(&((uint32_t *) extent_wptr)[1], extent->offset,
-			extent_offset_sz);
+		memcpy(&((uint32_t *)extent_wptr)[1], extent->offset,
+		       extent_offset_sz);
 		extent_wptr += sizeof(uint32_t) + extent_offset_sz;
 	}
 	assert(extent_wptr == buffer + builder->extents_size);

@@ -107,8 +107,8 @@ raft_new_random_election_shift(void)
 {
 	double timeout = raft.election_timeout;
 	/* Translate to ms. Integer is needed to be able to use mod below. */
-	uint32_t rand_part =
-		(uint32_t)(timeout * RAFT_RANDOM_ELECTION_FACTOR * 1000);
+	uint32_t rand_part = (uint32_t)(timeout * RAFT_RANDOM_ELECTION_FACTOR *
+					1000);
 	if (rand_part == 0)
 		rand_part = 1;
 	/*
@@ -345,20 +345,23 @@ raft_process_msg(const struct raft_request *req, uint32_t source)
 	assert(source > 0);
 	assert(source != instance_id);
 	if (req->term == 0 || req->state == 0) {
-		diag_set(ClientError, ER_PROTOCOL, "Raft term and state can't "
+		diag_set(ClientError, ER_PROTOCOL,
+			 "Raft term and state can't "
 			 "be zero");
 		return -1;
 	}
 	if (req->state == RAFT_STATE_CANDIDATE &&
 	    (req->vote != source || req->vclock == NULL)) {
-		diag_set(ClientError, ER_PROTOCOL, "Candidate should always "
+		diag_set(ClientError, ER_PROTOCOL,
+			 "Candidate should always "
 			 "vote for self and provide its vclock");
 		return -1;
 	}
 	/* Outdated request. */
 	if (req->term < raft.volatile_term) {
 		say_info("RAFT: the message is ignored due to outdated term - "
-			 "current term is %u", raft.volatile_term);
+			 "current term is %u",
+			 raft.volatile_term);
 		return 0;
 	}
 
@@ -435,8 +438,8 @@ raft_process_msg(const struct raft_request *req, uint32_t source)
 			raft.vote_count += !was_set;
 			if (raft.vote_count < quorum) {
 				say_info("RAFT: accepted vote for self, vote "
-					 "count is %d/%d", raft.vote_count,
-					 quorum);
+					 "count is %d/%d",
+					 raft.vote_count, quorum);
 				break;
 			}
 			raft_sm_become_leader();
@@ -448,7 +451,8 @@ raft_process_msg(const struct raft_request *req, uint32_t source)
 	if (req->state != RAFT_STATE_LEADER) {
 		if (source == raft.leader) {
 			say_info("RAFT: the node %u has resigned from the "
-				 "leader role", raft.leader);
+				 "leader role",
+				 raft.leader);
 			/*
 			 * Candidate node clears leader implicitly when starts a
 			 * new term, but non-candidate won't do that, so clear
@@ -471,7 +475,8 @@ raft_process_msg(const struct raft_request *req, uint32_t source)
 	 */
 	if (raft.leader != 0) {
 		say_warn("RAFT: conflicting leader detected in one term - "
-			 "known is %u, received %u", raft.leader, source);
+			 "known is %u, received %u",
+			 raft.leader, source);
 		return 0;
 	}
 
@@ -545,8 +550,7 @@ raft_write_request(const struct raft_request *req)
 	struct region *region = &fiber()->gc;
 	uint32_t svp = region_used(region);
 	struct xrow_header row;
-	char buf[sizeof(struct journal_entry) +
-		 sizeof(struct xrow_header *)];
+	char buf[sizeof(struct journal_entry) + sizeof(struct xrow_header *)];
 	struct journal_entry *entry = (struct journal_entry *)buf;
 	entry->rows[0] = &row;
 
@@ -581,7 +585,7 @@ raft_worker_handle_io(void)
 	struct raft_request req;
 
 	if (raft_is_fully_on_disk()) {
-end_dump:
+	end_dump:
 		raft.is_write_in_progress = false;
 		/*
 		 * The state machine is stable. Can see now, to what state to
@@ -648,8 +652,7 @@ raft_worker_handle_broadcast(void)
 		assert(raft.vote == instance_id);
 		req.vclock = &replicaset.vclock;
 	}
-	replicaset_foreach(replica)
-		relay_push_raft(replica->relay, &req);
+	replicaset_foreach(replica) relay_push_raft(replica->relay, &req);
 	trigger_run(&raft.on_update, NULL);
 	raft.is_broadcast_scheduled = false;
 }
