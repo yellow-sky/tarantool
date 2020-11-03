@@ -19,6 +19,7 @@ box.cfg({
         instance_uri(3),
     },
     replication_timeout = 0.1,
+    replication_sync_timeout = 5,
     election_mode = 'candidate',
     election_timeout = ELECTION_TIMEOUT,
     replication_synchro_quorum = SYNCHRO_QUORUM,
