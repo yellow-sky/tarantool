@@ -18,7 +18,6 @@ local decode            = msgpack.decode_unchecked
 local decode_map_header = msgpack.decode_map_header
 local buffer_reg        = buffer.reg1
 
-local table_new           = require('table.new')
 local check_iterator_type = box.internal.check_iterator_type
 local check_index_arg     = box.internal.check_index_arg
 local check_space_arg     = box.internal.check_space_arg
@@ -555,7 +554,7 @@ local function create_transport(host, port, user, password, callback,
         -- Request in most cases has maximum 10 members:
         -- method, buffer, skip_header, id, cond, errno, response,
         -- on_push, on_push_ctx and ctx.
-        local request = setmetatable(table_new(0, 10), request_mt)
+        local request = setmetatable({}, request_mt)
         request.method = method
         request.buffer = buffer
         request.skip_header = skip_header
