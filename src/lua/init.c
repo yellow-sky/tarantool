@@ -38,7 +38,6 @@
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
-#include <lj_cdata.h>
 #include <luajit.h>
 
 #include <fiber.h>
@@ -103,15 +102,7 @@ extern char strict_lua[],
 	error_lua[],
 	argparse_lua[],
 	iconv_lua[],
-	/* jit.* library */
-	vmdef_lua[],
-	bc_lua[],
-	bcsave_lua[],
-	dis_x86_lua[],
-	dis_x64_lua[],
-	dump_lua[],
 	csv_lua[],
-	v_lua[],
 	clock_lua[],
 	title_lua[],
 	env_lua[],
@@ -119,9 +110,7 @@ extern char strict_lua[],
 	table_lua[],
 	trigger_lua[],
 	string_lua[],
-	swim_lua[],
-	p_lua[], /* LuaJIT 2.1 profiler */
-	zone_lua[] /* LuaJIT 2.1 profiler */;
+	swim_lua[];
 
 static const char *lua_modules[] = {
 	/* Make it first to affect load of all other modules */
@@ -156,17 +145,6 @@ static const char *lua_modules[] = {
 	"http.client", httpc_lua,
 	"iconv", iconv_lua,
 	"swim", swim_lua,
-	/* jit.* library */
-	"jit.vmdef", vmdef_lua,
-	"jit.bc", bc_lua,
-	"jit.bcsave", bcsave_lua,
-	"jit.dis_x86", dis_x86_lua,
-	"jit.dis_x64", dis_x64_lua,
-	"jit.dump", dump_lua,
-	"jit.v", v_lua,
-	/* Profiler */
-	"jit.p", p_lua,
-	"jit.zone", zone_lua,
 	NULL
 };
 

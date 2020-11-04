@@ -358,11 +358,11 @@ static struct popen_handle *
 luaT_check_popen_handle(struct lua_State *L, int idx, bool *is_closed_ptr)
 {
 	struct popen_handle **handle_ptr =
-		luaL_testudata(L, idx, popen_handle_uname);
+		luaL_checkudata(L, idx, popen_handle_uname);
 	bool is_closed = false;
 
 	if (handle_ptr == NULL) {
-		handle_ptr = luaL_testudata(L, idx, popen_handle_closed_uname);
+		handle_ptr = luaL_checkudata(L, idx, popen_handle_closed_uname);
 		is_closed = true;
 	}
 
