@@ -35,12 +35,12 @@ e
 e:unpack()
  | ---
  | - code: 1
- |   base_type: ClientError
- |   type: ClientError
- |   message: Illegal parameters, bla bla
  |   trace:
  |   - file: '[C]'
  |     line: 4294967295
+ |   message: Illegal parameters, bla bla
+ |   base_type: ClientError
+ |   type: ClientError
  | ...
 e.type
  | ---
@@ -845,14 +845,15 @@ e = box.error.new({type = 'TestType', reason = 'Test reason'})
  | ...
 e:unpack()
  | ---
- | - code: 0
+ | - custom_type: TestType
+ |   code: 0
+ |   trace:
+ |   - file: '[string "e = box.error.new({type = ''TestType'', reason = ''Test reason''})
+ |       "]'
+ |     line: 1
+ |   message: Test reason
  |   base_type: CustomError
  |   type: TestType
- |   custom_type: TestType
- |   message: Test reason
- |   trace:
- |   - file: '[string "e = box.error.new({type = ''TestType'', reason ..."]'
- |     line: 1
  | ...
 -- Try code not the same as used by default.
 e = box.error.new({type = 'TestType', reason = 'Test reason', code = 123})
@@ -860,14 +861,15 @@ e = box.error.new({type = 'TestType', reason = 'Test reason', code = 123})
  | ...
 e:unpack()
  | ---
- | - code: 123
+ | - custom_type: TestType
+ |   code: 123
+ |   trace:
+ |   - file: '[string "e = box.error.new({type = ''TestType'', reason = ''Test reason'',
+ |       code = 123}) "]'
+ |     line: 1
+ |   message: Test reason
  |   base_type: CustomError
  |   type: TestType
- |   custom_type: TestType
- |   message: Test reason
- |   trace:
- |   - file: '[string "e = box.error.new({type = ''TestType'', reason ..."]'
- |     line: 1
  | ...
 -- Try to omit message.
 e = box.error.new({type = 'TestType'})
@@ -875,14 +877,14 @@ e = box.error.new({type = 'TestType'})
  | ...
 e:unpack()
  | ---
- | - code: 0
- |   base_type: CustomError
- |   type: TestType
- |   custom_type: TestType
- |   message: 
+ | - custom_type: TestType
+ |   code: 0
  |   trace:
  |   - file: '[string "e = box.error.new({type = ''TestType''}) "]'
  |     line: 1
+ |   message: 
+ |   base_type: CustomError
+ |   type: TestType
  | ...
 -- Try too long type name.
 e = box.error.new({type = string.rep('a', 128)})
@@ -939,8 +941,8 @@ collectgarbage('collect')
 --
 gc_err
  | ---
- | - - '[string "return function(tuple) local json = require(''..."]:1: attempt to call
- |     global ''require'' (a nil value)'
+ | - - '[string "return function(tuple) local json = require(''json'') return json.encode(tuple)
+ |     end"]:1: attempt to call global ''require'' (a nil value)'
  | ...
 preve = nil
  | ---

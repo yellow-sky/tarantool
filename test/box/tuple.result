@@ -223,19 +223,19 @@ box.tuple.new{{'a', 'b'}, {'c', 'd'}, {'e', 'f'}}
 ...
 box.tuple.new({1, 2}, 'x', 'y', 'z', {c = 3, d = 4}, {e = 5, f = 6})
 ---
-- [[1, 2], 'x', 'y', 'z', {'c': 3, 'd': 4}, {'e': 5, 'f': 6}]
+- [[1, 2], 'x', 'y', 'z', {'c': 3, 'd': 4}, {'f': 6, 'e': 5}]
 ...
 box.tuple.new{{1, 2}, 'x', 'y', 'z', {c = 3, d = 4}, {e = 5, f = 6}}
 ---
-- [[1, 2], 'x', 'y', 'z', {'c': 3, 'd': 4}, {'e': 5, 'f': 6}]
+- [[1, 2], 'x', 'y', 'z', {'c': 3, 'd': 4}, {'f': 6, 'e': 5}]
 ...
 box.tuple.new('x', 'y', 'z', {1, 2}, {c = 3, d = 4}, {e = 5, f = 6})
 ---
-- ['x', 'y', 'z', [1, 2], {'c': 3, 'd': 4}, {'e': 5, 'f': 6}]
+- ['x', 'y', 'z', [1, 2], {'c': 3, 'd': 4}, {'f': 6, 'e': 5}]
 ...
 box.tuple.new{'x', 'y', 'z', {1, 2}, {c = 3, d = 4}, {e = 5, f = 6}}
 ---
-- ['x', 'y', 'z', [1, 2], {'c': 3, 'd': 4}, {'e': 5, 'f': 6}]
+- ['x', 'y', 'z', [1, 2], {'c': 3, 'd': 4}, {'f': 6, 'e': 5}]
 ...
 t=box.tuple.new{'a','b','c'}
 ---
@@ -1013,15 +1013,14 @@ t = box.tuple.new({1, -2, 1.2, -1.2}, 'x', 'y', 'z', null, true, false,
 ...
 tostring(t);
 ---
-- '[[1, -2, 1.2, -1.2], ''x'', ''y'', ''z'', null, true, false, {''big_num'': 18446744073709551615,
-  ''double'': 1.0000000001, ''utf8'': ''Кудыкины горы'', ''bin'': !!binary CFzCgBIv,
-  ''map'': {''key'': ''value''}}]'
+- '[[1, -2, 1.2, -1.2], ''x'', ''y'', ''z'', null, true, false, {''utf8'': ''Кудыкины
+  горы'', ''bin'': !!binary CFzCgBIv, ''big_num'': 18446744073709551615, ''map'':
+  {''key'': ''value''}, ''double'': 1.0000000001}]'
 ...
 t;
 ---
-- [[1, -2, 1.2, -1.2], 'x', 'y', 'z', null, true, false, {'big_num': 18446744073709551615,
-    'double': 1.0000000001, 'utf8': 'Кудыкины горы', 'bin': !!binary CFzCgBIv, 'map': {
-      'key': 'value'}}]
+- [[1, -2, 1.2, -1.2], 'x', 'y', 'z', null, true, false, {'utf8': 'Кудыкины горы',
+    'map': {'key': 'value'}, 'double': 1.0000000001, 'bin': !!binary CFzCgBIv, 'big_num': 18446744073709551615}]
 ...
 test_run:cmd("setopt delimiter ''");
 ---
@@ -1243,16 +1242,16 @@ s2:frommap({a="1", k="11"})
 --
 s2:frommap({a="1", k="11"}):tomap({names_only = true})
 ---
-- i: null
-  f: null
-  c: null
-  g: null
+- g: null
   b: null
-  j: null
+  c: null
   k: '11'
-  d: null
-  h: null
   a: '1'
+  h: null
+  j: null
+  f: null
+  i: null
+  d: null
   e: null
 ...
 s2:drop()

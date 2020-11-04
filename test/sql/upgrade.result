@@ -34,7 +34,7 @@ box.space._index:get({box.space._space.index['name']:get('_trigger').id, 0})
 ...
 box.space._schema:format()
 ---
-- [{'type': 'string', 'name': 'key'}, {'type': 'any', 'name': 'value', 'is_nullable': true}]
+- [{'name': 'key', 'type': 'string'}, {'is_nullable': true, 'name': 'value', 'type': 'any'}]
 ...
 -- test data migration
 box.space._space.index['name']:get('T1')
@@ -64,13 +64,13 @@ box.execute("CREATE TRIGGER t2t AFTER INSERT ON t FOR EACH ROW BEGIN INSERT INTO
 ...
 box.space._space.index['name']:get('T')
 ---
-- [513, 1, 'T', 'memtx', 1, {}, [{'type': 'integer', 'nullable_action': 'abort', 'name': 'X',
-      'is_nullable': false}]]
+- [513, 1, 'T', 'memtx', 1, {}, [{'is_nullable': false, 'nullable_action': 'abort',
+      'name': 'X', 'type': 'integer'}]]
 ...
 box.space._space.index['name']:get('T_OUT')
 ---
-- [514, 1, 'T_OUT', 'memtx', 1, {}, [{'type': 'integer', 'nullable_action': 'abort',
-      'name': 'X', 'is_nullable': false}]]
+- [514, 1, 'T_OUT', 'memtx', 1, {}, [{'is_nullable': false, 'nullable_action': 'abort',
+      'name': 'X', 'type': 'integer'}]]
 ...
 t1t = box.space._trigger:get('T1T')
 ---
@@ -119,19 +119,19 @@ box.space.T_OUT:select()
 ...
 box.execute("SELECT * FROM T")
 ---
-- metadata:
+- rows:
+  - [1]
+  metadata:
   - name: X
     type: integer
-  rows:
-  - [1]
 ...
 box.execute("SELECT * FROM T")
 ---
-- metadata:
+- rows:
+  - [1]
+  metadata:
   - name: X
     type: integer
-  rows:
-  - [1]
 ...
 box.execute("DROP TABLE T;")
 ---

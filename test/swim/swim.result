@@ -127,8 +127,8 @@ s:cfg{gc_mode = 'off'}
 ...
 s.cfg
 ---
-- gc_mode: off
-  uuid: 00000000-0000-1000-8000-000000000001
+- uuid: 00000000-0000-1000-8000-000000000001
+  gc_mode: off
   uri: 127.0.0.1:<port>
 ...
 s.cfg.gc_mode
@@ -305,11 +305,11 @@ s1:self():uuid()
 ...
 old_self
 ---
-- uri: 127.0.0.1:<port>
-  status: left
-  incarnation: cdata {generation = 0ULL, version = 1ULL}
-  uuid: 00000000-0000-1000-8000-000000000001
+- incarnation: cdata {generation = 0ULL, version = 1ULL}
   payload_size: 0
+  uuid: 00000000-0000-1000-8000-000000000001
+  status: left
+  uri: 127.0.0.1:<port>
 ...
 -- Can't remove self.
 s1:remove_member(uuid(3))
@@ -389,11 +389,11 @@ s = s1:self()
 ...
 s
 ---
-- uri: 127.0.0.1:<port>
-  status: alive
-  incarnation: cdata {generation = 0ULL, version = 1ULL}
-  uuid: 00000000-0000-1000-8000-000000000001
+- incarnation: cdata {generation = 0ULL, version = 1ULL}
   payload_size: 0
+  uuid: 00000000-0000-1000-8000-000000000001
+  status: alive
+  uri: 127.0.0.1:<port>
 ...
 s:status()
 ---
@@ -488,11 +488,11 @@ s1:member_by_uuid(uuid(2))
 -- UUID can be cdata.
 s1:member_by_uuid(s:uuid())
 ---
-- uri: 127.0.0.1:<port>
-  status: alive
-  incarnation: cdata {generation = 0ULL, version = 1ULL}
-  uuid: 00000000-0000-1000-8000-000000000001
+- incarnation: cdata {generation = 0ULL, version = 1ULL}
   payload_size: 0
+  uuid: 00000000-0000-1000-8000-000000000001
+  status: alive
+  uri: 127.0.0.1:<port>
 ...
 s1:quit()
 ---
@@ -762,8 +762,8 @@ s = swim.new({generation = 0})
 ...
 iterate()
 ---
-- error: '[string "function iterate() local t = {} for k, v in s..."]:1: attempt to
-    call method ''pairs'' (a nil value)'
+- error: '[string "function iterate() local t = {} for k, v in s:pairs() do table.insert(t,
+    {k, v}) end return t end "]:1: attempt to call method ''pairs'' (a nil value)'
 ...
 s:cfg({uuid = uuid(1), uri = uri(), gc_mode = 'off'})
 ---
@@ -776,11 +776,11 @@ s.pairs()
 iterate()
 ---
 - - - 00000000-0000-1000-8000-000000000001
-    - uri: 127.0.0.1:<port>
-      status: alive
-      incarnation: cdata {generation = 0ULL, version = 1ULL}
-      uuid: 00000000-0000-1000-8000-000000000001
+    - incarnation: cdata {generation = 0ULL, version = 1ULL}
       payload_size: 0
+      uuid: 00000000-0000-1000-8000-000000000001
+      status: alive
+      uri: 127.0.0.1:<port>
 ...
 s:add_member({uuid = uuid(2), uri = uri()})
 ---
@@ -789,17 +789,17 @@ s:add_member({uuid = uuid(2), uri = uri()})
 iterate()
 ---
 - - - 00000000-0000-1000-8000-000000000002
-    - uri: 127.0.0.1:<port>
-      status: alive
-      incarnation: cdata {generation = 0ULL, version = 0ULL}
+    - incarnation: cdata {generation = 0ULL, version = 0ULL}
+      payload_size: 0
       uuid: 00000000-0000-1000-8000-000000000002
-      payload_size: 0
-  - - 00000000-0000-1000-8000-000000000001
-    - uri: 127.0.0.1:<port>
       status: alive
-      incarnation: cdata {generation = 0ULL, version = 1ULL}
-      uuid: 00000000-0000-1000-8000-000000000001
+      uri: 127.0.0.1:<port>
+  - - 00000000-0000-1000-8000-000000000001
+    - incarnation: cdata {generation = 0ULL, version = 1ULL}
       payload_size: 0
+      uuid: 00000000-0000-1000-8000-000000000001
+      status: alive
+      uri: 127.0.0.1:<port>
 ...
 s:add_member({uuid = uuid(3), uri = uri()})
 ---
@@ -808,23 +808,23 @@ s:add_member({uuid = uuid(3), uri = uri()})
 iterate()
 ---
 - - - 00000000-0000-1000-8000-000000000001
-    - uri: 127.0.0.1:<port>
-      status: alive
-      incarnation: cdata {generation = 0ULL, version = 1ULL}
+    - incarnation: cdata {generation = 0ULL, version = 1ULL}
+      payload_size: 0
       uuid: 00000000-0000-1000-8000-000000000001
-      payload_size: 0
+      status: alive
+      uri: 127.0.0.1:<port>
   - - 00000000-0000-1000-8000-000000000003
-    - uri: 127.0.0.1:<port>
-      status: alive
-      incarnation: cdata {generation = 0ULL, version = 0ULL}
+    - incarnation: cdata {generation = 0ULL, version = 0ULL}
+      payload_size: 0
       uuid: 00000000-0000-1000-8000-000000000003
-      payload_size: 0
-  - - 00000000-0000-1000-8000-000000000002
-    - uri: 127.0.0.1:<port>
       status: alive
-      incarnation: cdata {generation = 0ULL, version = 0ULL}
-      uuid: 00000000-0000-1000-8000-000000000002
+      uri: 127.0.0.1:<port>
+  - - 00000000-0000-1000-8000-000000000002
+    - incarnation: cdata {generation = 0ULL, version = 0ULL}
       payload_size: 0
+      uuid: 00000000-0000-1000-8000-000000000002
+      status: alive
+      uri: 127.0.0.1:<port>
 ...
 s:delete()
 ---
@@ -907,11 +907,11 @@ s2 = s:member_by_uuid(uuid(2))
 ...
 s2
 ---
-- uri: 127.0.0.1:<port>
-  status: alive
-  incarnation: cdata {generation = 0ULL, version = 0ULL}
-  uuid: 00000000-0000-1000-8000-000000000002
+- incarnation: cdata {generation = 0ULL, version = 0ULL}
   payload_size: 0
+  uuid: 00000000-0000-1000-8000-000000000002
+  status: alive
+  uri: 127.0.0.1:<port>
 ...
 -- Next lookups return the same member table.
 s2_old_uri = s2:uri()
@@ -1153,11 +1153,11 @@ while s1:member_by_uuid(s2:self():uuid()) == nil do fiber.sleep(0.01) end
 ...
 s2:member_by_uuid(s1:self():uuid())
 ---
-- uri: 127.0.0.1:<port>
-  status: alive
-  incarnation: cdata {generation = 0ULL, version = 1ULL}
-  uuid: 00000000-0000-1000-8000-000000000001
+- incarnation: cdata {generation = 0ULL, version = 1ULL}
   payload_size: 0
+  uuid: 00000000-0000-1000-8000-000000000001
+  status: alive
+  uri: 127.0.0.1:<port>
 ...
 s1:delete()
 ---
@@ -1230,17 +1230,17 @@ while #m_list < 1 do fiber.sleep(0) end
 ...
 m_list
 ---
-- - uri: 127.0.0.1:<port>
-    status: alive
-    incarnation: cdata {generation = 0ULL, version = 1ULL}
-    uuid: 00000000-0000-1000-8000-000000000001
+- - incarnation: cdata {generation = 0ULL, version = 1ULL}
     payload_size: 0
+    uuid: 00000000-0000-1000-8000-000000000001
+    status: alive
+    uri: 127.0.0.1:<port>
 ...
 e_list
 ---
-- - is_new_version: true
+- - is_new_uri: true
     is_update: true
-    is_new_uri: true
+    is_new_version: true
     is_new: true
     is_new_incarnation: true
 ...
@@ -1271,11 +1271,11 @@ while s1:size() ~= 2 do fiber.sleep(0.01) end
 -- sleeps.
 m_list
 ---
-- - uri: 127.0.0.1:<port>
-    status: alive
-    incarnation: cdata {generation = 0ULL, version = 1ULL}
-    uuid: 00000000-0000-1000-8000-000000000002
+- - incarnation: cdata {generation = 0ULL, version = 1ULL}
     payload_size: 0
+    uuid: 00000000-0000-1000-8000-000000000002
+    status: alive
+    uri: 127.0.0.1:<port>
 ...
 e_list
 ---
@@ -1311,33 +1311,33 @@ while #m_list ~= 3 do fiber.sleep(0.01) end
 ...
 m_list
 ---
-- - uri: 127.0.0.1:<port>
-    status: alive
-    incarnation: cdata {generation = 0ULL, version = 1ULL}
-    uuid: 00000000-0000-1000-8000-000000000002
+- - incarnation: cdata {generation = 0ULL, version = 1ULL}
     payload_size: 0
-  - uri: 127.0.0.1:<port>
+    uuid: 00000000-0000-1000-8000-000000000002
     status: alive
-    incarnation: cdata {generation = 0ULL, version = 2ULL}
-    uuid: 00000000-0000-1000-8000-000000000001
+    uri: 127.0.0.1:<port>
+  - incarnation: cdata {generation = 0ULL, version = 2ULL}
     payload_size: 8
-  - uri: 127.0.0.1:<port>
+    uuid: 00000000-0000-1000-8000-000000000001
     status: alive
-    incarnation: cdata {generation = 0ULL, version = 2ULL}
-    uuid: 00000000-0000-1000-8000-000000000001
+    uri: 127.0.0.1:<port>
+  - incarnation: cdata {generation = 0ULL, version = 2ULL}
     payload_size: 8
+    uuid: 00000000-0000-1000-8000-000000000001
+    status: alive
+    uri: 127.0.0.1:<port>
 ...
 e_list
 ---
 - - is_new: true
-  - is_new_payload: true
-    is_new_version: true
-    is_new_incarnation: true
+  - is_new_version: true
+    is_new_payload: true
     is_update: true
-  - is_new_payload: true
-    is_new_version: true
     is_new_incarnation: true
+  - is_new_version: true
+    is_new_payload: true
     is_update: true
+    is_new_incarnation: true
 ...
 ctx_list
 ---
@@ -1368,16 +1368,16 @@ fiber.sleep(0)
 -- Two events - status update to 'left', and 'drop'.
 m_list
 ---
-- - uri: 127.0.0.1:<port>
-    status: left
-    incarnation: cdata {generation = 0ULL, version = 1ULL}
-    uuid: 00000000-0000-1000-8000-000000000002
+- - incarnation: cdata {generation = 0ULL, version = 1ULL}
     payload_size: 0
-  - uri: 127.0.0.1:<port>
-    status: left
-    incarnation: cdata {generation = 0ULL, version = 1ULL}
     uuid: 00000000-0000-1000-8000-000000000002
+    status: left
+    uri: 127.0.0.1:<port>
+  - incarnation: cdata {generation = 0ULL, version = 1ULL}
     payload_size: 0
+    uuid: 00000000-0000-1000-8000-000000000002
+    status: left
+    uri: 127.0.0.1:<port>
 ...
 e_list
 ---
@@ -1496,11 +1496,11 @@ s1_view:payload()
 ...
 new_gen_ev
 ---
-- is_new_version: true
-  is_new_generation: true
+- is_new_uri: true
   is_update: true
+  is_new_version: true
+  is_new_generation: true
   is_new_payload: true
-  is_new_uri: true
   is_new_incarnation: true
 ...
 -- Generation is static parameter.

@@ -532,9 +532,9 @@ i.dimension
 ...
 i.parts
 ---
-- - type: array
+- - fieldno: 2
     is_nullable: false
-    fieldno: 2
+    type: array
 ...
 i:drop()
 ---

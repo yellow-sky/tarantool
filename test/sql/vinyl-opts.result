@@ -23,11 +23,11 @@ box.execute('CREATE TABLE v1 (id INT PRIMARY KEY, b INT);')
 ...
 box.space.V1.index[0].options
 ---
-- page_size: 32768
+- range_size: 536870912
   run_count_per_level: 3
-  run_size_ratio: 5
   bloom_fpr: 0.1
-  range_size: 536870912
+  run_size_ratio: 5
+  page_size: 32768
 ...
 box.execute('CREATE INDEX i1 ON v1(b);')
 ---
@@ -35,11 +35,11 @@ box.execute('CREATE INDEX i1 ON v1(b);')
 ...
 box.space.V1.index[1].options
 ---
-- page_size: 32768
+- range_size: 536870912
   run_count_per_level: 3
-  run_size_ratio: 5
   bloom_fpr: 0.1
-  range_size: 536870912
+  run_size_ratio: 5
+  page_size: 32768
 ...
 box.space.V1:drop()
 ---

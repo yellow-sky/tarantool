@@ -10,11 +10,11 @@ _ = box.space._session_settings:update('sql_default_engine', {{'=', 2, engine}})
 -- Forbid multistatement queries.
 box.execute('select 1;')
 ---
-- metadata:
+- rows:
+  - [1]
+  metadata:
   - name: '1'
     type: integer
-  rows:
-  - [1]
 ...
 box.execute('select 1; select 2;')
 ---
@@ -77,43 +77,43 @@ box.execute('CREATE TABLE test (id INTEGER PRIMARY KEY, b TEXT CONSTRAINT c1 COL
 --
 box.execute('SELECT 1;')
 ---
-- metadata:
+- rows:
+  - [1]
+  metadata:
   - name: '1'
     type: integer
-  rows:
-  - [1]
 ...
 box.execute('SELECT 1.5;')
 ---
-- metadata:
+- rows:
+  - [1.5]
+  metadata:
   - name: '1.5'
     type: double
-  rows:
-  - [1.5]
 ...
 box.execute('SELECT 1.0;')
 ---
-- metadata:
+- rows:
+  - [1]
+  metadata:
   - name: '1.0'
     type: double
-  rows:
-  - [1]
 ...
 box.execute('SELECT \'abc\';')
 ---
-- metadata:
+- rows:
+  - ['abc']
+  metadata:
   - name: '''abc'''
     type: string
-  rows:
-  - ['abc']
 ...
 box.execute('SELECT X\'4D6564766564\'')
 ---
-- metadata:
+- rows:
+  - ['Medved']
+  metadata:
   - name: X'4D6564766564'
     type: varbinary
-  rows:
-  - ['Medved']
 ...
 --
 -- gh-4139: assertion when reading a temporary space.
@@ -129,10 +129,10 @@ i = s:create_index('i')
 ...
 box.execute('select * from "s"')
 ---
-- metadata:
+- rows: []
+  metadata:
   - name: id
     type: integer
-  rows: []
 ...
 s:drop()
 ---
@@ -177,13 +177,13 @@ s:insert(t)
 ...
 box.execute('SELECT field70, field64 FROM test')
 ---
-- metadata:
+- rows:
+  - [70, 64]
+  metadata:
   - name: FIELD70
     type: unsigned
   - name: FIELD64
     type: unsigned
-  rows:
-  - [70, 64]
 ...
 -- In the case below described optimization works fine.
 pk:alter({parts = {66}})
@@ -191,15 +191,15 @@ pk:alter({parts = {66}})
 ...
 box.execute('SELECT field66, field68, field70 FROM test')
 ---
-- metadata:
+- rows:
+  - [66, 68, 70]
+  metadata:
   - name: FIELD66
     type: unsigned
   - name: FIELD68
     type: unsigned
   - name: FIELD70
     type: unsigned
-  rows:
-  - [66, 68, 70]
 ...
 box.space.TEST:drop()
 ---

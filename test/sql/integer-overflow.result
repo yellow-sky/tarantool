@@ -18,11 +18,11 @@ box.execute('SELECT (2147483647 * 2147483647 * 2147483647);')
 ...
 box.execute('SELECT (-9223372036854775808 / -1);')
 ---
-- metadata:
+- rows:
+  - [9223372036854775808]
+  metadata:
   - name: (-9223372036854775808 / -1)
     type: integer
-  rows:
-  - [9223372036854775808]
 ...
 box.execute('SELECT (-9223372036854775808 - 1);')
 ---
@@ -31,11 +31,11 @@ box.execute('SELECT (-9223372036854775808 - 1);')
 ...
 box.execute('SELECT (9223372036854775807 + 1);')
 ---
-- metadata:
+- rows:
+  - [9223372036854775808]
+  metadata:
   - name: (9223372036854775807 + 1)
     type: integer
-  rows:
-  - [9223372036854775808]
 ...
 box.execute('SELECT (9223372036854775807 + 9223372036854775807 + 2);')
 ---
@@ -49,21 +49,21 @@ box.execute('SELECT 18446744073709551615 * 2;')
 ...
 box.execute('SELECT (-9223372036854775807 * (-2));')
 ---
-- metadata:
+- rows:
+  - [18446744073709551614]
+  metadata:
   - name: (-9223372036854775807 * (-2))
     type: integer
-  rows:
-  - [18446744073709551614]
 ...
 -- Literals are checked right after parsing.
 --
 box.execute('SELECT 9223372036854775808;')
 ---
-- metadata:
+- rows:
+  - [9223372036854775808]
+  metadata:
   - name: '9223372036854775808'
     type: integer
-  rows:
-  - [9223372036854775808]
 ...
 box.execute('SELECT -9223372036854775809;')
 ---
@@ -73,19 +73,19 @@ box.execute('SELECT -9223372036854775809;')
 ...
 box.execute('SELECT 9223372036854775808 - 1;')
 ---
-- metadata:
+- rows:
+  - [9223372036854775807]
+  metadata:
   - name: 9223372036854775808 - 1
     type: integer
-  rows:
-  - [9223372036854775807]
 ...
 box.execute('SELECT 18446744073709551615;')
 ---
-- metadata:
+- rows:
+  - [18446744073709551615]
+  metadata:
   - name: '18446744073709551615'
     type: integer
-  rows:
-  - [18446744073709551615]
 ...
 box.execute('SELECT 18446744073709551616;')
 ---
@@ -97,11 +97,11 @@ box.execute('SELECT 18446744073709551616;')
 --
 box.execute('SELECT CAST(\'9223372036854775808\' AS INTEGER);')
 ---
-- metadata:
+- rows:
+  - [9223372036854775808]
+  metadata:
   - name: CAST('9223372036854775808' AS INTEGER)
     type: integer
-  rows:
-  - [9223372036854775808]
 ...
 box.execute('SELECT CAST(\'18446744073709551616\' AS INTEGER);')
 ---
@@ -137,12 +137,12 @@ box.space.T:insert({18446744073709551615ULL})
 ...
 box.execute('SELECT * FROM t;')
 ---
-- metadata:
-  - name: ID
-    type: integer
-  rows:
+- rows:
   - [9223372036854775808]
   - [18446744073709551615]
+  metadata:
+  - name: ID
+    type: integer
 ...
 box.space.T:drop()
 ---
@@ -164,14 +164,14 @@ box.space.T:insert({2, -1})
 ...
 box.execute("SELECT * FROM t;")
 ---
-- metadata:
+- rows:
+  - [1, 18446744073709551615]
+  - [2, -1]
+  metadata:
   - name: ID
     type: integer
   - name: A
     type: number
-  rows:
-  - [1, 18446744073709551615]
-  - [2, -1]
 ...
 box.space.T:drop()
 ---

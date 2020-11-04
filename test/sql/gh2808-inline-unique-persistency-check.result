@@ -23,13 +23,13 @@ box.execute([[INSERT INTO t1 VALUES(1,2);]])
 -- Sanity check
 box.execute([[SELECT * FROM t1]])
 ---
-- metadata:
+- rows:
+  - [1, 2]
+  metadata:
   - name: A
     type: integer
   - name: B
     type: integer
-  rows:
-  - [1, 2]
 ...
 test_run:cmd('restart server default');
 -- This cmd should not fail
@@ -42,14 +42,14 @@ box.execute([[INSERT INTO t1 VALUES(2,3);]])
 -- Sanity check
 box.execute([[SELECT * FROM t1]])
 ---
-- metadata:
+- rows:
+  - [1, 2]
+  - [2, 3]
+  metadata:
   - name: A
     type: integer
   - name: B
     type: integer
-  rows:
-  - [1, 2]
-  - [2, 3]
 ...
 -- Cleanup
 box.execute([[drop table t1;]])

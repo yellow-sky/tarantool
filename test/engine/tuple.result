@@ -616,13 +616,13 @@ t:tomap({names_only = false})
 - 1: 100
   2: 200
   3: 300
-  field1: 100
   field2: 200
+  field1: 100
 ...
 t:tomap({names_only = true})
 ---
-- field1: 100
-  field2: 200
+- field2: 200
+  field1: 100
 ...
 t:tomap({names_only = 'text'})
 ---
@@ -637,8 +637,8 @@ t:tomap({})
 - 1: 100
   2: 200
   3: 300
-  field1: 100
   field2: 200
+  field1: 100
 ...
 s:drop()
 ---
@@ -701,12 +701,13 @@ t[1]
 ...
 t[2]
 ---
-- [1, 2, 3, '4', [5, 6, 7], {'привет中国world': {'中国': 'привет'}, 'key': 'value1', 'value': 'key1'}]
+- [1, 2, 3, '4', [5, 6, 7], {'value': 'key1', 'key': 'value1', 'привет中国world': {
+      '中国': 'привет'}}]
 ...
 t[3]
 ---
-- {'k1': 100, 'k3': [{'a': 1, 'b': 2}, {'c': 3, 'd': 4}], -1: 200, 10: 100, 'k2': [
-    1, 2, 3]}
+- {'k1': 100, 'k2': [1, 2, 3], 'k3': [{'a': 1, 'b': 2}, {'c': 3, 'd': 4}], 10: 100,
+  -1: 200}
 ...
 t[4]
 ---
@@ -937,9 +938,9 @@ tuple:tomap()
 - 1: 1
   2: 2
   3: 3
-  third: 3
-  second: 2
   first: 1
+  second: 2
+  third: 3
 ...
 -- Should be NULL
 tuple:tomap().fourth

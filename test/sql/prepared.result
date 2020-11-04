@@ -69,14 +69,14 @@ test_run:cmd("setopt delimiter ''");
 box.info.sql()
  | ---
  | - cache:
- |     size: 0
  |     stmt_count: 0
+ |     size: 0
  | ...
 box.info:sql()
  | ---
  | - cache:
- |     size: 0
  |     stmt_count: 0
+ |     size: 0
  | ...
 
 -- Test local interface and basic capabilities of prepared statements.
@@ -137,26 +137,26 @@ s.param_count
  | ...
 execute(s.stmt_id, {1, 2})
  | ---
- | - metadata:
+ | - rows:
+ |   - [1, 2, '3']
+ |   metadata:
  |   - name: ID
  |     type: integer
  |   - name: A
  |     type: number
  |   - name: B
  |     type: string
- |   rows:
- |   - [1, 2, '3']
  | ...
 execute(s.stmt_id, {1, 3})
  | ---
- | - metadata:
+ | - rows: []
+ |   metadata:
  |   - name: ID
  |     type: integer
  |   - name: A
  |     type: number
  |   - name: B
  |     type: string
- |   rows: []
  | ...
 
 assert(box.info.sql().cache.stmt_count ~= 0)
@@ -384,19 +384,19 @@ s = prepare("SELECT a FROM test WHERE b = '3';")
 
 execute(s.stmt_id)
  | ---
- | - metadata:
+ | - rows:
+ |   - [2]
+ |   metadata:
  |   - name: A
  |     type: number
- |   rows:
- |   - [2]
  | ...
 execute(s.stmt_id)
  | ---
- | - metadata:
+ | - rows:
+ |   - [2]
+ |   metadata:
  |   - name: A
  |     type: number
- |   rows:
- |   - [2]
  | ...
 test_run:cmd("setopt delimiter ';'")
  | ---
@@ -424,7 +424,9 @@ s = prepare("SELECT count(*), count(a - 3), max(b), abs(id) FROM test WHERE b = 
  | ...
 execute(s.stmt_id)
  | ---
- | - metadata:
+ | - rows:
+ |   - [1, 1, '3', 1]
+ |   metadata:
  |   - name: count(*)
  |     type: integer
  |   - name: count(a - 3)
@@ -433,12 +435,12 @@ execute(s.stmt_id)
  |     type: scalar
  |   - name: abs(id)
  |     type: number
- |   rows:
- |   - [1, 1, '3', 1]
  | ...
 execute(s.stmt_id)
  | ---
- | - metadata:
+ | - rows:
+ |   - [1, 1, '3', 1]
+ |   metadata:
  |   - name: count(*)
  |     type: integer
  |   - name: count(a - 3)
@@ -447,8 +449,6 @@ execute(s.stmt_id)
  |     type: scalar
  |   - name: abs(id)
  |     type: number
- |   rows:
- |   - [1, 1, '3', 1]
  | ...
 unprepare(s.stmt_id)
  | ---
@@ -495,19 +495,19 @@ s = prepare("SELECT a FROM test WHERE b = ?;")
  | ...
 execute(s.stmt_id, {'6'})
  | ---
- | - metadata:
+ | - rows:
+ |   - [5]
+ |   metadata:
  |   - name: A
  |     type: number
- |   rows:
- |   - [5]
  | ...
 execute(s.stmt_id, {'9'})
  | ---
- | - metadata:
+ | - rows:
+ |   - [8.5]
+ |   metadata:
  |   - name: A
  |     type: number
- |   rows:
- |   - [8.5]
  | ...
 unprepare(s.stmt_id)
  | ---
@@ -677,10 +677,10 @@ _ = prepare("SELECT a FROM test WHERE b = ?;")
  | ...
 execute(s.stmt_id)
  | ---
- | - metadata:
+ | - rows: []
+ |   metadata:
  |   - name: A
  |     type: number
- |   rows: []
  | ...
 unprepare(s.stmt_id)
  | ---
@@ -837,39 +837,39 @@ s = prepare('SELECT :a, :b, :c');
  | ...
 execute(s.stmt_id, {{[':a'] = 1}, {[':b'] = 2}, {[':c'] = 3}});
  | ---
- | - metadata:
+ | - rows:
+ |   - [1, 2, 3]
+ |   metadata:
  |   - name: :a
  |     type: integer
  |   - name: :b
  |     type: integer
  |   - name: :c
  |     type: integer
- |   rows:
- |   - [1, 2, 3]
  | ...
 execute(s.stmt_id, {{[':a'] = 1}, {[':b'] = 2}});
  | ---
- | - metadata:
+ | - rows:
+ |   - [1, 2, null]
+ |   metadata:
  |   - name: :a
  |     type: integer
  |   - name: :b
  |     type: integer
  |   - name: :c
  |     type: boolean
- |   rows:
- |   - [1, 2, null]
  | ...
 execute(s.stmt_id);
  | ---
- | - metadata:
+ | - rows:
+ |   - [null, null, null]
+ |   metadata:
  |   - name: :a
  |     type: boolean
  |   - name: :b
  |     type: boolean
  |   - name: :c
  |     type: boolean
- |   rows:
- |   - [null, null, null]
  | ...
 unprepare(s.stmt_id);
  | ---

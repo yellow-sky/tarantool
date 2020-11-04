@@ -1,7 +1,5 @@
 #!/usr/bin/env tarantool
 
-local table_clear = require('table.clear')
-
 box.cfg{
     log = "tarantool.log"
 }
@@ -72,7 +70,7 @@ test:test("errored trigger test", function(test)
     local status = pcall(function() trigger_list:run() end)
     test:is(cnt, 2, "check simple+error trigger")
     -- Flush triggers
-    table_clear(trigger_list)
+    trigger_list = {}
     test:is(#trigger_list(), 0, "successfull flush")
     -- Append first trigger
     trigger_list(trigger_errored)

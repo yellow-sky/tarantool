@@ -29,21 +29,21 @@ c = net:connect(box.cfg.listen)
 -- gh-1729 net.box index metadata incompatible with local metadata
 c.space.test.index.primary.parts
 ---
-- - type: unsigned
+- - fieldno: 1
     is_nullable: false
-    fieldno: 1
+    type: unsigned
 ...
 c.space.test.index.covering.parts
 ---
-- - type: unsigned
+- - fieldno: 1
     is_nullable: false
-    fieldno: 1
-  - type: string
+    type: unsigned
+  - fieldno: 3
     is_nullable: false
-    fieldno: 3
-  - type: unsigned
+    type: string
+  - fieldno: 2
     is_nullable: false
-    fieldno: 2
+    type: unsigned
 ...
 box.space.test:drop()
 ---

@@ -25,16 +25,16 @@ box.execute("INSERT INTO t3 VALUES(2, NULL,'xyz')");
 -- Select must return properly decoded `NULL`
 box.execute("SELECT * FROM t3")
 ---
-- metadata:
+- rows:
+  - [1, 'abc', null]
+  - [2, null, 'xyz']
+  metadata:
   - name: ID
     type: integer
   - name: A
     type: string
   - name: B
     type: string
-  rows:
-  - [1, 'abc', null]
-  - [2, null, 'xyz']
 ...
 -- Cleanup
 box.execute("DROP TABLE t3")

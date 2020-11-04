@@ -134,18 +134,18 @@ end;
 ...
 t;
 ---
-- - DELETE
-  - SELECT
-  - INSERT
-  - EVAL
-  - CALL
+- - PREPARE
   - ERROR
-  - PREPARE
-  - REPLACE
   - UPSERT
-  - AUTH
+  - REPLACE
+  - DELETE
+  - CALL
   - EXECUTE
   - UPDATE
+  - INSERT
+  - SELECT
+  - AUTH
+  - EVAL
   - total
   - rps
   - total
@@ -172,9 +172,9 @@ end;
 ...
 t;
 ---
-- - 'type : unsigned'
+- - 'fieldno : 1'
   - 'is_nullable : false'
-  - 'fieldno : 1'
+  - 'type : unsigned'
 ...
 ----------------
 -- # box.slab
@@ -206,14 +206,14 @@ end;
 t;
 ---
 - - items_size
-  - items_used_ratio
-  - quota_size
-  - quota_used_ratio
-  - arena_used_ratio
   - items_used
+  - arena_used_ratio
+  - items_used_ratio
   - quota_used
-  - arena_size
   - arena_used
+  - quota_size
+  - arena_size
+  - quota_used_ratio
 ...
 box.runtime.info().used > 0;
 ---
@@ -835,16 +835,16 @@ not not s:create_index('test3', {parts = {{3, 'string', collation = 'UnIcOdE'}}}
 ...
 s:create_index('test4', {parts = {{4, 'string'}}}).parts
 ---
-- - type: string
+- - fieldno: 4
     is_nullable: false
-    fieldno: 4
+    type: string
 ...
 s:create_index('test5', {parts = {{5, 'string', collation = 'Unicode'}}}).parts
 ---
-- - type: string
-    is_nullable: false
+- - fieldno: 5
     collation: unicode
-    fieldno: 5
+    is_nullable: false
+    type: string
 ...
 s:drop()
 ---
@@ -925,8 +925,8 @@ s = box.schema.space.create('test', {user="no_such_user"})
 --
 box.session.su("admin", function(x) return #x end, 3)
 ---
-- error: '[string "return box.session.su("admin", function(x) re..."]:1: attempt to
-    get length of local ''x'' (a number value)'
+- error: '[string "return box.session.su("admin", function(x) return #x end, 3) "]:1:
+    attempt to get length of local ''x'' (a number value)'
 ...
 -- Too long WAL write warning (gh-2743).
 s = box.schema.space.create('test')

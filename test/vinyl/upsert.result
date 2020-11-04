@@ -525,8 +525,8 @@ stat2 = index:stat()
 ...
 upsert_stat_diff(stat2, stat1)
 ---
-- squashed: 3
-  applied: 3
+- applied: 3
+  squashed: 3
 ...
 stat1 = stat2
 ---
@@ -556,8 +556,8 @@ stat2 = index:stat()
 ...
 upsert_stat_diff(stat2, stat1)
 ---
-- squashed: 3
-  applied: 3
+- applied: 3
+  squashed: 3
 ...
 stat1 = stat2
 ---
@@ -586,8 +586,8 @@ stat2 = index:stat()
 ...
 upsert_stat_diff(stat2, stat1)
 ---
-- squashed: 0
-  applied: 0
+- applied: 0
+  squashed: 0
 ...
 stat1 = stat2
 ---
@@ -606,8 +606,8 @@ stat2 = index:stat()
 ...
 upsert_stat_diff(stat2, stat1)
 ---
-- squashed: 0
-  applied: 2
+- applied: 2
+  squashed: 0
 ...
 stat1 = stat2
 ---
@@ -621,8 +621,8 @@ stat2 = index:stat()
 ...
 upsert_stat_diff(stat2, stat1)
 ---
-- squashed: 0
-  applied: 0
+- applied: 0
+  squashed: 0
 ...
 stat1 = stat2
 ---
@@ -637,8 +637,8 @@ stat2 = index:stat()
 ...
 upsert_stat_diff(stat2, stat1)
 ---
-- squashed: 0
-  applied: 0
+- applied: 0
+  squashed: 0
 ...
 stat1 = stat2
 ---
@@ -652,8 +652,8 @@ stat2 = index:stat()
 ...
 upsert_stat_diff(stat2, stat1)
 ---
-- squashed: 7
-  applied: 903
+- applied: 903
+  squashed: 7
 ...
 stat1 = stat2
 ---
@@ -724,8 +724,8 @@ new_stat = s.index.test:stat()
 ...
 upsert_stat_diff(new_stat, old_stat)
 ---
-- squashed: 0
-  applied: 1
+- applied: 1
+  squashed: 0
 ...
 new_stat.disk.iterator.lookup - old_stat.disk.iterator.lookup
 ---
@@ -759,8 +759,8 @@ new_stat = s.index.test:stat()
 ...
 upsert_stat_diff(new_stat, old_stat)
 ---
-- squashed: 0
-  applied: 0
+- applied: 0
+  squashed: 0
 ...
 new_stat.disk.iterator.lookup - old_stat.disk.iterator.lookup
 ---

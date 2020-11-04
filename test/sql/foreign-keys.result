@@ -192,7 +192,8 @@ box.space._index:replace{512, 1, 'I1', 'tree', {unique = true}, {{field = 0, typ
 ...
 box.space._index:replace{512, 1, 'I2', 'tree', {unique = true}, {{field = 1, type = 'unsigned', is_nullable = true}}}
 ---
-- [512, 1, 'I2', 'tree', {'unique': true}, [{'field': 1, 'type': 'unsigned', 'is_nullable': true}]]
+- [512, 1, 'I2', 'tree', {'unique': true}, [{'is_nullable': true, 'type': 'unsigned',
+      'field': 1}]]
 ...
 -- Finally, can't drop space until it has FK constraints,
 -- i.e. by manual removing tuple from _space.
@@ -356,11 +357,11 @@ box.execute('ALTER TABLE tc ADD CONSTRAINT fk1 FOREIGN KEY (id) REFERENCES tp(id
 --
 box.execute('SELECT row_count();')
 ---
-- metadata:
+- rows:
+  - [1]
+  metadata:
   - name: row_count()
     type: integer
-  rows:
-  - [1]
 ...
 box.space._fk_constraint:select{}
 ---
@@ -373,11 +374,11 @@ box.execute('ALTER TABLE tc DROP CONSTRAINT fk1;')
 ...
 box.execute('SELECT row_count();')
 ---
-- metadata:
+- rows:
+  - [1]
+  metadata:
   - name: row_count()
     type: integer
-  rows:
-  - [1]
 ...
 box.execute('DROP TABLE tc')
 ---

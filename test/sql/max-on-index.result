@@ -47,27 +47,27 @@ box.execute("INSERT INTO test2 VALUES(1, 2)");
 -- Select must return properly decoded `NULL`
 box.execute("SELECT MAX(f1) FROM test1")
 ---
-- metadata:
+- rows:
+  - [4]
+  metadata:
   - name: MAX(f1)
     type: scalar
-  rows:
-  - [4]
 ...
 box.execute("SELECT MAX(f2) FROM test1")
 ---
-- metadata:
+- rows:
+  - [3]
+  metadata:
   - name: MAX(f2)
     type: scalar
-  rows:
-  - [3]
 ...
 box.execute("SELECT MAX(f1) FROM test2")
 ---
-- metadata:
+- rows:
+  - [1]
+  metadata:
   - name: MAX(f1)
     type: scalar
-  rows:
-  - [1]
 ...
 -- Cleanup
 box.execute("DROP INDEX test1_index ON test1")

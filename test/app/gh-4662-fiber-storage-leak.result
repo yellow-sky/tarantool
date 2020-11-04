@@ -53,9 +53,9 @@ c:call('ref_object_in_fiber') c:call('ref_object_in_fiber')
  | ...
 storage
  | ---
- | - key: 2
- |   object:
+ | - object:
  |   - object
+ |   key: 2
  | ...
 i
  | ---

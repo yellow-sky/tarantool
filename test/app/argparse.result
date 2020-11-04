@@ -33,42 +33,42 @@ argparse({'tarantoolctl', 'start', 'instance', '--start', '--stop'})
 - 1: tarantoolctl
   2: start
   3: instance
-  start: true
   stop: true
+  start: true
 ...
 argparse({'tarantoolctl', 'start', 'instance', '--start', '--stop', '--stop'})
 ---
 - 1: tarantoolctl
   2: start
   3: instance
-  start: true
   stop:
   - true
   - true
+  start: true
 ...
 argparse({'tarantoolctl', 'start', 'instance', '--start', '--stop', '--stop'})
 ---
 - 1: tarantoolctl
   2: start
   3: instance
-  start: true
   stop:
   - true
   - true
+  start: true
 ...
 argparse({'tarantoolctl', 'start', 'instance', '-baobab'})
 ---
 - 1: tarantoolctl
   2: start
   3: instance
+  a:
+  - true
+  - true
   b:
   - true
   - true
   - true
   o: true
-  a:
-  - true
-  - true
 ...
 argparse({'tarantoolctl', 'start', 'instance', '-vovov'})
 ---

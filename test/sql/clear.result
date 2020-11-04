@@ -24,16 +24,7 @@ for i=1, 100 do box.execute(string.format("INSERT INTO zoobar VALUES (%d, %d, 'c
 -- Check table is not empty
 box.execute("SELECT * FROM zoobar")
 ---
-- metadata:
-  - name: C1
-    type: integer
-  - name: C2
-    type: integer
-  - name: C3
-    type: string
-  - name: C4
-    type: integer
-  rows:
+- rows:
   - [2, 1, 'c3', 444]
   - [4, 2, 'c3', 444]
   - [6, 3, 'c3', 444]
@@ -134,6 +125,15 @@ box.execute("SELECT * FROM zoobar")
   - [196, 98, 'c3', 444]
   - [198, 99, 'c3', 444]
   - [200, 100, 'c3', 444]
+  metadata:
+  - name: C1
+    type: integer
+  - name: C2
+    type: integer
+  - name: C3
+    type: string
+  - name: C4
+    type: integer
 ...
 -- Do clean up
 box.execute("DELETE FROM zoobar")
@@ -143,7 +143,8 @@ box.execute("DELETE FROM zoobar")
 -- Make sure table is empty
 box.execute("SELECT * from zoobar")
 ---
-- metadata:
+- rows: []
+  metadata:
   - name: C1
     type: integer
   - name: C2
@@ -152,7 +153,6 @@ box.execute("SELECT * from zoobar")
     type: string
   - name: C4
     type: integer
-  rows: []
 ...
 -- Cleanup
 box.execute("DROP INDEX zoobar2 ON zoobar")

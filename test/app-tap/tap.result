@@ -44,30 +44,30 @@ not ok - 1 is boolean
 ok - {} is a table
 not ok - udata
   ---
-  expected: userdata<fiber>
   got: nil
+  expected: userdata<fiber>
   ...
 not ok - udata
   ---
-  expected: userdata<some utype>
   got: userdata<fiber>
+  expected: userdata<some utype>
   ...
 ok - udata
 not ok - cdata type
   ---
-  expected: ctype<int>
   got: string
+  expected: ctype<int>
   ...
 not ok - cdata type
   ---
-  expected: ctype<int>
   got: number
+  expected: ctype<int>
   ...
 ok - cdata type
 not ok - cdata type
   ---
-  expected: ctype<int>
   got: ctype<unsigned int>
+  expected: ctype<int>
   ...
 not ok - box.NULL == nil strict = true
   ---
@@ -133,8 +133,8 @@ not ok - bad plan
     # failed subtest: end
 not ok - failed subtests
   ---
-  planned: 1
   failed: 1
+  planned: 1
   ...
     # is_deeply
     1..20
@@ -146,15 +146,15 @@ not ok - failed subtests
       ---
       path: //1
       strict: false
-      expected: 2
       got: 1
+      expected: 2
       ...
     not ok - {1,2,{3,4}} and {1,2,{3,5}}
       ---
       path: //3/2
       strict: false
-      expected: 5
       got: 4
+      expected: 5
       ...
     ok - {} and {a = box.NULL} strict = false
     ok - {a = box.NULL} and {} strict = false
@@ -166,29 +166,29 @@ not ok - failed subtests
     not ok - {} and {a = box.NULL} strict = true
       ---
       strict: true
-      expected: key a
       got: nil
+      expected: key a
       ...
     not ok - {a = box.NULL} and {} strict = true
       ---
       path: //a
       strict: true
-      expected: nil
       got: cdata
+      expected: nil
       ...
     not ok - {a = box.NULL} and {b = box.NULL} strict = true
       ---
       path: //a
       strict: true
-      expected: nil
       got: cdata
+      expected: nil
       ...
     not ok - {a = box.NULL} and {b = box.NULL, c = box.NULL} strict = true
       ---
       path: //a
       strict: true
-      expected: nil
       got: cdata
+      expected: nil
       ...
     not ok - nil and box.NULL strict = true
       ---
@@ -198,16 +198,16 @@ not ok - failed subtests
       ...
     not ok - box.NULL and nil strict = true
       ---
-      got: cdata
       expected: nil
       strict: true
+      got: cdata
       ...
     ok - {a = box.NULL} and {a = box.NULL} strict true
     # is_deeply: end
 not ok - failed subtests
   ---
-  planned: 20
   failed: 8
+  planned: 20
   ...
     # like
     1..2
@@ -218,19 +218,19 @@ ok - like
 not ok - compare {1, 2, 3} and '200'
   ---
   strict: false
-  expected: '200'
   got:
   - 1
   - 2
   - 3
+  expected: '200'
   ...
 not ok - compare '200' and {1, 2, 3}
   ---
   strict: false
+  got: '200'
   expected:
   - 1
   - 2
   - 3
-  got: '200'
   ...
 # failed subtest: 21
