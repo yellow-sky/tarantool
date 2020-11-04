@@ -27,16 +27,16 @@ box.execute('INSERT INTO test VALUES (1, 1, 1), (2, 2, 2)')
 ...
 box.execute('SELECT x, y, x + y FROM test ORDER BY y')
 ---
-- metadata:
+- rows:
+  - [1, 1, 2]
+  - [2, 2, 4]
+  metadata:
   - name: X
     type: integer
   - name: Y
     type: integer
   - name: x + y
     type: integer
-  rows:
-  - [1, 1, 2]
-  - [2, 2, 4]
 ...
 fiber.info()[fiber.self().id()].memory.used
 ---
@@ -44,55 +44,55 @@ fiber.info()[fiber.self().id()].memory.used
 ...
 box.execute('SELECT x, y, x + y FROM test ORDER BY y')
 ---
-- metadata:
+- rows:
+  - [1, 1, 2]
+  - [2, 2, 4]
+  metadata:
   - name: X
     type: integer
   - name: Y
     type: integer
   - name: x + y
     type: integer
-  rows:
-  - [1, 1, 2]
-  - [2, 2, 4]
 ...
 box.execute('SELECT x, y, x + y FROM test ORDER BY y')
 ---
-- metadata:
+- rows:
+  - [1, 1, 2]
+  - [2, 2, 4]
+  metadata:
   - name: X
     type: integer
   - name: Y
     type: integer
   - name: x + y
     type: integer
-  rows:
-  - [1, 1, 2]
-  - [2, 2, 4]
 ...
 box.execute('SELECT x, y, x + y FROM test ORDER BY y')
 ---
-- metadata:
+- rows:
+  - [1, 1, 2]
+  - [2, 2, 4]
+  metadata:
   - name: X
     type: integer
   - name: Y
     type: integer
   - name: x + y
     type: integer
-  rows:
-  - [1, 1, 2]
-  - [2, 2, 4]
 ...
 box.execute('SELECT x, y, x + y FROM test ORDER BY y')
 ---
-- metadata:
+- rows:
+  - [1, 1, 2]
+  - [2, 2, 4]
+  metadata:
   - name: X
     type: integer
   - name: Y
     type: integer
   - name: x + y
     type: integer
-  rows:
-  - [1, 1, 2]
-  - [2, 2, 4]
 ...
 fiber.info()[fiber.self().id()].memory.used
 ---
@@ -112,18 +112,18 @@ box.execute('INSERT INTO test2 VALUES (3, \'test\', 3), (4, \'xx\', 4)')
 ...
 box.execute('SELECT a, id + 2, b FROM test2 WHERE b < id * 2 ORDER BY a ')
 ---
-- metadata:
+- rows:
+  - ['abc', 3, 1]
+  - ['hello', 4, 2]
+  - ['test', 5, 3]
+  - ['xx', 6, 4]
+  metadata:
   - name: A
     type: string
   - name: id + 2
     type: integer
   - name: B
     type: integer
-  rows:
-  - ['abc', 3, 1]
-  - ['hello', 4, 2]
-  - ['test', 5, 3]
-  - ['xx', 6, 4]
 ...
 fiber.info()[fiber.self().id()].memory.used
 ---
@@ -131,48 +131,48 @@ fiber.info()[fiber.self().id()].memory.used
 ...
 box.execute('SELECT a, id + 2 * b, a FROM test2 WHERE b < id * 2 ORDER BY a ')
 ---
-- metadata:
+- rows:
+  - ['abc', 3, 'abc']
+  - ['hello', 6, 'hello']
+  - ['test', 9, 'test']
+  - ['xx', 12, 'xx']
+  metadata:
   - name: A
     type: string
   - name: id + 2 * b
     type: integer
   - name: A
     type: string
-  rows:
-  - ['abc', 3, 'abc']
-  - ['hello', 6, 'hello']
-  - ['test', 9, 'test']
-  - ['xx', 12, 'xx']
 ...
 box.execute('SELECT a, id + 2 * b, a FROM test2 WHERE b < id * 2 ORDER BY a ')
 ---
-- metadata:
+- rows:
+  - ['abc', 3, 'abc']
+  - ['hello', 6, 'hello']
+  - ['test', 9, 'test']
+  - ['xx', 12, 'xx']
+  metadata:
   - name: A
     type: string
   - name: id + 2 * b
     type: integer
   - name: A
     type: string
-  rows:
-  - ['abc', 3, 'abc']
-  - ['hello', 6, 'hello']
-  - ['test', 9, 'test']
-  - ['xx', 12, 'xx']
 ...
 box.execute('SELECT a, id + 2 * b, a FROM test2 WHERE b < id * 2 ORDER BY a ')
 ---
-- metadata:
+- rows:
+  - ['abc', 3, 'abc']
+  - ['hello', 6, 'hello']
+  - ['test', 9, 'test']
+  - ['xx', 12, 'xx']
+  metadata:
   - name: A
     type: string
   - name: id + 2 * b
     type: integer
   - name: A
     type: string
-  rows:
-  - ['abc', 3, 'abc']
-  - ['hello', 6, 'hello']
-  - ['test', 9, 'test']
-  - ['xx', 12, 'xx']
 ...
 fiber.info()[fiber.self().id()].memory.used
 ---
@@ -180,42 +180,42 @@ fiber.info()[fiber.self().id()].memory.used
 ...
 box.execute('SELECT x, y + 3 * b, b FROM test2, test WHERE b = x')
 ---
-- metadata:
+- rows:
+  - [1, 4, 1]
+  - [2, 8, 2]
+  metadata:
   - name: X
     type: integer
   - name: y + 3 * b
     type: integer
   - name: B
     type: integer
-  rows:
-  - [1, 4, 1]
-  - [2, 8, 2]
 ...
 box.execute('SELECT x, y + 3 * b, b FROM test2, test WHERE b = x')
 ---
-- metadata:
+- rows:
+  - [1, 4, 1]
+  - [2, 8, 2]
+  metadata:
   - name: X
     type: integer
   - name: y + 3 * b
     type: integer
   - name: B
     type: integer
-  rows:
-  - [1, 4, 1]
-  - [2, 8, 2]
 ...
 box.execute('SELECT x, y + 3 * b, b FROM test2, test WHERE b = x')
 ---
-- metadata:
+- rows:
+  - [1, 4, 1]
+  - [2, 8, 2]
+  metadata:
   - name: X
     type: integer
   - name: y + 3 * b
     type: integer
   - name: B
     type: integer
-  rows:
-  - [1, 4, 1]
-  - [2, 8, 2]
 ...
 fiber.info()[fiber.self().id()].memory.used
 ---

@@ -64,27 +64,27 @@ parameters[1][':value'] = 1
 ...
 execute('SELECT * FROM test WHERE id = :value', parameters)
 ---
-- metadata:
+- rows:
+  - [1, 2, '3']
+  metadata:
   - name: ID
     type: integer
   - name: A
     type: number
   - name: B
     type: string
-  rows:
-  - [1, 2, '3']
 ...
 execute('SELECT ?, ?, ?', {1, 2, 3})
 ---
-- metadata:
-  - name: '?'
-    type: integer
-  - name: '?'
-    type: integer
-  - name: '?'
-    type: integer
-  rows:
+- rows:
   - [1, 2, 3]
+  metadata:
+  - name: '?'
+    type: integer
+  - name: '?'
+    type: integer
+  - name: '?'
+    type: integer
 ...
 parameters = {}
 ---
@@ -106,15 +106,15 @@ parameters[3][':value1'] = 11
 ...
 execute('SELECT ?, :value1, @value2', parameters)
 ---
-- metadata:
+- rows:
+  - [10, 11, 12]
+  metadata:
   - name: '?'
     type: integer
   - name: :value1
     type: integer
   - name: '@value2'
     type: integer
-  rows:
-  - [10, 11, 12]
 ...
 parameters = {}
 ---
@@ -148,7 +148,9 @@ parameters[6]['@value2'] = 6
 ...
 execute('SELECT :value3, ?, :value1, ?, ?, @value2, ?, :value3', parameters)
 ---
-- metadata:
+- rows:
+  - [1, 2, 3, 4, 5, 6, null, 1]
+  metadata:
   - name: :value3
     type: integer
   - name: '?'
@@ -165,8 +167,6 @@ execute('SELECT :value3, ?, :value1, ?, ?, @value2, ?, :value3', parameters)
     type: boolean
   - name: :value3
     type: integer
-  rows:
-  - [1, 2, 3, 4, 5, 6, null, 1]
 ...
 -- Try not-integer types.
 msgpack = require('msgpack')
@@ -174,7 +174,9 @@ msgpack = require('msgpack')
 ...
 execute('SELECT ?, ?, ?, ?, ?', {'abc', -123.456, msgpack.NULL, true, false})
 ---
-- metadata:
+- rows:
+  - ['abc', -123.456, null, true, false]
+  metadata:
   - name: '?'
     type: text
   - name: '?'
@@ -185,19 +187,17 @@ execute('SELECT ?, ?, ?, ?, ?', {'abc', -123.456, msgpack.NULL, true, false})
     type: boolean
   - name: '?'
     type: boolean
-  rows:
-  - ['abc', -123.456, null, true, false]
 ...
 -- Try to replace '?' in meta with something meaningful.
 execute('SELECT ? AS kek, ? AS kek2', {1, 2})
 ---
-- metadata:
+- rows:
+  - [1, 2]
+  metadata:
   - name: KEK
     type: integer
   - name: KEK2
     type: integer
-  rows:
-  - [1, 2]
 ...
 -- Try to bind not existing name.
 parameters = {}
@@ -242,11 +242,11 @@ execute(sql, parameters)
 -- suitable method in its bind API.
 execute('SELECT ? AS big_uint', {0xefffffffffffffff})
 ---
-- metadata:
+- rows:
+  - [17293822569102704640]
+  metadata:
   - name: BIG_UINT
     type: integer
-  rows:
-  - [17293822569102704640]
 ...
 -- Bind incorrect parameters.
 ok, err = pcall(execute, 'SELECT ?', { {1, 2, 3} })
@@ -289,11 +289,11 @@ execute('SELECT :value', parameters)
 --
 execute('SELECT ? ', {18446744073709551615ULL})
 ---
-- metadata:
+- rows:
+  - [18446744073709551615]
+  metadata:
   - name: '?'
     type: integer
-  rows:
-  - [18446744073709551615]
 ...
 -- Make sure that VARBINARY values can be bound. Note that
 -- at the moment there's no direct way to encode value as MP_BIN,
@@ -345,12 +345,12 @@ box.execute("CREATE TABLE t (id INT PRIMARY KEY, a TEXT);")
 ...
 box.execute("SELECT * FROM t WHERE a LIKE ?;", {'a%'});
 ---
-- metadata:
+- rows: []
+  metadata:
   - name: ID
     type: integer
   - name: A
     type: string
-  rows: []
 ...
 box.execute("INSERT INTO t VALUES (1, 'aA'), (2, 'Ba'), (3, 'A');")
 ---
@@ -358,13 +358,13 @@ box.execute("INSERT INTO t VALUES (1, 'aA'), (2, 'Ba'), (3, 'A');")
 ...
 box.execute("SELECT * FROM t WHERE a LIKE ?;", {'a%'});
 ---
-- metadata:
+- rows:
+  - [1, 'aA']
+  metadata:
   - name: ID
     type: integer
   - name: A
     type: string
-  rows:
-  - [1, 'aA']
 ...
 box.space.T:drop()
 ---

@@ -323,8 +323,8 @@ box.on_commit()
 -- Incorrect usage inside a transaction.
 box.begin() s:replace{3} box.on_rollback(on_rollback) box.on_commit(100)
 ---
-- error: '[string "box.begin() s:replace{3} box.on_rollback(on_r..."]:1: trigger reset:
-    incorrect arguments'
+- error: '[string "box.begin() s:replace{3} box.on_rollback(on_rollback) box.on_commit(100)
+    "]:1: trigger reset: incorrect arguments'
 ...
 box.rollback()
 ---

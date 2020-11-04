@@ -101,11 +101,11 @@ box.execute("INSERT INTO t1 VALUES(1);")
 ...
 box.execute("SELECT * FROM t2;")
 ---
-- metadata:
+- rows:
+  - [1]
+  metadata:
   - name: X
     type: integer
-  rows:
-  - [1]
 ...
 box.execute("DELETE FROM t2;")
 ---
@@ -142,13 +142,13 @@ box.execute("INSERT INTO t1 VALUES(2);")
 ...
 box.execute("SELECT * FROM t2;")
 ---
-- metadata:
-  - name: X
-    type: integer
-  rows:
+- rows:
   - [1]
   - [2]
   - [3]
+  metadata:
+  - name: X
+    type: integer
 ...
 box.execute("DELETE FROM t2;")
 ---
@@ -174,11 +174,11 @@ box.execute("INSERT INTO t1 VALUES(3);")
 ...
 box.execute("SELECT * FROM t2;")
 ---
-- metadata:
+- rows:
+  - [1]
+  metadata:
   - name: X
     type: integer
-  rows:
-  - [1]
 ...
 box.execute("DELETE FROM t2;")
 ---
@@ -211,13 +211,13 @@ box.execute("INSERT INTO t1 VALUES(4);")
 ...
 box.execute("SELECT * FROM t2;")
 ---
-- metadata:
-  - name: X
-    type: integer
-  rows:
+- rows:
   - [1]
   - [2]
   - [3]
+  metadata:
+  - name: X
+    type: integer
 ...
 -- Clean up.
 box.execute("DROP TABLE t1;")
@@ -453,7 +453,9 @@ box.execute("UPDATE v SET s1 = s1 + 5;")
 ...
 box.execute("SELECT * FROM t;")
 ---
-- metadata:
+- rows:
+  - [1, 1, 6, 1]
+  metadata:
   - name: S1
     type: integer
   - name: S2
@@ -462,8 +464,6 @@ box.execute("SELECT * FROM t;")
     type: integer
   - name: S4
     type: integer
-  rows:
-  - [1, 1, 6, 1]
 ...
 box.execute("DROP VIEW v;")
 ---
@@ -582,32 +582,32 @@ box.execute('INSERT INTO t1 VALUES (100);')
 ...
 box.execute('INSERT INTO t2 VALUES (NULL), (NULL), (NULL);')
 ---
-- autoincrement_ids:
+- row_count: 3
+  autoincrement_ids:
   - 1
   - 2
   - 3
-  row_count: 3
 ...
 box.execute('SELECT * FROM t1;')
 ---
-- metadata:
-  - name: I
-    type: integer
-  rows:
+- rows:
   - [100]
   - [101]
   - [102]
   - [103]
+  metadata:
+  - name: I
+    type: integer
 ...
 box.execute('SELECT * FROM t2;')
 ---
-- metadata:
-  - name: I
-    type: integer
-  rows:
+- rows:
   - [1]
   - [2]
   - [3]
+  metadata:
+  - name: I
+    type: integer
 ...
 box.execute('CREATE TRIGGER r2 AFTER INSERT ON t3 FOR EACH ROW BEGIN INSERT INTO t2 VALUES (null); END')
 ---
@@ -615,18 +615,15 @@ box.execute('CREATE TRIGGER r2 AFTER INSERT ON t3 FOR EACH ROW BEGIN INSERT INTO
 ...
 box.execute('INSERT INTO t3 VALUES (NULL), (NULL), (NULL);')
 ---
-- autoincrement_ids:
+- row_count: 3
+  autoincrement_ids:
   - 1
   - 2
   - 3
-  row_count: 3
 ...
 box.execute('SELECT * FROM t1;')
 ---
-- metadata:
-  - name: I
-    type: integer
-  rows:
+- rows:
   - [100]
   - [101]
   - [102]
@@ -634,29 +631,32 @@ box.execute('SELECT * FROM t1;')
   - [104]
   - [105]
   - [106]
+  metadata:
+  - name: I
+    type: integer
 ...
 box.execute('SELECT * FROM t2;')
 ---
-- metadata:
-  - name: I
-    type: integer
-  rows:
+- rows:
   - [1]
   - [2]
   - [3]
   - [4]
   - [5]
   - [6]
+  metadata:
+  - name: I
+    type: integer
 ...
 box.execute('SELECT * FROM t3;')
 ---
-- metadata:
-  - name: I
-    type: integer
-  rows:
+- rows:
   - [1]
   - [2]
   - [3]
+  metadata:
+  - name: I
+    type: integer
 ...
 box.execute('DROP TABLE t1;')
 ---

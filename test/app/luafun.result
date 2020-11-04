@@ -100,8 +100,8 @@ fun.iter({2, 4, 6, 8}):all(function(x) return x % 2 == 1 end)
 -- iter on hashes
 fun.iter({a = 1, b = 2, c = 3}):tomap()
 ---
-- b: 2
-  a: 1
+- a: 1
+  b: 2
   c: 3
 ...
 -- iter on tuple

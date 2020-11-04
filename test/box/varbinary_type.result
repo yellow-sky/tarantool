@@ -66,11 +66,11 @@ s:select()
 ...
 box.execute("SELECT * FROM \"withdata\" WHERE \"b\" < x'FEEDFACE';")
 ---
-- metadata:
+- rows:
+  - [!!binary 3q2+rw==]
+  metadata:
   - name: b
     type: varbinary
-  rows:
-  - [!!binary 3q2+rw==]
 ...
 pk:alter({parts = {1, "scalar"}})
 ---
@@ -105,15 +105,15 @@ s:select()
 ...
 box.execute("SELECT * FROM \"withdata\" WHERE \"b\" <= x'DEADBEAF';")
 ---
-- metadata:
-  - name: b
-    type: scalar
-  rows:
+- rows:
   - [11]
   - [22]
   - ['11']
   - ['22']
   - [!!binary 3q2+rw==]
+  metadata:
+  - name: b
+    type: scalar
 ...
 pk:alter({parts = {1, "varbinary"}})
 ---

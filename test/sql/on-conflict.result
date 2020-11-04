@@ -101,16 +101,16 @@ box.execute("INSERT INTO a VALUES(2, NULL, NULL);")
 ...
 box.execute("SELECT * FROM a;")
 ---
-- metadata:
+- rows:
+  - [1, 1, 2]
+  - [2, 1, 2]
+  metadata:
   - name: ID
     type: integer
   - name: A
     type: integer
   - name: B
     type: integer
-  rows:
-  - [1, 1, 2]
-  - [2, 1, 2]
 ...
 box.execute("DROP TABLE a;")
 ---
@@ -136,14 +136,14 @@ box.execute("UPDATE OR IGNORE tj SET s1 = s1 + 1;")
 ...
 box.execute("SELECT s1, s2 FROM tj;")
 ---
-- metadata:
+- rows:
+  - [1, 2]
+  - [3, 3]
+  metadata:
   - name: S1
     type: integer
   - name: S2
     type: integer
-  rows:
-  - [1, 2]
-  - [3, 3]
 ...
 box.execute("UPDATE OR IGNORE tj SET s2 = s2 + 1;")
 ---
@@ -151,14 +151,14 @@ box.execute("UPDATE OR IGNORE tj SET s2 = s2 + 1;")
 ...
 box.execute("SELECT s1, s2 FROM tj;")
 ---
-- metadata:
+- rows:
+  - [1, 2]
+  - [3, 4]
+  metadata:
   - name: S1
     type: integer
   - name: S2
     type: integer
-  rows:
-  - [1, 2]
-  - [3, 4]
 ...
 -- gh-3565: INSERT OR REPLACE causes assertion fault.
 --
@@ -184,13 +184,13 @@ box.execute("REPLACE INTO tj VALUES (1, 3);")
 ...
 box.execute("SELECT * FROM tj;")
 ---
-- metadata:
+- rows:
+  - [1, 3]
+  metadata:
   - name: S1
     type: integer
   - name: S2
     type: integer
-  rows:
-  - [1, 3]
 ...
 box.execute("INSERT INTO tj VALUES (2, 4), (3, 5);")
 ---
@@ -202,14 +202,14 @@ box.execute("UPDATE OR REPLACE tj SET s2 = s2 + 1;")
 ...
 box.execute("SELECT * FROM tj;")
 ---
-- metadata:
+- rows:
+  - [1, 4]
+  - [3, 6]
+  metadata:
   - name: S1
     type: integer
   - name: S2
     type: integer
-  rows:
-  - [1, 4]
-  - [3, 6]
 ...
 box.execute("DROP TABLE tj;")
 ---

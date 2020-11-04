@@ -221,15 +221,15 @@ function return_map() return { k1 = 'v1', k2 = 'v2'} end
 ...
 conn:call("return_map")
 ---
-- {'k1': 'v1', 'k2': 'v2'}
+- {'k2': 'v2', 'k1': 'v1'}
 ...
 conn:eval("return return_map()")
 ---
-- {'k1': 'v1', 'k2': 'v2'}
+- {'k2': 'v2', 'k1': 'v1'}
 ...
 conn:call_16("return_map")
 ---
-- - [{'k1': 'v1', 'k2': 'v2'}]
+- - [{'k2': 'v2', 'k1': 'v1'}]
 ...
 function return_emptyarray() return {} end
 ---
@@ -281,60 +281,60 @@ function return_complexarray1() return {1, 2, {k1 = 'v1', k2 = 'v2' }} end
 ...
 conn:call("return_complexarray1")
 ---
-- [1, 2, {'k1': 'v1', 'k2': 'v2'}]
+- [1, 2, {'k2': 'v2', 'k1': 'v1'}]
 ...
 conn:eval("return return_complexarray1()")
 ---
-- [1, 2, {'k1': 'v1', 'k2': 'v2'}]
+- [1, 2, {'k2': 'v2', 'k1': 'v1'}]
 ...
 conn:call_16("return_complexarray1")
 ---
-- - [1, 2, {'k1': 'v1', 'k2': 'v2'}]
+- - [1, 2, {'k2': 'v2', 'k1': 'v1'}]
 ...
 function return_complexarray2() return {{k1 = 'v1', k2 = 'v2' }, 2, 3} end
 ---
 ...
 conn:call("return_complexarray2")
 ---
-- [{'k1': 'v1', 'k2': 'v2'}, 2, 3]
+- [{'k2': 'v2', 'k1': 'v1'}, 2, 3]
 ...
 conn:eval("return return_complexarray2()")
 ---
-- [{'k1': 'v1', 'k2': 'v2'}, 2, 3]
+- [{'k2': 'v2', 'k1': 'v1'}, 2, 3]
 ...
 conn:call_16("return_complexarray2")
 ---
-- - [{'k1': 'v1', 'k2': 'v2'}, 2, 3]
+- - [{'k2': 'v2', 'k1': 'v1'}, 2, 3]
 ...
 function return_complexarray3() return {1, {k1 = 'v1', k2 = 'v2' }, 3} end
 ---
 ...
 conn:call("return_complexarray3")
 ---
-- [1, {'k1': 'v1', 'k2': 'v2'}, 3]
+- [1, {'k2': 'v2', 'k1': 'v1'}, 3]
 ...
 conn:eval("return return_complexarray3()")
 ---
-- [1, {'k1': 'v1', 'k2': 'v2'}, 3]
+- [1, {'k2': 'v2', 'k1': 'v1'}, 3]
 ...
 conn:call_16("return_complexarray3")
 ---
-- - [1, {'k1': 'v1', 'k2': 'v2'}, 3]
+- - [1, {'k2': 'v2', 'k1': 'v1'}, 3]
 ...
 function return_complexarray4() return {{k1 = 'v1', k2 = 'v2' }} end
 ---
 ...
 conn:call("return_complexarray4")
 ---
-- [{'k1': 'v1', 'k2': 'v2'}]
+- [{'k2': 'v2', 'k1': 'v1'}]
 ...
 conn:eval("return return_complexarray4()")
 ---
-- [{'k1': 'v1', 'k2': 'v2'}]
+- [{'k2': 'v2', 'k1': 'v1'}]
 ...
 conn:call_16("return_complexarray4")
 ---
-- - [{'k1': 'v1', 'k2': 'v2'}]
+- - [{'k2': 'v2', 'k1': 'v1'}]
 ...
 function return_tableofarrays1() return {{1}} end
 ---

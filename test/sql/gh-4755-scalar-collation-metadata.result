@@ -25,18 +25,18 @@ box.execute([[CREATE TABLE test (a SCALAR COLLATE "unicode_ci" PRIMARY KEY,
  | ...
 box.execute("SELECT * FROM test;");
  | ---
- | - metadata:
- |   - span: A
- |     type: scalar
+ | - rows: []
+ |   metadata:
+ |   - name: A
  |     is_nullable: false
- |     name: A
+ |     span: A
  |     collation: unicode_ci
- |   - span: B
- |     type: string
+ |     type: scalar
+ |   - name: B
  |     is_nullable: true
- |     name: B
+ |     span: B
  |     collation: unicode_ci
- |   rows: []
+ |     type: string
  | ...
 
 --

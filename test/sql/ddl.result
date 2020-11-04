@@ -400,11 +400,11 @@ true_check_res
  |   - Duplicate key exists in unique index 'unique_unnamed_T2_2' in space 'T2'
  |   - 'Failed to execute SQL statement: FOREIGN KEY constraint failed'
  |   - 'Check constraint failed ''CK2'': a > 0'
- |   - metadata:
+ |   - rows:
+ |     - [1]
+ |     metadata:
  |     - name: ID
  |       type: integer
- |     rows:
- |     - [1]
  | ...
 
 monster_ddl_clear()

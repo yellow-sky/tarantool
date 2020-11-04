@@ -19,14 +19,14 @@ box.stat.net.RECEIVED -- zero
 box.stat.net.CONNECTIONS -- zero
 ---
 - current: 0
-  rps: 0
   total: 0
+  rps: 0
 ...
 box.stat.net.REQUESTS -- zero
 ---
 - current: 0
-  rps: 0
   total: 0
+  rps: 0
 ...
 space = box.schema.space.create('tweedledum')
 ---

@@ -784,8 +784,8 @@ inf[1].canonname = nil;
 inf;
 ---
 - - host: 127.0.0.1
-    family: AF_INET
     type: SOCK_DGRAM
+    family: AF_INET
     protocol: udp
     port: 80
 ...
@@ -798,15 +798,15 @@ sc = socket('AF_INET', 'SOCK_STREAM', 'tcp')
 ...
 json.encode(sc:name())
 ---
-- '{"host":"0.0.0.0","family":"AF_INET","type":"SOCK_STREAM","protocol":"tcp","port":0}'
+- '{"host":"0.0.0.0","protocol":"tcp","port":0,"family":"AF_INET","type":"SOCK_STREAM"}'
 ...
 sc:name()
 ---
 - host: 0.0.0.0
-  family: AF_INET
-  type: SOCK_STREAM
   protocol: tcp
   port: 0
+  family: AF_INET
+  type: SOCK_STREAM
 ...
 sc:nonblock(true)
 ---
@@ -858,7 +858,7 @@ from.port = 'Random port'
 ...
 json.encode{d, from}
 ---
-- '["Hello, world, 2",{"host":"127.0.0.1","family":"AF_INET","port":"Random port"}]'
+- '["Hello, world, 2",{"port":"Random port","family":"AF_INET","host":"127.0.0.1"}]'
 ...
 s:close()
 ---

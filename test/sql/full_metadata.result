@@ -54,77 +54,77 @@ execute([[UPDATE "_session_settings" SET "value" = true WHERE "name" = 'sql_full
 --
 execute("SELECT 'aSd' COLLATE \"unicode_ci\";")
  | ---
- | - metadata:
- |   - type: string
- |     span: '''aSd'' COLLATE "unicode_ci"'
- |     name: '''aSd'' COLLATE "unicode_ci"'
- |     collation: unicode_ci
- |   rows:
+ | - rows:
  |   - ['aSd']
+ |   metadata:
+ |   - span: '''aSd'' COLLATE "unicode_ci"'
+ |     collation: unicode_ci
+ |     name: '''aSd'' COLLATE "unicode_ci"'
+ |     type: string
  | ...
 execute("SELECT c FROM t;")
  | ---
- | - metadata:
- |   - span: C
- |     type: string
- |     is_nullable: true
- |     name: C
- |     collation: unicode_ci
- |   rows:
+ | - rows:
  |   - ['aSd']
+ |   metadata:
+ |   - name: C
+ |     is_nullable: true
+ |     span: C
+ |     collation: unicode_ci
+ |     type: string
  | ...
 execute("SELECT c COLLATE \"unicode\" FROM t;")
  | ---
- | - metadata:
- |   - type: string
- |     span: c COLLATE "unicode"
- |     name: c COLLATE "unicode"
- |     collation: unicode
- |   rows:
+ | - rows:
  |   - ['aSd']
+ |   metadata:
+ |   - span: c COLLATE "unicode"
+ |     collation: unicode
+ |     name: c COLLATE "unicode"
+ |     type: string
  | ...
 
 -- Make sure that nullability/autoincrement are presented.
 --
 execute("SELECT id, a, c FROM t;")
  | ---
- | - metadata:
- |   - span: ID
- |     type: integer
- |     is_autoincrement: true
- |     name: ID
+ | - rows:
+ |   - [1, 1, 'aSd']
+ |   metadata:
+ |   - name: ID
  |     is_nullable: false
- |   - type: integer
+ |     is_autoincrement: true
+ |     span: ID
+ |     type: integer
+ |   - is_nullable: false
  |     span: A
  |     name: A
- |     is_nullable: false
- |   - span: C
- |     type: string
+ |     type: integer
+ |   - name: C
  |     is_nullable: true
- |     name: C
+ |     span: C
  |     collation: unicode_ci
- |   rows:
- |   - [1, 1, 'aSd']
+ |     type: string
  | ...
 execute("SELECT * FROM t;")
  | ---
- | - metadata:
- |   - span: ID
- |     type: integer
- |     is_autoincrement: true
- |     name: ID
+ | - rows:
+ |   - [1, 1, 'aSd']
+ |   metadata:
+ |   - name: ID
  |     is_nullable: false
- |   - type: integer
+ |     is_autoincrement: true
+ |     span: ID
+ |     type: integer
+ |   - is_nullable: false
  |     span: A
  |     name: A
- |     is_nullable: false
- |   - span: C
- |     type: string
+ |     type: integer
+ |   - name: C
  |     is_nullable: true
- |     name: C
+ |     span: C
  |     collation: unicode_ci
- |   rows:
- |   - [1, 1, 'aSd']
+ |     type: string
  | ...
 
 -- Span is always set in extended metadata. Span is an original
@@ -132,42 +132,42 @@ execute("SELECT * FROM t;")
 --
 execute("SELECT 1 AS x;")
  | ---
- | - metadata:
- |   - type: integer
- |     span: '1'
- |     name: X
- |   rows:
+ | - rows:
  |   - [1]
+ |   metadata:
+ |   - span: '1'
+ |     name: X
+ |     type: integer
  | ...
 execute("SELECT *, id + 1 AS x, a AS y, c || 'abc' FROM t;")
  | ---
- | - metadata:
- |   - span: ID
- |     type: integer
- |     is_autoincrement: true
- |     name: ID
+ | - rows:
+ |   - [1, 1, 'aSd', 2, 1, 'aSdabc']
+ |   metadata:
+ |   - name: ID
  |     is_nullable: false
- |   - type: integer
+ |     is_autoincrement: true
+ |     span: ID
+ |     type: integer
+ |   - is_nullable: false
  |     span: A
  |     name: A
- |     is_nullable: false
- |   - span: C
- |     type: string
+ |     type: integer
+ |   - name: C
  |     is_nullable: true
- |     name: C
+ |     span: C
  |     collation: unicode_ci
- |   - type: integer
- |     span: id + 1
+ |     type: string
+ |   - span: id + 1
  |     name: X
- |   - type: integer
+ |     type: integer
+ |   - is_nullable: false
  |     span: a
  |     name: Y
- |     is_nullable: false
- |   - type: string
- |     span: c || 'abc'
+ |     type: integer
+ |   - span: c || 'abc'
  |     name: c || 'abc'
- |   rows:
- |   - [1, 1, 'aSd', 2, 1, 'aSdabc']
+ |     type: string
  | ...
 
 box.execute("CREATE VIEW v AS SELECT id + 1 AS x, a AS y, c || 'abc' FROM t;")
@@ -176,32 +176,32 @@ box.execute("CREATE VIEW v AS SELECT id + 1 AS x, a AS y, c || 'abc' FROM t;")
  | ...
 execute("SELECT * FROM v;")
  | ---
- | - metadata:
- |   - type: integer
- |     span: X
+ | - rows:
+ |   - [2, 1, 'aSdabc']
+ |   metadata:
+ |   - span: X
  |     name: X
- |   - type: integer
+ |     type: integer
+ |   - is_nullable: false
  |     span: Y
  |     name: Y
- |     is_nullable: false
- |   - type: string
- |     span: c || 'abc'
+ |     type: integer
+ |   - span: c || 'abc'
  |     name: c || 'abc'
- |   rows:
- |   - [2, 1, 'aSdabc']
+ |     type: string
  | ...
 execute("SELECT x, y FROM v;")
  | ---
- | - metadata:
- |   - type: integer
- |     span: x
+ | - rows:
+ |   - [2, 1]
+ |   metadata:
+ |   - span: x
  |     name: X
- |   - type: integer
+ |     type: integer
+ |   - is_nullable: false
  |     span: y
  |     name: Y
- |     is_nullable: false
- |   rows:
- |   - [2, 1]
+ |     type: integer
  | ...
 
 execute([[UPDATE "_session_settings" SET "value" = false WHERE "name" = 'sql_full_metadata';]])

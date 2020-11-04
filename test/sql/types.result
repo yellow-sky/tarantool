@@ -42,11 +42,11 @@ box.execute("CREATE TABLE t1 (id TEXT PRIMARY KEY, a NUMBER, b INT, c TEXT, d SC
 ...
 box.space.T1:format()
 ---
-- [{'type': 'string', 'nullable_action': 'abort', 'name': 'ID', 'is_nullable': false},
-  {'type': 'number', 'nullable_action': 'none', 'name': 'A', 'is_nullable': true},
-  {'type': 'integer', 'nullable_action': 'none', 'name': 'B', 'is_nullable': true},
-  {'type': 'string', 'nullable_action': 'none', 'name': 'C', 'is_nullable': true},
-  {'type': 'scalar', 'nullable_action': 'none', 'name': 'D', 'is_nullable': true}]
+- [{'is_nullable': false, 'nullable_action': 'abort', 'name': 'ID', 'type': 'string'},
+  {'is_nullable': true, 'nullable_action': 'none', 'name': 'A', 'type': 'number'},
+  {'is_nullable': true, 'nullable_action': 'none', 'name': 'B', 'type': 'integer'},
+  {'is_nullable': true, 'nullable_action': 'none', 'name': 'C', 'type': 'string'},
+  {'is_nullable': true, 'nullable_action': 'none', 'name': 'D', 'type': 'scalar'}]
 ...
 box.execute("CREATE VIEW v1 AS SELECT b + a, b - a FROM t1;")
 ---
@@ -54,8 +54,8 @@ box.execute("CREATE VIEW v1 AS SELECT b + a, b - a FROM t1;")
 ...
 box.space.V1:format()
 ---
-- [{'type': 'number', 'nullable_action': 'none', 'name': 'b + a', 'is_nullable': true},
-  {'type': 'number', 'nullable_action': 'none', 'name': 'b - a', 'is_nullable': true}]
+- [{'is_nullable': true, 'nullable_action': 'none', 'name': 'b + a', 'type': 'number'},
+  {'is_nullable': true, 'nullable_action': 'none', 'name': 'b - a', 'type': 'number'}]
 ...
 -- gh-2494: index's part also features correct declared type.
 --
@@ -77,39 +77,39 @@ box.execute("CREATE INDEX i4 ON t1 (id, c, b, a, d);")
 ...
 box.space.T1.index.I1.parts
 ---
-- - type: number
+- - fieldno: 2
     is_nullable: true
-    fieldno: 2
+    type: number
 ...
 box.space.T1.index.I2.parts
 ---
-- - type: integer
+- - fieldno: 3
     is_nullable: true
-    fieldno: 3
+    type: integer
 ...
 box.space.T1.index.I3.parts
 ---
-- - type: string
+- - fieldno: 4
     is_nullable: true
-    fieldno: 4
+    type: string
 ...
 box.space.T1.index.I4.parts
 ---
-- - type: string
+- - fieldno: 1
     is_nullable: false
-    fieldno: 1
-  - type: string
+    type: string
+  - fieldno: 4
     is_nullable: true
-    fieldno: 4
-  - type: integer
+    type: string
+  - fieldno: 3
     is_nullable: true
-    fieldno: 3
-  - type: number
+    type: integer
+  - fieldno: 2
     is_nullable: true
-    fieldno: 2
-  - type: scalar
+    type: number
+  - fieldno: 5
     is_nullable: true
-    fieldno: 5
+    type: scalar
 ...
 box.execute("DROP VIEW v1;")
 ---
@@ -141,14 +141,14 @@ sp:insert({2, false})
 ...
 box.execute("SELECT * FROM test")
 ---
-- metadata:
+- rows:
+  - [1, true]
+  - [2, false]
+  metadata:
   - name: ID
     type: unsigned
   - name: A
     type: boolean
-  rows:
-  - [1, true]
-  - [2, false]
 ...
 sp:drop()
 ---
@@ -196,11 +196,11 @@ box.execute("SELECT randomblob(5) || 'x';")
 --
 box.execute("VALUES (TYPEOF(randomblob(5) || zeroblob(5)));")
 ---
-- metadata:
+- rows:
+  - ['varbinary']
+  metadata:
   - name: column1
     type: string
-  rows:
-  - ['varbinary']
 ...
 -- gh-3954: LIKE accepts only arguments of type TEXT and NULLs.
 --
@@ -229,11 +229,11 @@ box.execute("SELECT * FROM t1 WHERE 'blob' LIKE x'0000';")
 ...
 box.execute("SELECT s LIKE NULL FROM t1;")
 ---
-- metadata:
+- rows:
+  - [null]
+  metadata:
   - name: s LIKE NULL
     type: integer
-  rows:
-  - [null]
 ...
 box.execute("DELETE FROM t1;")
 ---
@@ -255,11 +255,11 @@ box.execute("SELECT * FROM t1 WHERE 'int' LIKE 4;")
 ...
 box.execute("SELECT NULL LIKE s FROM t1;")
 ---
-- metadata:
+- rows:
+  - [null]
+  metadata:
   - name: NULL LIKE s
     type: integer
-  rows:
-  - [null]
 ...
 box.space.T1:drop()
 ---
@@ -294,36 +294,36 @@ box.space.T1:drop()
 --
 box.execute('SELECT 1 + 1;')
 ---
-- metadata:
+- rows:
+  - [2]
+  metadata:
   - name: 1 + 1
     type: integer
-  rows:
-  - [2]
 ...
 box.execute('SELECT 1 + 1.1;')
 ---
-- metadata:
+- rows:
+  - [2.1]
+  metadata:
   - name: 1 + 1.1
     type: double
-  rows:
-  - [2.1]
 ...
 box.execute('SELECT \'9223372036854\' + 1;')
 ---
-- metadata:
+- rows:
+  - [9223372036855]
+  metadata:
   - name: '''9223372036854'' + 1'
     type: integer
-  rows:
-  - [9223372036855]
 ...
 -- Fix BOOLEAN bindings.
 box.execute('SELECT ?', {true})
 ---
-- metadata:
+- rows:
+  - [true]
+  metadata:
   - name: '?'
     type: boolean
-  rows:
-  - [true]
 ...
 -- gh-4187: make sure that value passsed to the iterator has
 -- the same type as indexed fields.
@@ -369,40 +369,40 @@ box.execute("INSERT INTO t1 VALUES (1, 1);")
 ...
 box.execute("SELECT a FROM t1 WHERE a IN (1.1, 2.1);")
 ---
-- metadata:
+- rows: []
+  metadata:
   - name: A
     type: integer
-  rows: []
 ...
 box.execute("SELECT a FROM t1 WHERE a = 1.1;")
 ---
-- metadata:
+- rows: []
+  metadata:
   - name: A
     type: integer
-  rows: []
 ...
 box.execute("SELECT a FROM t1 WHERE a = 1.0;")
 ---
-- metadata:
+- rows:
+  - [1]
+  metadata:
   - name: A
     type: integer
-  rows:
-  - [1]
 ...
 box.execute("SELECT a FROM t1 WHERE a > 1.1;")
 ---
-- metadata:
+- rows: []
+  metadata:
   - name: A
     type: integer
-  rows: []
 ...
 box.execute("SELECT a FROM t1 WHERE a < 1.1;")
 ---
-- metadata:
+- rows:
+  - [1]
+  metadata:
   - name: A
     type: integer
-  rows:
-  - [1]
 ...
 box.space.T1:drop()
 ---
@@ -421,25 +421,25 @@ box.execute("INSERT INTO t1 VALUES (1, 1, 1);")
 ...
 box.execute("SELECT a FROM t1 WHERE a = 1.0 AND b > 0.5;")
 ---
-- metadata:
+- rows:
+  - [1]
+  metadata:
   - name: A
     type: integer
-  rows:
-  - [1]
 ...
 box.execute("SELECT a FROM t1 WHERE a = 1.5 AND b IS NULL;")
 ---
-- metadata:
+- rows: []
+  metadata:
   - name: A
     type: integer
-  rows: []
 ...
 box.execute("SELECT a FROM t1 WHERE a IS NULL AND b IS NULL;")
 ---
-- metadata:
+- rows: []
+  metadata:
   - name: A
     type: integer
-  rows: []
 ...
 box.space.T1:drop()
 ---
@@ -468,10 +468,10 @@ s:insert({ 1, 1 })
 ...
 box.execute("SELECT a FROM t1 WHERE a IN (1.1, 2.1);")
 ---
-- metadata:
+- rows: []
+  metadata:
   - name: A
     type: unsigned
-  rows: []
 ...
 s:drop()
 ---
@@ -480,154 +480,154 @@ s:drop()
 --
 box.execute("SELECT 18446744073709551615 > 18446744073709551614;")
 ---
-- metadata:
+- rows:
+  - [true]
+  metadata:
   - name: 18446744073709551615 > 18446744073709551614
     type: boolean
-  rows:
-  - [true]
 ...
 box.execute("SELECT 18446744073709551615 > -9223372036854775808;")
 ---
-- metadata:
+- rows:
+  - [true]
+  metadata:
   - name: 18446744073709551615 > -9223372036854775808
     type: boolean
-  rows:
-  - [true]
 ...
 box.execute("SELECT -1 < 18446744073709551615;")
 ---
-- metadata:
+- rows:
+  - [true]
+  metadata:
   - name: -1 < 18446744073709551615
     type: boolean
-  rows:
-  - [true]
 ...
 box.execute("SELECT 1.5 < 18446744073709551615")
 ---
-- metadata:
+- rows:
+  - [true]
+  metadata:
   - name: 1.5 < 18446744073709551615
     type: boolean
-  rows:
-  - [true]
 ...
 box.execute("SELECT 1.5 > 18446744073709551615")
 ---
-- metadata:
+- rows:
+  - [false]
+  metadata:
   - name: 1.5 > 18446744073709551615
     type: boolean
-  rows:
-  - [false]
 ...
 box.execute("SELECT 18446744073709551615 > 1.5")
 ---
-- metadata:
+- rows:
+  - [true]
+  metadata:
   - name: 18446744073709551615 > 1.5
     type: boolean
-  rows:
-  - [true]
 ...
 box.execute("SELECT 18446744073709551615 < 1.5")
 ---
-- metadata:
+- rows:
+  - [false]
+  metadata:
   - name: 18446744073709551615 < 1.5
     type: boolean
-  rows:
-  - [false]
 ...
 box.execute("SELECT 18446744073709551615 = 18446744073709551615;")
 ---
-- metadata:
+- rows:
+  - [true]
+  metadata:
   - name: 18446744073709551615 = 18446744073709551615
     type: boolean
-  rows:
-  - [true]
 ...
 box.execute("SELECT 18446744073709551615 > -9223372036854775808;")
 ---
-- metadata:
+- rows:
+  - [true]
+  metadata:
   - name: 18446744073709551615 > -9223372036854775808
     type: boolean
-  rows:
-  - [true]
 ...
 box.execute("SELECT 18446744073709551615 < -9223372036854775808;")
 ---
-- metadata:
+- rows:
+  - [false]
+  metadata:
   - name: 18446744073709551615 < -9223372036854775808
     type: boolean
-  rows:
-  - [false]
 ...
 box.execute("SELECT -1 < 18446744073709551615;")
 ---
-- metadata:
+- rows:
+  - [true]
+  metadata:
   - name: -1 < 18446744073709551615
     type: boolean
-  rows:
-  - [true]
 ...
 box.execute("SELECT -1 > 18446744073709551615;")
 ---
-- metadata:
+- rows:
+  - [false]
+  metadata:
   - name: -1 > 18446744073709551615
     type: boolean
-  rows:
-  - [false]
 ...
 box.execute("SELECT 18446744073709551610 - 18446744073709551615;")
 ---
-- metadata:
+- rows:
+  - [-5]
+  metadata:
   - name: 18446744073709551610 - 18446744073709551615
     type: integer
-  rows:
-  - [-5]
 ...
 box.execute("SELECT 18446744073709551615 = null;")
 ---
-- metadata:
+- rows:
+  - [null]
+  metadata:
   - name: 18446744073709551615 = null
     type: boolean
-  rows:
-  - [null]
 ...
 box.execute("SELECT 18446744073709551615 = 18446744073709551615.0;")
 ---
-- metadata:
+- rows:
+  - [false]
+  metadata:
   - name: 18446744073709551615 = 18446744073709551615.0
     type: boolean
-  rows:
-  - [false]
 ...
 box.execute("SELECT 18446744073709551615.0 > 18446744073709551615")
 ---
-- metadata:
+- rows:
+  - [true]
+  metadata:
   - name: 18446744073709551615.0 > 18446744073709551615
     type: boolean
-  rows:
-  - [true]
 ...
 box.execute("SELECT 18446744073709551615 IN ('18446744073709551615', 18446744073709551615.0)")
 ---
-- metadata:
+- rows:
+  - [true]
+  metadata:
   - name: 18446744073709551615 IN ('18446744073709551615', 18446744073709551615.0)
     type: boolean
-  rows:
-  - [true]
 ...
 box.execute("SELECT 1 LIMIT 18446744073709551615;")
 ---
-- metadata:
+- rows:
+  - [1]
+  metadata:
   - name: '1'
     type: integer
-  rows:
-  - [1]
 ...
 box.execute("SELECT 1 LIMIT 1 OFFSET 18446744073709551614;")
 ---
-- metadata:
+- rows: []
+  metadata:
   - name: '1'
     type: integer
-  rows: []
 ...
 box.execute("SELECT CAST('18446744073' || '709551616' AS INTEGER);")
 ---
@@ -636,51 +636,51 @@ box.execute("SELECT CAST('18446744073' || '709551616' AS INTEGER);")
 ...
 box.execute("SELECT CAST('18446744073' || '709551615' AS INTEGER);")
 ---
-- metadata:
+- rows:
+  - [18446744073709551615]
+  metadata:
   - name: CAST('18446744073' || '709551615' AS INTEGER)
     type: integer
-  rows:
-  - [18446744073709551615]
 ...
 box.execute("SELECT 18446744073709551610 + 5;")
 ---
-- metadata:
+- rows:
+  - [18446744073709551615]
+  metadata:
   - name: 18446744073709551610 + 5
     type: integer
-  rows:
-  - [18446744073709551615]
 ...
 box.execute("SELECT 18446744073709551615 * 1;")
 ---
-- metadata:
+- rows:
+  - [18446744073709551615]
+  metadata:
   - name: 18446744073709551615 * 1
     type: integer
-  rows:
-  - [18446744073709551615]
 ...
 box.execute("SELECT 1 / 18446744073709551615;")
 ---
-- metadata:
+- rows:
+  - [0]
+  metadata:
   - name: 1 / 18446744073709551615
     type: integer
-  rows:
-  - [0]
 ...
 box.execute("SELECT 18446744073709551615 / 18446744073709551615;")
 ---
-- metadata:
+- rows:
+  - [1]
+  metadata:
   - name: 18446744073709551615 / 18446744073709551615
     type: integer
-  rows:
-  - [1]
 ...
 box.execute("SELECT 18446744073709551615 / -9223372036854775808;")
 ---
-- metadata:
+- rows:
+  - [-1]
+  metadata:
   - name: 18446744073709551615 / -9223372036854775808
     type: integer
-  rows:
-  - [-1]
 ...
 box.execute("SELECT 0 - 18446744073709551610;")
 ---
@@ -705,41 +705,41 @@ box.execute("INSERT INTO t VALUES (3, 18446744073709551613)")
 ...
 box.execute("SELECT i FROM t;")
 ---
-- metadata:
-  - name: I
-    type: integer
-  rows:
+- rows:
   - [18446744073709551615]
   - [18446744073709551614]
   - [18446744073709551613]
+  metadata:
+  - name: I
+    type: integer
 ...
 box.execute("SELECT i FROM t WHERE i = 18446744073709551615;")
 ---
-- metadata:
+- rows:
+  - [18446744073709551615]
+  metadata:
   - name: I
     type: integer
-  rows:
-  - [18446744073709551615]
 ...
 box.execute("SELECT i FROM t WHERE i BETWEEN 18446744073709551613 AND 18446744073709551615;")
 ---
-- metadata:
-  - name: I
-    type: integer
-  rows:
+- rows:
   - [18446744073709551615]
   - [18446744073709551614]
   - [18446744073709551613]
+  metadata:
+  - name: I
+    type: integer
 ...
 box.execute("SELECT i FROM t ORDER BY i;")
 ---
-- metadata:
-  - name: I
-    type: integer
-  rows:
+- rows:
   - [18446744073709551613]
   - [18446744073709551614]
   - [18446744073709551615]
+  metadata:
+  - name: I
+    type: integer
 ...
 box.execute("SELECT i FROM t ORDER BY -i;")
 ---
@@ -748,11 +748,11 @@ box.execute("SELECT i FROM t ORDER BY -i;")
 ...
 box.execute("SELECT i FROM t ORDER BY i LIMIT 1;")
 ---
-- metadata:
+- rows:
+  - [18446744073709551613]
+  metadata:
   - name: I
     type: integer
-  rows:
-  - [18446744073709551613]
 ...
 -- Test that built-in functions are capable of handling unsigneds.
 --
@@ -770,59 +770,59 @@ box.execute("INSERT INTO t VALUES (2, -1);")
 ...
 box.execute("SELECT sum(i) FROM t;")
 ---
-- metadata:
+- rows:
+  - [18446744073709551613]
+  metadata:
   - name: sum(i)
     type: number
-  rows:
-  - [18446744073709551613]
 ...
 box.execute("SELECT avg(i) FROM t;")
 ---
-- metadata:
+- rows:
+  - [6148914691236516864]
+  metadata:
   - name: avg(i)
     type: number
-  rows:
-  - [6148914691236516864]
 ...
 box.execute("SELECT total(i) FROM t;")
 ---
-- metadata:
+- rows:
+  - [1.844674407371e+19]
+  metadata:
   - name: total(i)
     type: number
-  rows:
-  - [1.844674407371e+19]
 ...
 box.execute("SELECT min(i) FROM t;")
 ---
-- metadata:
+- rows:
+  - [-1]
+  metadata:
   - name: min(i)
     type: scalar
-  rows:
-  - [-1]
 ...
 box.execute("SELECT max(i) FROM t;")
 ---
-- metadata:
+- rows:
+  - [18446744073709551613]
+  metadata:
   - name: max(i)
     type: scalar
-  rows:
-  - [18446744073709551613]
 ...
 box.execute("SELECT count(i) FROM t;")
 ---
-- metadata:
+- rows:
+  - [3]
+  metadata:
   - name: count(i)
     type: integer
-  rows:
-  - [3]
 ...
 box.execute("SELECT group_concat(i) FROM t;")
 ---
-- metadata:
+- rows:
+  - ['1,-1,18446744073709551613']
+  metadata:
   - name: group_concat(i)
     type: string
-  rows:
-  - ['1,-1,18446744073709551613']
 ...
 box.execute("DELETE FROM t WHERE i < 18446744073709551613;")
 ---
@@ -830,59 +830,59 @@ box.execute("DELETE FROM t WHERE i < 18446744073709551613;")
 ...
 box.execute("SELECT lower(i) FROM t;")
 ---
-- metadata:
+- rows:
+  - ['18446744073709551613']
+  metadata:
   - name: lower(i)
     type: string
-  rows:
-  - ['18446744073709551613']
 ...
 box.execute("SELECT upper(i) FROM t;")
 ---
-- metadata:
+- rows:
+  - ['18446744073709551613']
+  metadata:
   - name: upper(i)
     type: string
-  rows:
-  - ['18446744073709551613']
 ...
 box.execute("SELECT abs(i) FROM t;")
 ---
-- metadata:
+- rows:
+  - [18446744073709551613]
+  metadata:
   - name: abs(i)
     type: number
-  rows:
-  - [18446744073709551613]
 ...
 box.execute("SELECT typeof(i) FROM t;")
 ---
-- metadata:
+- rows:
+  - ['integer']
+  metadata:
   - name: typeof(i)
     type: string
-  rows:
-  - ['integer']
 ...
 box.execute("SELECT quote(i) FROM t;")
 ---
-- metadata:
+- rows:
+  - [18446744073709551613]
+  metadata:
   - name: quote(i)
     type: string
-  rows:
-  - [18446744073709551613]
 ...
 box.execute("SELECT LEAST(-1, i) FROM t;")
 ---
-- metadata:
+- rows:
+  - [-1]
+  metadata:
   - name: LEAST(-1, i)
     type: scalar
-  rows:
-  - [-1]
 ...
 box.execute("SELECT quote(i) FROM t;")
 ---
-- metadata:
+- rows:
+  - [18446744073709551613]
+  metadata:
   - name: quote(i)
     type: string
-  rows:
-  - [18446744073709551613]
 ...
 box.execute("CREATE INDEX i ON t(i);")
 ---
@@ -890,19 +890,19 @@ box.execute("CREATE INDEX i ON t(i);")
 ...
 box.execute("SELECT i FROM t WHERE i = 18446744073709551613;")
 ---
-- metadata:
+- rows:
+  - [18446744073709551613]
+  metadata:
   - name: I
     type: integer
-  rows:
-  - [18446744073709551613]
 ...
 box.execute("SELECT i FROM t WHERE i >= 18446744073709551613 ORDER BY i;")
 ---
-- metadata:
+- rows:
+  - [18446744073709551613]
+  metadata:
   - name: I
     type: integer
-  rows:
-  - [18446744073709551613]
 ...
 box.execute("UPDATE t SET i = 18446744073709551615 WHERE i = 18446744073709551613;")
 ---
@@ -910,11 +910,11 @@ box.execute("UPDATE t SET i = 18446744073709551615 WHERE i = 1844674407370955161
 ...
 box.execute("SELECT i FROM t;")
 ---
-- metadata:
+- rows:
+  - [18446744073709551615]
+  metadata:
   - name: I
     type: integer
-  rows:
-  - [18446744073709551615]
 ...
 -- Test constraints functionality.
 --
@@ -1000,9 +1000,9 @@ box.execute("INSERT INTO t1 VALUES (18446744073709551615);")
 ...
 box.execute("INSERT INTO t1 VALUES (NULL);")
 ---
-- autoincrement_ids:
+- row_count: 1
+  autoincrement_ids:
   - 1
-  row_count: 1
 ...
 box.space.T1:drop()
 ---
@@ -1011,43 +1011,43 @@ box.space.T1:drop()
 --
 box.execute("SELECT CAST(18446744073709551615 AS NUMBER);")
 ---
-- metadata:
+- rows:
+  - [18446744073709551615]
+  metadata:
   - name: CAST(18446744073709551615 AS NUMBER)
     type: number
-  rows:
-  - [18446744073709551615]
 ...
 box.execute("SELECT CAST(18446744073709551615 AS TEXT);")
 ---
-- metadata:
+- rows:
+  - ['18446744073709551615']
+  metadata:
   - name: CAST(18446744073709551615 AS TEXT)
     type: string
-  rows:
-  - ['18446744073709551615']
 ...
 box.execute("SELECT CAST(18446744073709551615 AS SCALAR);")
 ---
-- metadata:
+- rows:
+  - [18446744073709551615]
+  metadata:
   - name: CAST(18446744073709551615 AS SCALAR)
     type: scalar
-  rows:
-  - [18446744073709551615]
 ...
 box.execute("SELECT CAST(18446744073709551615 AS BOOLEAN);")
 ---
-- metadata:
+- rows:
+  - [true]
+  metadata:
   - name: CAST(18446744073709551615 AS BOOLEAN)
     type: boolean
-  rows:
-  - [true]
 ...
 box.execute("SELECT CAST('18446744073709551615' AS INTEGER);")
 ---
-- metadata:
+- rows:
+  - [18446744073709551615]
+  metadata:
   - name: CAST('18446744073709551615' AS INTEGER)
     type: integer
-  rows:
-  - [18446744073709551615]
 ...
 -- gh-4015: introduce unsigned type in SQL.
 --
@@ -1066,21 +1066,21 @@ box.execute("INSERT INTO t1 VALUES (-3);")
 ...
 box.execute("SELECT id FROM t1;")
 ---
-- metadata:
-  - name: ID
-    type: unsigned
-  rows:
+- rows:
   - [0]
   - [1]
   - [2]
+  metadata:
+  - name: ID
+    type: unsigned
 ...
 box.execute("SELECT CAST(123 AS UNSIGNED);")
 ---
-- metadata:
+- rows:
+  - [123]
+  metadata:
   - name: CAST(123 AS UNSIGNED)
     type: unsigned
-  rows:
-  - [123]
 ...
 box.execute("SELECT CAST(-123 AS UNSIGNED);")
 ---
@@ -1089,35 +1089,35 @@ box.execute("SELECT CAST(-123 AS UNSIGNED);")
 ...
 box.execute("SELECT CAST(1.5 AS UNSIGNED);")
 ---
-- metadata:
+- rows:
+  - [1]
+  metadata:
   - name: CAST(1.5 AS UNSIGNED)
     type: unsigned
-  rows:
-  - [1]
 ...
 box.execute("SELECT CAST(-1.5 AS UNSIGNED);")
 ---
-- metadata:
+- rows:
+  - [-1]
+  metadata:
   - name: CAST(-1.5 AS UNSIGNED)
     type: unsigned
-  rows:
-  - [-1]
 ...
 box.execute("SELECT CAST(true AS UNSIGNED);")
 ---
-- metadata:
+- rows:
+  - [1]
+  metadata:
   - name: CAST(true AS UNSIGNED)
     type: unsigned
-  rows:
-  - [1]
 ...
 box.execute("SELECT CAST('123' AS UNSIGNED);")
 ---
-- metadata:
+- rows:
+  - [123]
+  metadata:
   - name: CAST('123' AS UNSIGNED)
     type: unsigned
-  rows:
-  - [123]
 ...
 box.execute("SELECT CAST('-123' AS UNSIGNED);")
 ---
@@ -1145,71 +1145,71 @@ box.space.T:drop()
 --
 box.execute("SELECT CASE 1 WHEN 1 THEN x'0000000000' WHEN 2 THEN 'str' END")
 ---
-- metadata:
+- rows:
+  - ["\0\0\0\0\0"]
+  metadata:
   - name: CASE 1 WHEN 1 THEN x'0000000000' WHEN 2 THEN 'str' END
     type: scalar
-  rows:
-  - ["\0\0\0\0\0"]
 ...
 box.execute("SELECT CASE 1 WHEN 1 THEN 666 WHEN 2 THEN 123 END")
 ---
-- metadata:
+- rows:
+  - [666]
+  metadata:
   - name: CASE 1 WHEN 1 THEN 666 WHEN 2 THEN 123 END
     type: integer
-  rows:
-  - [666]
 ...
 box.execute("SELECT CASE 1 WHEN 1 THEN 666 WHEN 2 THEN 123 ELSE 321 END")
 ---
-- metadata:
+- rows:
+  - [666]
+  metadata:
   - name: CASE 1 WHEN 1 THEN 666 WHEN 2 THEN 123 ELSE 321 END
     type: integer
-  rows:
-  - [666]
 ...
 box.execute("SELECT CASE 1 WHEN 1 THEN 666 WHEN 2 THEN 123 ELSE 'asd' END")
 ---
-- metadata:
+- rows:
+  - [666]
+  metadata:
   - name: CASE 1 WHEN 1 THEN 666 WHEN 2 THEN 123 ELSE 'asd' END
     type: scalar
-  rows:
-  - [666]
 ...
 box.execute("SELECT CASE 'a' WHEN 'a' THEN 1 WHEN 'b' THEN 2 WHEN 'c' THEN 3 WHEN 'd' THEN 4 WHEN 'e' THEN 5 WHEN 'f' THEN 6 END;")
 ---
-- metadata:
+- rows:
+  - [1]
+  metadata:
   - name: CASE 'a' WHEN 'a' THEN 1 WHEN 'b' THEN 2 WHEN 'c' THEN 3 WHEN 'd' THEN 4
       WHEN 'e' THEN 5 WHEN 'f' THEN 6 END
     type: integer
-  rows:
-  - [1]
 ...
 box.execute("SELECT CASE 'a' WHEN 'a' THEN 1 WHEN 'b' THEN 2 WHEN 'c' THEN 3 WHEN 'd' THEN 4 WHEN 'e' THEN 5 WHEN 'f' THEN 'asd' END;")
 ---
-- metadata:
+- rows:
+  - [1]
+  metadata:
   - name: CASE 'a' WHEN 'a' THEN 1 WHEN 'b' THEN 2 WHEN 'c' THEN 3 WHEN 'd' THEN 4
       WHEN 'e' THEN 5 WHEN 'f' THEN 'asd' END
     type: scalar
-  rows:
-  - [1]
 ...
 box.execute("SELECT CASE 'a' WHEN 'a' THEN 1 WHEN 'b' THEN 2 WHEN 'c' THEN 3 WHEN 'd' THEN 4 WHEN 'e' THEN 5 WHEN 'f' THEN 6 ELSE 'asd' END;")
 ---
-- metadata:
+- rows:
+  - [1]
+  metadata:
   - name: CASE 'a' WHEN 'a' THEN 1 WHEN 'b' THEN 2 WHEN 'c' THEN 3 WHEN 'd' THEN 4
       WHEN 'e' THEN 5 WHEN 'f' THEN 6 ELSE 'asd' END
     type: scalar
-  rows:
-  - [1]
 ...
 box.execute("SELECT CASE 'a' WHEN 'a' THEN 1 WHEN 'b' THEN 2 WHEN 'c' THEN 3 WHEN 'd' THEN 4 WHEN 'e' THEN 5 WHEN 'f' THEN 6 ELSE 7 END;")
 ---
-- metadata:
+- rows:
+  - [1]
+  metadata:
   - name: CASE 'a' WHEN 'a' THEN 1 WHEN 'b' THEN 2 WHEN 'c' THEN 3 WHEN 'd' THEN 4
       WHEN 'e' THEN 5 WHEN 'f' THEN 6 ELSE 7 END
     type: integer
-  rows:
-  - [1]
 ...
 -- Test basic capabilities of VARBINARY type.
 --
@@ -1258,13 +1258,13 @@ box.execute("SELECT * FROM t WHERE v = 'str'")
 ...
 box.execute("SELECT * FROM t WHERE v = x'616263'")
 ---
-- metadata:
+- rows:
+  - [1, 'abc']
+  metadata:
   - name: ID
     type: integer
   - name: V
     type: varbinary
-  rows:
-  - [1, 'abc']
 ...
 box.execute("SELECT sum(v) FROM t;")
 ---
@@ -1283,35 +1283,35 @@ box.execute("SELECT total(v) FROM t;")
 ...
 box.execute("SELECT min(v) FROM t;")
 ---
-- metadata:
+- rows:
+  - ['abc']
+  metadata:
   - name: min(v)
     type: scalar
-  rows:
-  - ['abc']
 ...
 box.execute("SELECT max(v) FROM t;")
 ---
-- metadata:
+- rows:
+  - ['abc']
+  metadata:
   - name: max(v)
     type: scalar
-  rows:
-  - ['abc']
 ...
 box.execute("SELECT count(v) FROM t;")
 ---
-- metadata:
+- rows:
+  - [1]
+  metadata:
   - name: count(v)
     type: integer
-  rows:
-  - [1]
 ...
 box.execute("SELECT group_concat(v) FROM t;")
 ---
-- metadata:
+- rows:
+  - ['abc']
+  metadata:
   - name: group_concat(v)
     type: string
-  rows:
-  - ['abc']
 ...
 box.execute("SELECT lower(v) FROM t;")
 ---
@@ -1330,27 +1330,27 @@ box.execute("SELECT abs(v) FROM t;")
 ...
 box.execute("SELECT typeof(v) FROM t;")
 ---
-- metadata:
+- rows:
+  - ['varbinary']
+  metadata:
   - name: typeof(v)
     type: string
-  rows:
-  - ['varbinary']
 ...
 box.execute("SELECT quote(v) FROM t;")
 ---
-- metadata:
+- rows:
+  - ['X''616263''']
+  metadata:
   - name: quote(v)
     type: string
-  rows:
-  - ['X''616263''']
 ...
 box.execute("SELECT LEAST(v, x'') FROM t;")
 ---
-- metadata:
+- rows:
+  - ['']
+  metadata:
   - name: LEAST(v, x'')
     type: scalar
-  rows:
-  - ['']
 ...
 box.execute("CREATE INDEX iv ON t(v);")
 ---
@@ -1358,19 +1358,19 @@ box.execute("CREATE INDEX iv ON t(v);")
 ...
 box.execute("SELECT v FROM t WHERE v = x'616263';")
 ---
-- metadata:
+- rows:
+  - ['abc']
+  metadata:
   - name: V
     type: varbinary
-  rows:
-  - ['abc']
 ...
 box.execute("SELECT v FROM t ORDER BY v;")
 ---
-- metadata:
+- rows:
+  - ['abc']
+  metadata:
   - name: V
     type: varbinary
-  rows:
-  - ['abc']
 ...
 box.execute("UPDATE t SET v = x'636261' WHERE v = x'616263';")
 ---
@@ -1378,11 +1378,11 @@ box.execute("UPDATE t SET v = x'636261' WHERE v = x'616263';")
 ...
 box.execute("SELECT v FROM t;")
 ---
-- metadata:
+- rows:
+  - ['cba']
+  metadata:
   - name: V
     type: varbinary
-  rows:
-  - ['cba']
 ...
 box.execute("CREATE TABLE parent (id INT PRIMARY KEY, a VARBINARY UNIQUE);")
 ---
@@ -1466,19 +1466,19 @@ box.execute("SELECT CAST(true AS VARBINARY);")
 ...
 box.execute("SELECT CAST('asd' AS VARBINARY);")
 ---
-- metadata:
+- rows:
+  - ['asd']
+  metadata:
   - name: CAST('asd' AS VARBINARY)
     type: varbinary
-  rows:
-  - ['asd']
 ...
 box.execute("SELECT CAST(x'' AS VARBINARY);")
 ---
-- metadata:
+- rows:
+  - ['']
+  metadata:
   - name: CAST(x'' AS VARBINARY)
     type: varbinary
-  rows:
-  - ['']
 ...
 -- gh-4148: make sure that typeof() returns origin type of column
 -- even if value is null.
@@ -1493,14 +1493,14 @@ box.execute("INSERT INTO t VALUES (1, 1, 1), (2, NULL, NULL);")
 ...
 box.execute("SELECT typeof(a), typeof(s) FROM t;")
 ---
-- metadata:
+- rows:
+  - ['integer', 'integer']
+  - ['integer', 'boolean']
+  metadata:
   - name: typeof(a)
     type: string
   - name: typeof(s)
     type: string
-  rows:
-  - ['integer', 'integer']
-  - ['integer', 'boolean']
 ...
 box.execute('CREATE TABLE t1 (id INTEGER PRIMARY KEY, a INTEGER, b INTEGER)')
 ---
@@ -1512,31 +1512,31 @@ box.execute('INSERT INTO t1 VALUES (1, NULL, NULL);')
 ...
 box.execute('SELECT typeof(a & b) FROM t1;')
 ---
-- metadata:
+- rows:
+  - ['integer']
+  metadata:
   - name: typeof(a & b)
     type: string
-  rows:
-  - ['integer']
 ...
 box.execute('SELECT typeof(a), typeof(b), typeof(a & b) FROM t1')
 ---
-- metadata:
+- rows:
+  - ['integer', 'integer', 'integer']
+  metadata:
   - name: typeof(a)
     type: string
   - name: typeof(b)
     type: string
   - name: typeof(a & b)
     type: string
-  rows:
-  - ['integer', 'integer', 'integer']
 ...
 box.execute("SELECT typeof(CAST(0 AS UNSIGNED));")
 ---
-- metadata:
+- rows:
+  - ['unsigned']
+  metadata:
   - name: typeof(CAST(0 AS UNSIGNED))
     type: string
-  rows:
-  - ['unsigned']
 ...
 box.space.T:drop()
 ---
@@ -1692,35 +1692,35 @@ box.execute('DROP TABLE t1;')
 -- gh-3812: Make sure DOUBLE type works correctly.
 box.execute("SELECT 1.0;")
 ---
-- metadata:
+- rows:
+  - [1]
+  metadata:
   - name: '1.0'
     type: double
-  rows:
-  - [1]
 ...
 box.execute("SELECT .01;")
 ---
-- metadata:
+- rows:
+  - [0.01]
+  metadata:
   - name: '.01'
     type: double
-  rows:
-  - [0.01]
 ...
 box.execute("SELECT CAST(1 AS DOUBLE);")
 ---
-- metadata:
+- rows:
+  - [1]
+  metadata:
   - name: CAST(1 AS DOUBLE)
     type: double
-  rows:
-  - [1]
 ...
 box.execute("SELECT CAST(1.123 AS DOUBLE);")
 ---
-- metadata:
+- rows:
+  - [1.123]
+  metadata:
   - name: CAST(1.123 AS DOUBLE)
     type: double
-  rows:
-  - [1.123]
 ...
 box.execute("SELECT CAST(true AS DOUBLE);")
 ---
@@ -1734,19 +1734,19 @@ box.execute("SELECT CAST('asd' AS DOUBLE);")
 ...
 box.execute("SELECT CAST('1' AS DOUBLE);")
 ---
-- metadata:
+- rows:
+  - [1]
+  metadata:
   - name: CAST('1' AS DOUBLE)
     type: double
-  rows:
-  - [1]
 ...
 box.execute("SELECT CAST('1.123' AS DOUBLE);")
 ---
-- metadata:
+- rows:
+  - [1.123]
+  metadata:
   - name: CAST('1.123' AS DOUBLE)
     type: double
-  rows:
-  - [1.123]
 ...
 box.execute("SELECT CAST(x'' AS DOUBLE);")
 ---
@@ -1760,11 +1760,11 @@ box.execute("SELECT CAST(x'35' AS DOUBLE);")
 ...
 box.execute("SELECT CAST(CAST(x'35' AS STRING) AS DOUBLE);")
 ---
-- metadata:
+- rows:
+  - [5]
+  metadata:
   - name: CAST(CAST(x'35' AS STRING) AS DOUBLE)
     type: double
-  rows:
-  - [5]
 ...
 box.execute('CREATE TABLE t (i INT PRIMARY KEY AUTOINCREMENT, d DOUBLE);')
 ---
@@ -1772,180 +1772,180 @@ box.execute('CREATE TABLE t (i INT PRIMARY KEY AUTOINCREMENT, d DOUBLE);')
 ...
 box.execute('INSERT INTO t(d) VALUES (10), (-2.0), (3.3), (18000000000000000000);')
 ---
-- autoincrement_ids:
+- row_count: 4
+  autoincrement_ids:
   - 1
   - 2
   - 3
   - 4
-  row_count: 4
 ...
 box.execute('SELECT * FROM t;')
 ---
-- metadata:
-  - name: I
-    type: integer
-  - name: D
-    type: double
-  rows:
+- rows:
   - [1, 10]
   - [2, -2]
   - [3, 3.3]
   - [4, 18000000000000000000]
+  metadata:
+  - name: I
+    type: integer
+  - name: D
+    type: double
 ...
 box.execute('SELECT d / 100 FROM t;')
 ---
-- metadata:
-  - name: d / 100
-    type: double
-  rows:
+- rows:
   - [0.1]
   - [-0.02]
   - [0.033]
   - [180000000000000000]
+  metadata:
+  - name: d / 100
+    type: double
 ...
 box.execute('SELECT * from t WHERE d < 15;')
 ---
-- metadata:
-  - name: I
-    type: integer
-  - name: D
-    type: double
-  rows:
+- rows:
   - [1, 10]
   - [2, -2]
   - [3, 3.3]
-...
-box.execute('SELECT * from t WHERE d = 3.3;')
----
-- metadata:
+  metadata:
   - name: I
     type: integer
   - name: D
     type: double
-  rows:
+...
+box.execute('SELECT * from t WHERE d = 3.3;')
+---
+- rows:
   - [3, 3.3]
+  metadata:
+  - name: I
+    type: integer
+  - name: D
+    type: double
 ...
 box.execute("SELECT sum(d) FROM t;")
 ---
-- metadata:
+- rows:
+  - [18000000000000000000]
+  metadata:
   - name: sum(d)
     type: number
-  rows:
-  - [18000000000000000000]
 ...
 box.execute("SELECT avg(d) FROM t;")
 ---
-- metadata:
+- rows:
+  - [4500000000000000000]
+  metadata:
   - name: avg(d)
     type: number
-  rows:
-  - [4500000000000000000]
 ...
 box.execute("SELECT total(d) FROM t;")
 ---
-- metadata:
+- rows:
+  - [18000000000000000000]
+  metadata:
   - name: total(d)
     type: number
-  rows:
-  - [18000000000000000000]
 ...
 box.execute("SELECT min(d) FROM t;")
 ---
-- metadata:
+- rows:
+  - [-2]
+  metadata:
   - name: min(d)
     type: scalar
-  rows:
-  - [-2]
 ...
 box.execute("SELECT max(d) FROM t;")
 ---
-- metadata:
+- rows:
+  - [18000000000000000000]
+  metadata:
   - name: max(d)
     type: scalar
-  rows:
-  - [18000000000000000000]
 ...
 box.execute("SELECT count(d) FROM t;")
 ---
-- metadata:
+- rows:
+  - [4]
+  metadata:
   - name: count(d)
     type: integer
-  rows:
-  - [4]
 ...
 box.execute("SELECT group_concat(d) FROM t;")
 ---
-- metadata:
+- rows:
+  - ['10.0,-2.0,3.3,1.8e+19']
+  metadata:
   - name: group_concat(d)
     type: string
-  rows:
-  - ['10.0,-2.0,3.3,1.8e+19']
 ...
 box.execute("SELECT lower(d) FROM t;")
 ---
-- metadata:
-  - name: lower(d)
-    type: string
-  rows:
+- rows:
   - ['10.0']
   - ['-2.0']
   - ['3.3']
   - ['1.8e+19']
+  metadata:
+  - name: lower(d)
+    type: string
 ...
 box.execute("SELECT upper(d) FROM t;")
 ---
-- metadata:
-  - name: upper(d)
-    type: string
-  rows:
+- rows:
   - ['10.0']
   - ['-2.0']
   - ['3.3']
   - ['1.8E+19']
+  metadata:
+  - name: upper(d)
+    type: string
 ...
 box.execute("SELECT abs(d) FROM t;")
 ---
-- metadata:
-  - name: abs(d)
-    type: number
-  rows:
+- rows:
   - [10]
   - [2]
   - [3.3]
   - [18000000000000000000]
+  metadata:
+  - name: abs(d)
+    type: number
 ...
 box.execute("SELECT typeof(d) FROM t;")
 ---
-- metadata:
+- rows:
+  - ['double']
+  - ['double']
+  - ['double']
+  - ['double']
+  metadata:
   - name: typeof(d)
     type: string
-  rows:
-  - ['double']
-  - ['double']
-  - ['double']
-  - ['double']
 ...
 box.execute("SELECT quote(d) FROM t;")
 ---
-- metadata:
-  - name: quote(d)
-    type: string
-  rows:
+- rows:
   - ['10.0']
   - ['-2.0']
   - ['3.3']
   - ['1.8e+19']
+  metadata:
+  - name: quote(d)
+    type: string
 ...
 box.execute("SELECT LEAST(d, 0) FROM t;")
 ---
-- metadata:
-  - name: LEAST(d, 0)
-    type: scalar
-  rows:
+- rows:
   - [0]
   - [-2]
   - [0]
   - [0]
+  metadata:
+  - name: LEAST(d, 0)
+    type: scalar
 ...
 box.execute("CREATE INDEX dd ON t(d);")
 ---
@@ -1953,22 +1953,22 @@ box.execute("CREATE INDEX dd ON t(d);")
 ...
 box.execute("SELECT d FROM t WHERE d < 0;")
 ---
-- metadata:
+- rows:
+  - [-2]
+  metadata:
   - name: D
     type: double
-  rows:
-  - [-2]
 ...
 box.execute("SELECT d FROM t ORDER BY d;")
 ---
-- metadata:
-  - name: D
-    type: double
-  rows:
+- rows:
   - [-2]
   - [3.3]
   - [10]
   - [18000000000000000000]
+  metadata:
+  - name: D
+    type: double
 ...
 box.execute("UPDATE t SET d = 1 WHERE d = 10;")
 ---
@@ -1976,14 +1976,14 @@ box.execute("UPDATE t SET d = 1 WHERE d = 10;")
 ...
 box.execute("SELECT d FROM t;")
 ---
-- metadata:
-  - name: D
-    type: double
-  rows:
+- rows:
   - [1]
   - [-2]
   - [3.3]
   - [18000000000000000000]
+  metadata:
+  - name: D
+    type: double
 ...
 box.execute("DROP TABLE t;")
 ---
@@ -2042,14 +2042,14 @@ box.execute("INSERT INTO t3 VALUES (3, 10.0000001);")
 ...
 box.execute("SELECT * FROM t3;")
 ---
-- metadata:
+- rows:
+  - [1, 1]
+  - [2, 9.999999]
+  metadata:
   - name: I
     type: integer
   - name: D
     type: double
-  rows:
-  - [1, 1]
-  - [2, 9.999999]
 ...
 box.execute("DROP TABLE t3;")
 ---
@@ -2065,13 +2065,13 @@ box.execute("INSERT INTO t4(i) VALUES (1);")
 ...
 box.execute("SELECT * FROM t4;")
 ---
-- metadata:
+- rows:
+  - [1, 1.2345]
+  metadata:
   - name: I
     type: integer
   - name: D
     type: double
-  rows:
-  - [1, 1.2345]
 ...
 box.execute("DROP TABLE t4;")
 ---
@@ -2080,33 +2080,33 @@ box.execute("DROP TABLE t4;")
 -- Make sure the typeof() function works correctly with DOUBLE.
 box.execute("SELECT 1.0, typeof(1.0);")
 ---
-- metadata:
+- rows:
+  - [1, 'double']
+  metadata:
   - name: '1.0'
     type: double
   - name: typeof(1.0)
     type: string
-  rows:
-  - [1, 'double']
 ...
 box.execute("SELECT CAST(2 AS DOUBLE), typeof(CAST(2 AS DOUBLE));")
 ---
-- metadata:
+- rows:
+  - [2, 'double']
+  metadata:
   - name: CAST(2 AS DOUBLE)
     type: double
   - name: typeof(CAST(2 AS DOUBLE))
     type: string
-  rows:
-  - [2, 'double']
 ...
 box.execute("SELECT 3e3, typeof(3e3);")
 ---
-- metadata:
+- rows:
+  - [3000, 'double']
+  metadata:
   - name: '3e3'
     type: double
   - name: typeof(3e3)
     type: string
-  rows:
-  - [3000, 'double']
 ...
 box.execute("CREATE TABLE t5 (d DOUBLE PRIMARY KEY);")
 ---
@@ -2118,15 +2118,15 @@ box.execute("INSERT INTO t5 VALUES (4), (5.5), (6e6);")
 ...
 box.execute("SELECT d, TYPEOF(d) FROM t5;")
 ---
-- metadata:
+- rows:
+  - [4, 'double']
+  - [5.5, 'double']
+  - [6000000, 'double']
+  metadata:
   - name: D
     type: double
   - name: TYPEOF(d)
     type: string
-  rows:
-  - [4, 'double']
-  - [5.5, 'double']
-  - [6000000, 'double']
 ...
 -- gh-4728: make sure that given query doesn't result in
 -- assertion fault.
@@ -2145,12 +2145,12 @@ s:format({ \
 ...
 box.execute([[SELECT * FROM "s" WHERE "id" = ?;]])
 ---
-- metadata:
+- rows: []
+  metadata:
   - name: id
     type: unsigned
   - name: v
     type: string
-  rows: []
 ...
 s:drop()
 ---

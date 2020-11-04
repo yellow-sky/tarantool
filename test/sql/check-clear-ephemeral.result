@@ -21,10 +21,7 @@ box.execute("WITH RECURSIVE cnt(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM cnt W
 -- Ephemeral table is not belong to Tarantool, so must be cleared sql-way.
 box.execute("SELECT a FROM t1 ORDER BY b, a LIMIT 10 OFFSET 20;");
 ---
-- metadata:
-  - name: A
-    type: integer
-  rows:
+- rows:
   - [840]
   - [880]
   - [920]
@@ -35,6 +32,9 @@ box.execute("SELECT a FROM t1 ORDER BY b, a LIMIT 10 OFFSET 20;");
   - [81]
   - [121]
   - [161]
+  metadata:
+  - name: A
+    type: integer
 ...
 -- Cleanup
 box.execute("DROP TABLE t1")

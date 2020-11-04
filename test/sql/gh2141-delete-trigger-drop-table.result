@@ -39,12 +39,7 @@ box.execute("CREATE TRIGGER tt_ad AFTER DELETE ON t FOR EACH ROW BEGIN SELECT 1;
 -- check that these triggers exist
 box.execute("SELECT \"name\", \"opts\" FROM \"_trigger\"")
 ---
-- metadata:
-  - name: name
-    type: string
-  - name: opts
-    type: map
-  rows:
+- rows:
   - ['TT_AD', {'sql': 'CREATE TRIGGER tt_ad AFTER DELETE ON t FOR EACH ROW BEGIN SELECT
         1; END'}]
   - ['TT_AI', {'sql': 'CREATE TRIGGER tt_ai AFTER INSERT ON t FOR EACH ROW BEGIN SELECT
@@ -57,6 +52,11 @@ box.execute("SELECT \"name\", \"opts\" FROM \"_trigger\"")
         SELECT 1; END'}]
   - ['TT_BU', {'sql': 'CREATE TRIGGER tt_bu BEFORE UPDATE ON t FOR EACH ROW BEGIN
         SELECT 1; END'}]
+  metadata:
+  - name: name
+    type: string
+  - name: opts
+    type: map
 ...
 -- drop table
 box.execute("DROP TABLE t")
@@ -66,10 +66,10 @@ box.execute("DROP TABLE t")
 -- check that triggers were dropped with deleted table
 box.execute("SELECT \"name\", \"opts\" FROM \"_trigger\"")
 ---
-- metadata:
+- rows: []
+  metadata:
   - name: name
     type: string
   - name: opts
     type: map
-  rows: []
 ...

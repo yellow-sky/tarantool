@@ -42,15 +42,15 @@ box.execute("DELETE FROM t3 WHERE y IS NULL;");
 -- Verify.
 box.execute("SELECT * FROM t3;");
 ---
-- metadata:
+- rows:
+  - [6, 234, 567]
+  metadata:
   - name: ID
     type: integer
   - name: X
     type: integer
   - name: Y
     type: integer
-  rows:
-  - [6, 234, 567]
 ...
 -- Cleanup.
 box.execute("DROP INDEX t3y ON t3");

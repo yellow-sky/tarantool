@@ -48,7 +48,7 @@ type(ts:on_replace(fail))
 ...
 ts:insert{1, 'b', 'c'}
 ---
-- error: '[string "function fail(old_tuple, new_tuple) error(''te..."]:1: test'
+- error: '[string "function fail(old_tuple, new_tuple) error(''test'') end "]:1: test'
 ...
 ts:get{1}
 ---
@@ -73,7 +73,7 @@ type(ts:on_replace(fail))
 ...
 ts:insert{2, 'b', 'c'}
 ---
-- error: '[string "function fail(old_tuple, new_tuple) error(''ab..."]:1: abc'
+- error: '[string "function fail(old_tuple, new_tuple) error(''abc'') end "]:1: abc'
 ...
 ts:get{2}
 ---

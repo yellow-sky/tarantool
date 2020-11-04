@@ -24,12 +24,12 @@ box.execute("UPDATE t1 SET e=e+1 WHERE b IN (SELECT b FROM t1);");
 -- Check
 box.execute("SELECT e FROM t1");
 ---
-- metadata:
-  - name: E
-    type: integer
-  rows:
+- rows:
   - [7]
   - [8]
+  metadata:
+  - name: E
+    type: integer
 ...
 -- Cleanup
 box.execute("DROP TABLE t1;");

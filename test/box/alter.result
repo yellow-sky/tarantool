@@ -672,17 +672,17 @@ s.index.pk:alter({parts={1, 'num', 2, 'num'}})
 ...
 s.index.pk
 ---
-- unique: true
+- id: 0
+  unique: true
   parts:
-  - type: unsigned
+  - fieldno: 1
     is_nullable: false
-    fieldno: 1
-  - type: unsigned
+    type: unsigned
+  - fieldno: 2
     is_nullable: false
-    fieldno: 2
-  type: TREE
-  id: 0
+    type: unsigned
   space_id: 731
+  type: TREE
   name: pk
 ...
 s:select{}
@@ -705,26 +705,26 @@ s:select{}
 ...
 s.index.pk
 ---
-- unique: true
+- id: 0
+  unique: true
   parts:
-  - type: unsigned
+  - fieldno: 1
     is_nullable: false
-    fieldno: 1
+    type: unsigned
   space_id: 731
-  id: 0
   type: TREE
   name: pk
 ...
 s.index.secondary
 ---
-- unique: true
+- id: 1
+  unique: true
   parts:
-  - type: unsigned
+  - fieldno: 2
     is_nullable: false
-    fieldno: 2
-  type: TREE
-  id: 1
+    type: unsigned
   space_id: 731
+  type: TREE
   name: secondary
 ...
 s.index.secondary:select{}
@@ -1036,7 +1036,7 @@ s = box.schema.create_space('test', {format = format})
 ...
 s:format()
 ---
-- [{'type': 'unsigned', 'name': 'field1'}, {'type': 'unsigned', 'name': 'field2'}]
+- [{'name': 'field1', 'type': 'unsigned'}, {'name': 'field2', 'type': 'unsigned'}]
 ...
 format[2] = {name = 'field2', 'unsigned', 'unknown'}
 ---
@@ -1047,7 +1047,7 @@ s:format(format)
 ...
 s:format()
 ---
-- [{'type': 'unsigned', 'name': 'field1'}, {'type': 'unsigned', 'name': 'field2'}]
+- [{'name': 'field1', 'type': 'unsigned'}, {'name': 'field2', 'type': 'unsigned'}]
 ...
 s:drop()
 ---

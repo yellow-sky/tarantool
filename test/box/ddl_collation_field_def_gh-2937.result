@@ -19,8 +19,8 @@ s = box.schema.create_space('test', {format = format})
  | ...
 s:format()
  | ---
- | - [{'type': 'string', 'name': 'field1', 'collation': 1}, {'type': 'any', 'name': 'field2',
- |     'collation': 2}, {'type': 'scalar', 'name': 'field3', 'collation': 1}]
+ | - [{'collation': 1, 'name': 'field1', 'type': 'string'}, {'type': 'any', 'name': 'field2',
+ |     'collation': 2}, {'collation': 1, 'name': 'field3', 'type': 'scalar'}]
  | ...
 s:drop()
  | ---

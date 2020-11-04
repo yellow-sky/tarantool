@@ -44,7 +44,9 @@ fail = true
 ...
 space:insert({7, 'g'})
 ---
-- error: '[string "function on_replace(old_tuple_, new_tuple_) i..."]:1: fail'
+- error: '[string "function on_replace(old_tuple_, new_tuple_) if fail then old_tuple
+    = nil new_tuple = nil error(''fail'') else old_tuple = old_tuple_ new_tuple =
+    new_tuple_ end end "]:1: fail'
 ...
 old_tuple, new_tuple
 ---
@@ -96,7 +98,9 @@ fail = true
 ...
 space:insert({2, 3})
 ---
-- error: '[string "function on_replace(old_tuple_, new_tuple_) i..."]:1: fail'
+- error: '[string "function on_replace(old_tuple_, new_tuple_) if fail then old_tuple
+    = nil new_tuple = nil error(''fail'') else old_tuple = old_tuple_ new_tuple =
+    new_tuple_ end end "]:1: fail'
 ...
 old_tuple, new_tuple
 ---
@@ -163,7 +167,9 @@ fail = true
 ...
 space:replace({2, 100})
 ---
-- error: '[string "function on_replace(old_tuple_, new_tuple_) i..."]:1: fail'
+- error: '[string "function on_replace(old_tuple_, new_tuple_) if fail then old_tuple
+    = nil new_tuple = nil error(''fail'') else old_tuple = old_tuple_ new_tuple =
+    new_tuple_ end end "]:1: fail'
 ...
 old_tuple, new_tuple
 ---
@@ -218,7 +224,9 @@ tmp = space:on_replace(on_replace)
 ...
 space:insert({3, 'c'})
 ---
-- error: '[string "function on_replace(old_tuple_, new_tuple_) i..."]:1: fail'
+- error: '[string "function on_replace(old_tuple_, new_tuple_) if fail then old_tuple
+    = nil new_tuple = nil error(''fail'') else old_tuple = old_tuple_ new_tuple =
+    new_tuple_ end end "]:1: fail'
 ...
 old_tuple, new_tuple
 ---
@@ -313,7 +321,9 @@ fail = true
 ...
 space:replace({10, 10})
 ---
-- error: '[string "function on_replace(old_tuple_, new_tuple_) i..."]:1: fail'
+- error: '[string "function on_replace(old_tuple_, new_tuple_) if fail then old_tuple
+    = nil new_tuple = nil error(''fail'') else old_tuple = old_tuple_ new_tuple =
+    new_tuple_ end end "]:1: fail'
 ...
 old_tuple, new_tuple
 ---
@@ -389,7 +399,9 @@ fail = true
 ...
 index:delete({1})
 ---
-- error: '[string "function on_replace(old_tuple_, new_tuple_) i..."]:1: fail'
+- error: '[string "function on_replace(old_tuple_, new_tuple_) if fail then old_tuple
+    = nil new_tuple = nil error(''fail'') else old_tuple = old_tuple_ new_tuple =
+    new_tuple_ end end "]:1: fail'
 ...
 old_tuple, new_tuple
 ---
@@ -457,7 +469,9 @@ fail = true
 ...
 index2:delete({false})
 ---
-- error: '[string "function on_replace(old_tuple_, new_tuple_) i..."]:1: fail'
+- error: '[string "function on_replace(old_tuple_, new_tuple_) if fail then old_tuple
+    = nil new_tuple = nil error(''fail'') else old_tuple = old_tuple_ new_tuple =
+    new_tuple_ end end "]:1: fail'
 ...
 old_tuple, new_tuple
 ---
@@ -547,7 +561,9 @@ fail = true
 ...
 index:update({1}, {{'=', 2, 'one'}})
 ---
-- error: '[string "function on_replace(old_tuple_, new_tuple_) i..."]:1: fail'
+- error: '[string "function on_replace(old_tuple_, new_tuple_) if fail then old_tuple
+    = nil new_tuple = nil error(''fail'') else old_tuple = old_tuple_ new_tuple =
+    new_tuple_ end end "]:1: fail'
 ...
 old_tuple, new_tuple
 ---
@@ -638,7 +654,9 @@ fail = true
 ...
 index:update({1}, {{'=', 2, 'a'}})
 ---
-- error: '[string "function on_replace(old_tuple_, new_tuple_) i..."]:1: fail'
+- error: '[string "function on_replace(old_tuple_, new_tuple_) if fail then old_tuple
+    = nil new_tuple = nil error(''fail'') else old_tuple = old_tuple_ new_tuple =
+    new_tuple_ end end "]:1: fail'
 ...
 old_tuple, new_tuple
 ---
@@ -647,7 +665,9 @@ old_tuple, new_tuple
 ...
 index2:update({2}, {{'-', 2, 10}})
 ---
-- error: '[string "function on_replace(old_tuple_, new_tuple_) i..."]:1: fail'
+- error: '[string "function on_replace(old_tuple_, new_tuple_) if fail then old_tuple
+    = nil new_tuple = nil error(''fail'') else old_tuple = old_tuple_ new_tuple =
+    new_tuple_ end end "]:1: fail'
 ...
 old_tuple, new_tuple
 ---
@@ -717,7 +737,9 @@ fail = true
 ...
 space:upsert({2}, {{'!', 2, 2}})
 ---
-- error: '[string "function on_replace(old_tuple_, new_tuple_) i..."]:1: fail'
+- error: '[string "function on_replace(old_tuple_, new_tuple_) if fail then old_tuple
+    = nil new_tuple = nil error(''fail'') else old_tuple = old_tuple_ new_tuple =
+    new_tuple_ end end "]:1: fail'
 ...
 old_tuple, new_tuple
 ---
@@ -726,7 +748,9 @@ old_tuple, new_tuple
 ...
 space:upsert({5, 5, 5}, {{'!', 2, 5}})
 ---
-- error: '[string "function on_replace(old_tuple_, new_tuple_) i..."]:1: fail'
+- error: '[string "function on_replace(old_tuple_, new_tuple_) if fail then old_tuple
+    = nil new_tuple = nil error(''fail'') else old_tuple = old_tuple_ new_tuple =
+    new_tuple_ end end "]:1: fail'
 ...
 old_tuple, new_tuple
 ---
@@ -824,7 +848,9 @@ fail = true
 ...
 space:upsert({2, 2, 2}, {{'!', 4, 200}})
 ---
-- error: '[string "function on_replace(old_tuple_, new_tuple_) i..."]:1: fail'
+- error: '[string "function on_replace(old_tuple_, new_tuple_) if fail then old_tuple
+    = nil new_tuple = nil error(''fail'') else old_tuple = old_tuple_ new_tuple =
+    new_tuple_ end end "]:1: fail'
 ...
 old_tuple, new_tuple
 ---
@@ -833,7 +859,9 @@ old_tuple, new_tuple
 ...
 space:upsert({5, 5, 5}, {{'!', 4, 500}})
 ---
-- error: '[string "function on_replace(old_tuple_, new_tuple_) i..."]:1: fail'
+- error: '[string "function on_replace(old_tuple_, new_tuple_) if fail then old_tuple
+    = nil new_tuple = nil error(''fail'') else old_tuple = old_tuple_ new_tuple =
+    new_tuple_ end end "]:1: fail'
 ...
 old_tuple, new_tuple
 ---

@@ -570,20 +570,20 @@ box.space._index:insert{512, 0, 'pk', 'tree', {unique = true}, {{0, 'unsigned'}}
 ...
 box.space.test.index.pk
 ---
-- unique: true
-  parts:
-  - type: unsigned
-    is_nullable: false
-    fieldno: 1
-  options:
-    page_size: 8192
+- options:
+    bloom_fpr: 0.05
     run_count_per_level: 2
     run_size_ratio: 3.5
-    bloom_fpr: 0.05
+    page_size: 8192
   id: 0
+  unique: true
+  parts:
+  - fieldno: 1
+    is_nullable: false
+    type: unsigned
   space_id: 512
-  type: TREE
   name: pk
+  type: TREE
 ...
 box.space.test:drop()
 ---

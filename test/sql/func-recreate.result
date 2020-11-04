@@ -47,11 +47,11 @@ test_run:cmd("setopt delimiter ''");
 ...
 ch:get()
 ---
-- metadata:
+- rows:
+  - [0.2]
+  metadata:
   - name: WAITFOR(0.2)
     type: number
-  rows:
-  - [0.2]
 ...
 box.func.WAITFOR:drop()
 ---

@@ -26,11 +26,11 @@ box.execute([[INSERT INTO t (id) VALUES (1)]])
 -- Sanity check
 box.execute([[SELECT * FROM t]])
 ---
-- metadata:
+- rows:
+  - [1]
+  metadata:
   - name: ID
     type: integer
-  rows:
-  - [1]
 ...
 test_run:cmd('restart server default');
 -- Connect to ourself

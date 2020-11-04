@@ -119,11 +119,11 @@ insert_res
 ...
 select_res
 ---
-- metadata:
+- rows:
+  - [1]
+  metadata:
   - name: '1'
     type: integer
-  rows:
-  - [1]
 ...
 cn:close()
 ---
@@ -210,23 +210,23 @@ box.execute("INSERT INTO t1 VALUES (3, 3);")
 ...
 box.execute("SELECT * from t1");
 ---
-- metadata:
+- rows:
+  - [3, 3]
+  metadata:
   - name: ID
     type: integer
   - name: A
     type: integer
-  rows:
-  - [3, 3]
 ...
 box.execute("SELECT * from t2");
 ---
-- metadata:
+- rows:
+  - [1, 1]
+  metadata:
   - name: ID
     type: integer
   - name: A
     type: integer
-  rows:
-  - [1, 1]
 ...
 box.error.injection.set("ERRINJ_WAL_IO", true)
 ---
@@ -279,23 +279,23 @@ box.execute("INSERT INTO t1 VALUES (3, 3);")
 ...
 box.execute("SELECT * from t1");
 ---
-- metadata:
+- rows:
+  - [3, 3]
+  metadata:
   - name: ID
     type: integer
   - name: A
     type: integer
-  rows:
-  - [3, 3]
 ...
 box.execute("SELECT * from t2");
 ---
-- metadata:
+- rows:
+  - [1, 1]
+  metadata:
   - name: ID
     type: integer
   - name: A
     type: integer
-  rows:
-  - [1, 1]
 ...
 box.execute("DROP TABLE t1;")
 ---
