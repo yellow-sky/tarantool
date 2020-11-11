@@ -158,12 +158,36 @@ add_custom_target(ctags DEPENDS tags)
 #
 # Enable 'make luacheck' target.
 #
-
+# The code looks tricky, because of luacheck side problems
+# (see [1]).
+#
+# The following circumstances may lead to missing of source files
+# or exclusions:
+#
+# * Calling `luacheck "${dir}/.luacheckrc" "${dir}"` from
+#   outside of ${dir} or when ${dir} is not a real path.
+# * Using of a path with symlink components in --exclude-files.
+#
+# [1]: https://github.com/mpeterv/luacheck/issues/208
+#
+set(EXCLUDE_FILES)
+get_filename_component(BINARY_REALPATH "${PROJECT_BINARY_DIR}" REALPATH)
+get_filename_component(SOURCE_REALPATH "${PROJECT_SOURCE_DIR}" REALPATH)
+file_is_in_directory(BINARY_DIR_INSIDE_SOURCE_DIR "${BINARY_REALPATH}"
+                     "${SOURCE_REALPATH}")
+if (BINARY_DIR_INSIDE_SOURCE_DIR)
+    set(EXCLUDE_FILES --exclude-files "${BINARY_REALPATH}/**/*.lua")
+endif()
 add_custom_target(luacheck)
 add_custom_command(TARGET luacheck
-    COMMAND ${LUACHECK} --codes --config "${PROJECT_SOURCE_DIR}/.luacheckrc" "${PROJECT_SOURCE_DIR}"
+    COMMAND ${LUACHECK} --codes --config .luacheckrc . ${EXCLUDE_FILES}
+    WORKING_DIRECTORY ${SOURCE_REALPATH}
     COMMENT "Perform static analysis of Lua code"
 )
+unset(BINARY_REALPATH)
+unset(SOURCE_REALPATH)
+unset(BINARY_DIR_INSIDE_SOURCE_DIR)
+unset(EXCLUDE_FILES)
 
 if (WITH_JEPSEN)
     ExternalProject_Add(
