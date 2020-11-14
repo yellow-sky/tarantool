@@ -45,13 +45,9 @@
 
 #include <third_party/coro/coro.h>
 
-#if defined(__x86_64__) || defined(__i386__)
+#if defined(__x86_64__) || defined(__i386__) || defined(__aarch64__)
 #define ENABLE_FIBER_TOP 1
 #else
-/*
- * Fiber top doesn't work on ARM processors at the moment,
- * because we haven't chosen an alternative to rdtsc.
- */
 #define ENABLE_FIBER_TOP 0
 #endif
 

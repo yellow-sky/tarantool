@@ -46,7 +46,35 @@
 extern void cord_on_yield(void);
 
 #if ENABLE_FIBER_TOP
+
+#if defined(__x86_64__) || defined(__i386__)
+
 #include <x86intrin.h> /* __rdtscp() */
+
+static inline uint64_t
+read_ts_cnt(uint32_t* cpu_id)
+{
+	return __rdtscp(cpu_id);
+}
+
+#elif defined(__aarch64__)
+
+static inline uint64_t
+read_ts_cnt(uint32_t* cpu_id)
+{
+	*cpu_id = 0;	// FIXME
+	/* assumption is that OS has already set up
+	   properly virtual timers */
+	int64_t vtimer;
+	__asm__ __volatile__("mrs %0, cntvct_el0" : "=r"(vtimer));
+	return vtimer;
+}
+
+#else
+
+#error "fiber.top - Unsupported hw architecture"
+
+#endif
 
 static inline void
 clock_stat_add_delta(struct clock_stat *stat, uint64_t clock_delta)
@@ -85,7 +113,7 @@ clock_stat_reset(struct clock_stat *stat)
 static void
 cpu_stat_start(struct cpu_stat *stat)
 {
-	stat->prev_clock = __rdtscp(&stat->prev_cpu_id);
+	stat->prev_clock = read_ts_cnt(&stat->prev_cpu_id);
 	stat->cpu_miss_count = 0;
 	/*
 	 * We want to measure thread cpu time here to calculate
@@ -113,7 +141,7 @@ static uint64_t
 cpu_stat_on_csw(struct cpu_stat *stat)
 {
 	uint32_t cpu_id;
-	uint64_t delta, clock = __rdtscp(&cpu_id);
+	uint64_t delta, clock = read_ts_cnt(&cpu_id);
 
 	if (cpu_id == stat->prev_cpu_id) {
 		delta = clock - stat->prev_clock;
