@@ -18,7 +18,9 @@ function check_err(err)
 -- EAI_AGAIN
        err == 'getaddrinfo: Temporary failure in name resolution' or
 -- EAI_AGAIN
-       err == 'getaddrinfo: Name could not be resolved at this time' then
+       err == 'getaddrinfo: Name could not be resolved at this time' or
+-- EAI_NONAME
+       err == 'getaddrinfo: No address associated with hostname' then
         return true
     end
     return false

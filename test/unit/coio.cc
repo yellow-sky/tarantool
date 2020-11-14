@@ -106,12 +106,16 @@ test_getaddrinfo(void)
 	/* EAI_AGAIN */
 	const char *exp_errmsg_6 = "getaddrinfo: Name could not be resolved at "
 		"this time";
+	/* EAI_NONAME */
+	const char *exp_errmsg_7 = "getaddrinfo: No address associated with "
+		"hostname";
 	bool is_match_with_exp = strcmp(errmsg, exp_errmsg_1) == 0 ||
 		strcmp(errmsg, exp_errmsg_2) == 0 ||
 		strcmp(errmsg, exp_errmsg_3) == 0 ||
 		strcmp(errmsg, exp_errmsg_4) == 0 ||
 		strcmp(errmsg, exp_errmsg_5) == 0 ||
-		strcmp(errmsg, exp_errmsg_6) == 0;
+		strcmp(errmsg, exp_errmsg_6) == 0 ||
+		strcmp(errmsg, exp_errmsg_7) == 0;
 	is(is_match_with_exp, true, "getaddrinfo error message");
 
 	/*
