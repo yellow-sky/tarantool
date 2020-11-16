@@ -290,7 +290,7 @@ tonumber64('123')
 ---
 - 123
 ...
-type(tonumber64('4294967296')) == 'number'
+type(tonumber64('4294967296')) == 'cdata'
 ---
 - true
 ...
@@ -329,7 +329,7 @@ tonumber64(tonumber64(2))
 ...
 tostring(tonumber64(tonumber64(3)))
 ---
-- '3'
+- 3ULL
 ...
 --  A test case for Bug#1131108 'tonumber64 from negative int inconsistency'
 tonumber64(-1)
@@ -364,11 +364,11 @@ tonumber64(-1.0)
 ---
 - -1
 ...
-tostring(tonumber64('1234567890123')) == '1234567890123'
+tostring(tonumber64('1234567890123')) == '1234567890123ULL'
 ---
 - true
 ...
-tostring(tonumber64('12345678901234')) == '12345678901234'
+tostring(tonumber64('12345678901234')) == '12345678901234ULL'
 ---
 - true
 ...
@@ -403,7 +403,7 @@ tonumber64('-9223372036854775809') == nil
 ---
 - true
 ...
-tostring(tonumber64('0')) == '0'
+tostring(tonumber64('0')) == '0ULL'
 ---
 - true
 ...

@@ -105,7 +105,7 @@ tonumber64()
 tonumber64('invalid number')
 tonumber64(123)
 tonumber64('123')
-type(tonumber64('4294967296')) == 'number'
+type(tonumber64('4294967296')) == 'cdata'
 tonumber64('9223372036854775807') == tonumber64('9223372036854775807')
 tonumber64('9223372036854775807') - tonumber64('9223372036854775800')
 tonumber64('18446744073709551615') == tonumber64('18446744073709551615')
@@ -125,8 +125,8 @@ tonumber64(-1ULL)
 -1ULL
 tonumber64(-1.0)
 6LL - 7LL
-tostring(tonumber64('1234567890123')) == '1234567890123'
-tostring(tonumber64('12345678901234')) == '12345678901234'
+tostring(tonumber64('1234567890123')) == '1234567890123ULL'
+tostring(tonumber64('12345678901234')) == '12345678901234ULL'
 tostring(tonumber64('123456789012345')) == '123456789012345ULL'
 tostring(tonumber64('1234567890123456')) == '1234567890123456ULL'
 
@@ -138,7 +138,7 @@ tostring(tonumber64('18446744073709551615')) == '18446744073709551615ULL'
 tonumber64('18446744073709551616') == nil
 tostring(tonumber64('-9223372036854775808')) == '-9223372036854775808LL'
 tonumber64('-9223372036854775809') == nil
-tostring(tonumber64('0')) == '0'
+tostring(tonumber64('0')) == '0ULL'
 
 --
 -- gh-3431: tonumber of strings with ULL.

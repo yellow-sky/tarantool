@@ -174,126 +174,6 @@ static const char *lua_modules[] = {
  * {{{ box Lua library: common functions
  */
 
-/**
- * Convert lua number or string to lua cdata 64bit number.
- */
-static int
-lbox_tonumber64(struct lua_State *L)
-{
-	luaL_checkany(L, 1);
-	int base = luaL_optint(L, 2, -1);
-	luaL_argcheck(L, (2 <= base && base <= 36) || base == -1, 2,
-		      "base out of range");
-	switch (lua_type(L, 1)) {
-	case LUA_TNUMBER:
-		base = (base == -1 ? 10 : base);
-		if (base != 10)
-			return luaL_argerror(L, 1, "string expected");
-		lua_settop(L, 1); /* return original value as is */
-		return 1;
-	case LUA_TSTRING:
-	{
-		size_t argl = 0;
-		const char *arg = luaL_checklstring(L, 1, &argl);
-		/* Trim whitespaces at begin/end */
-		while (argl > 0 && isspace(arg[argl - 1])) {
-			argl--;
-		}
-		while (isspace(*arg)) {
-			arg++; argl--;
-		}
-
-		/*
-		 * Check if we're parsing custom format:
-		 * 1) '0x' or '0X' trim in case of base == 16 or base == -1
-		 * 2) '0b' or '0B' trim in case of base == 2  or base == -1
-		 * 3) '-' for negative numbers
-		 * 4) LL, ULL, LLU - trim, but only for base == 2 or
-		 *    base == 16 or base == -1. For consistency do not bother
-		 *    with any non-common bases, since user may have specified
-		 *    base >= 22, in which case 'L' will be a digit.
-		 */
-		char negative = 0;
-		if (arg[0] == '-') {
-			arg++; argl--;
-			negative = 1;
-		}
-		if (argl > 2 && arg[0] == '0') {
-			if ((arg[1] == 'x' || arg[1] == 'X') &&
-			    (base == 16 || base == -1)) {
-				base = 16; arg += 2; argl -= 2;
-			} else if ((arg[1] == 'b' || arg[1] == 'B') &&
-			           (base == 2 || base == -1)) {
-				base = 2;  arg += 2; argl -= 2;
-			}
-		}
-		bool ull = false;
-		if (argl > 2 && (base == 2 || base == 16 || base == -1)) {
-			if (arg[argl - 1] == 'u' || arg[argl - 1] == 'U') {
-				ull = true;
-				--argl;
-			}
-			if ((arg[argl - 1] == 'l' || arg[argl - 1] == 'L') &&
-			    (arg[argl - 2] == 'l' || arg[argl - 2] == 'L'))
-				argl -= 2;
-			else {
-				ull = false;
-				goto skip;
-			}
-			if (!ull && (arg[argl - 1] == 'u' ||
-				     arg[argl - 1] == 'U')) {
-				ull = true;
-				--argl;
-			}
-		}
-skip:		base = (base == -1 ? 10 : base);
-		errno = 0;
-		char *arge;
-		unsigned long long result = strtoull(arg, &arge, base);
-		if (errno == 0 && arge == arg + argl) {
-			if (argl == 0) {
-				lua_pushnil(L);
-			} else if (negative) {
-				/*
-				 * To test overflow, consider
-				 *  result > -INT64_MIN;
-				 *  result - 1 > -INT64_MIN - 1;
-				 * Assumption:
-				 *  INT64_MAX == -(INT64_MIN + 1);
-				 * Finally,
-				 *  result - 1 > INT64_MAX;
-				 */
-				if (ull)
-					luaL_pushuint64(L, (UINT64_MAX - result) + 1);
-				else if (result != 0 && result - 1 > INT64_MAX)
-					lua_pushnil(L);
-				else
-					luaL_pushint64(L, -result);
-			} else {
-				luaL_pushuint64(L, result);
-			}
-			return 1;
-		}
-		break;
-	} /* LUA_TSTRING */
-	case LUA_TCDATA:
-	{
-		base = (base == -1 ? 10 : base);
-		if (base != 10)
-			return luaL_argerror(L, 1, "string expected");
-		uint32_t ctypeid = 0;
-		luaL_checkcdata(L, 1, &ctypeid);
-		if (ctypeid >= CTID_INT8 && ctypeid <= CTID_DOUBLE) {
-			lua_pushvalue(L, 1);
-			return 1;
-		}
-		break;
-	} /* LUA_TCDATA */
-	}
-	lua_pushnil(L);
-	return 1;
-}
-
 /* }}} */
 
 /**
@@ -446,7 +326,6 @@ tarantool_lua_init(const char *tarantool_bin, int argc, char **argv)
 	/* Initialize ffi to enable luaL_pushcdata/luaL_checkcdata functions */
 	luaL_loadstring(L, "return require('ffi')");
 	lua_call(L, 0, 0);
-	lua_register(L, "tonumber64", lbox_tonumber64);
 
 	tarantool_lua_utf8_init(L);
 	tarantool_lua_utils_init(L);

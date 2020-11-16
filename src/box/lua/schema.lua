@@ -1,6 +1,7 @@
 -- schema.lua (internal file)
 --
 local ffi = require('ffi')
+local misc = require('misc')
 local msgpack = require('msgpack')
 local fun = require('fun')
 local log = require('log')
@@ -10,6 +11,8 @@ local internal = require('box.internal')
 local function setmap(table)
     return setmetatable(table, { __serialize = 'map' })
 end
+
+tonumber64 = misc.tonumber64
 
 local builtin = ffi.C
 
