@@ -203,6 +203,40 @@ sqlSelectNew(Parse * pParse,	/* Parsing context */
 	return pNew;
 }
 
+/*
+ * Reset parsed Select to make it suitable for (re)generation.
+ */
+void
+sqlSelectReset(Select * p)
+{
+	while (p) {
+		Select *pPrior = p->pPrior;
+#if 0
+		p->op = TK_SELECT;
+		p->selFlags &= ~(SF_Resolved);
+		//p->selFlags &= ~(SF_Resolved | SF_Expanded | SF_HasTypeInfo);
+		p->iLimit = 0;
+		p->iOffset = 0;
+	#ifdef SQL_DEBUG
+		p->zSelName[0] = 0;
+	#endif
+		p->addrOpenEphm[0] = -1;
+		p->addrOpenEphm[1] = -1;
+		p->nSelectRow = 0;
+
+		//sqlSrcListDelete(db, p->pSrc);
+		//p->pSrc = NULL;
+		//p->pPrior = NULL;
+		p->pNext = NULL;
+		p->pWith = NULL;
+#else
+		p->selFlags |= SF_CachedAST;
+#endif
+
+		p = pPrior;
+	}
+}
+
 #ifdef SQL_DEBUG
 /*
  * Set the name of a Select object
@@ -4657,7 +4691,7 @@ withExpand(Walker * pWalker, struct SrcList_item *pFrom)
 	struct Cte *pCte;	/* Matched CTE (or NULL if no match) */
 	With *pWith;		/* WITH clause that pCte belongs to */
 
-	assert(pFrom->space == NULL);
+	assert(pFrom->space == NULL); // FIXME - reentrancy
 
 	pCte = searchWith(pParse->pWith, pFrom, &pWith);
 	if (pCte) {
@@ -4867,7 +4901,7 @@ selectExpander(Walker * pWalker, Select * p)
 		assert(pFrom->fg.isRecursive == 0 || pFrom->space != NULL);
 		if (pFrom->fg.isRecursive)
 			continue;
-		assert(pFrom->space == NULL);
+		assert(pFrom->space == NULL); // FIXME - reentrancy
 
 		if (withExpand(pWalker, pFrom))
 			return WRC_Abort;
@@ -5289,6 +5323,10 @@ sqlSelectPrep(Parse * pParse,	/* The parser context */
 {
 	sql *db;
 	if (NEVER(p == 0))
+		return;
+	// Nothing to do if we are already bound
+	// for cached AST
+	if (p->selFlags & SF_CachedAST)
 		return;
 	db = pParse->db;
 	if (db->mallocFailed)
@@ -6514,15 +6552,22 @@ sqlSelect(Parse * pParse,		/* The parser context */
 void
 sql_expr_extract_select(struct Parse *parser, struct Select *select)
 {
-	struct ExprList *expr_list = select->pEList;
-	assert(expr_list->nExpr == 1);
-	parser->parsed_ast_type = AST_TYPE_EXPR;
-	/*
-	 * Extract a copy of parsed expression.
-	 * We cannot use EXPRDUP_REDUCE flag in sqlExprDup call
-	 * because some compiled Expr (like Checks expressions)
-	 * may require further resolve with sqlResolveExprNames.
-	 */
-	parser->parsed_ast.expr =
-		sqlExprDup(parser->db, expr_list->a->pExpr, 0);
+	// if we need AST then we need whole select, not noly expr
+	if (parser->parsed_ast.keep_ast) {
+		parser->parsed_ast.ast_type = AST_TYPE_SELECT;
+		parser->parsed_ast.select = sqlSelectDup(sql_get(), select, 0);
+	} else {
+		struct ExprList *expr_list = select->pEList;
+		assert(expr_list->nExpr == 1);
+		parser->parsed_ast.ast_type = AST_TYPE_EXPR;
+		/*
+		* Extract a copy of parsed expression.
+		* We cannot use EXPRDUP_REDUCE flag in sqlExprDup call
+		* because some compiled Expr (like Checks expressions)
+		* may require further resolve with sqlResolveExprNames.
+		*/
+		parser->parsed_ast.expr =
+			sqlExprDup(parser->db, expr_list->a->pExpr, 0);
+
+	}
 }

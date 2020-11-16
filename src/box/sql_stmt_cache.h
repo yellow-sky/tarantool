@@ -33,6 +33,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "sql_ast.h"
 #include "small/rlist.h"
 
 #if defined(__cplusplus)
@@ -42,10 +43,16 @@ extern "C" {
 struct sql_stmt;
 struct mh_i64ptr_t;
 struct info_handler;
+#ifndef DISABLE_AST_CACHING
+struct sql_parsed_ast;
+#endif
 
 struct stmt_cache_entry {
 	/** Prepared statement itself. */
 	struct sql_stmt *stmt;
+#ifndef DISABLE_AST_CACHING
+	struct sql_parsed_ast *ast; //< preparsed AST (if any)
+#endif
 	/**
 	 * Link to the next entry. All statements are to be
 	 * evicted on the next gc cycle.
@@ -82,6 +89,10 @@ struct sql_stmt_cache {
 	 * times.
 	 */
 	struct stmt_cache_entry *last_found;
+	/**
+	 * saved hash id for the last_found entry
+	 */
+	uint32_t last_id; // FIXME
 };
 
 /**
@@ -135,12 +146,15 @@ sql_stmt_cache_update(struct sql_stmt *old_stmt, struct sql_stmt *new_stmt);
  * return id of prepared statement via output parameter @id.
  */
 int
-sql_stmt_cache_insert(struct sql_stmt *stmt);
+sql_stmt_cache_insert(struct sql_stmt *stmt
+		     IF_AST_P(struct sql_parsed_ast *ast));
 
 /** Find entry by SQL string. In case of search fails it returns NULL. */
 struct sql_stmt *
 sql_stmt_cache_find(uint32_t stmt_id);
 
+struct stmt_cache_entry *
+stmt_cache_find_entry(uint32_t stmt_id);
 
 /** Set prepared cache size limit. */
 int
