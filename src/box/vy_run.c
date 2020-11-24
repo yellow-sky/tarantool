@@ -2452,6 +2452,8 @@ vy_run_rebuild_index(struct vy_run *run, const char *dir,
 					goto close_err;
 				}
 			}
+			vy_stmt_stat_acct(&run->info.stmt_stat,
+					  vy_stmt_type(tuple));
 			key = vy_stmt_is_key(tuple) ? tuple_data(tuple) :
 			      tuple_extract_key(tuple, cmp_def,
 						MULTIKEY_NONE, NULL);
