@@ -159,14 +159,17 @@ robust_open(const char *z, int f, mode_t m)
 		if (fd < 0) {
 			if (errno == EINTR)
 				continue;
+			diag_set(SystemError, "failed to open file '%s'", z);
 			break;
 		}
 		if (fd >= SQL_MINIMUM_FILE_DESCRIPTOR)
 			break;
 		close(fd);
 		fd = -1;
-		if (open("/dev/null", f, m) < 0)
+		if (open("/dev/null", f, m) < 0) {
+			diag_set(SystemError, "failed to open '/dev/null'");
 			break;
+		}
 	}
 	if (fd >= 0) {
 		if (m != 0) {
@@ -193,6 +196,10 @@ robust_ftruncate(int h, sql_int64 sz)
 	do {
 		rc = ftruncate(h, sz);
 	} while (rc < 0 && errno == EINTR);
+
+	if (rc < 0)
+		diag_set(SystemError, "failed to truncate file");
+
 	return rc;
 }
 
@@ -395,6 +402,9 @@ findInodeInfo(unixFile * pFile,	/* Unix file with file desc used in the key */
 	fd = pFile->h;
 	rc = fstat(fd, &statbuf);
 	if (rc != 0) {
+		diag_set(SystemError,
+			 "failed to retrieve information about the file '%s'",
+			 pFile->zPath);
 		storeLastErrno(pFile, errno);
 		return -1;
 	}
@@ -473,8 +483,12 @@ unixFileLock(unixFile * pFile, struct flock *pLock)
 			lock.l_len = SHARED_SIZE;
 			lock.l_type = F_WRLCK;
 			rc = fcntl(pFile->h, F_SETLK, &lock);
-			if (rc < 0)
+			if (rc < 0) {
+				diag_set(SystemError,
+					 "failed to acquire / release a lock on"
+					 " the file '%s'", pFile->zPath);
 				return rc;
+			}
 			pInode->bProcessLock = 1;
 			pInode->nLock++;
 		} else {
@@ -482,6 +496,11 @@ unixFileLock(unixFile * pFile, struct flock *pLock)
 		}
 	} else {
 		rc = fcntl(pFile->h, F_SETLK, pLock);
+		if (rc < 0) {
+			diag_set(SystemError,
+				 "failed to acquire / release a lock on"
+				 " the file '%s'", pFile->zPath);
+		}
 	}
 	return rc;
 }
@@ -729,6 +748,9 @@ seekAndRead(unixFile * id, sql_int64 offset, void *pBuf, int cnt)
 	do {
 		newOffset = lseek(id->h, offset, SEEK_SET);
 		if (newOffset < 0) {
+			diag_set(SystemError,
+				 "failed to reposition the offset of '%s' file",
+				 id->zPath);
 			storeLastErrno((unixFile *) id, errno);
 			return -1;
 		}
@@ -740,6 +762,8 @@ seekAndRead(unixFile * id, sql_int64 offset, void *pBuf, int cnt)
 				got = 1;
 				continue;
 			}
+			diag_set(SystemError, "failed to read from file '%s'",
+				 id->zPath);
 			prior = 0;
 			storeLastErrno((unixFile *) id, errno);
 			break;
@@ -794,6 +818,11 @@ unixRead(sql_file * id, void *pBuf, int amt, sql_int64 offset)
 		/* lastErrno set by seekAndRead */
 		return -1;
 	} else {
+		/* Read less than planned from file. */
+		const char *err = tt_sprintf("read less (%i bytes) than "
+					     "planned (%i bytes) from file: %s",
+					     got, amt, pFile->zPath);
+		diag_set(ClientError, ER_SQL_EXECUTE, err);
 		storeLastErrno(pFile, 0);	/* not a system error */
 		/* Unread parts of the buffer must be zero-filled */
 		memset(&((char *)pBuf)[got], 0, amt - got);
@@ -825,10 +854,16 @@ seekAndWriteFd(int fd,		/* File descriptor to write to */
 	do {
 		i64 iSeek = lseek(fd, iOff, SEEK_SET);
 		if (iSeek < 0) {
+			diag_set(SystemError,
+				 "failed to reposition file offset");
 			rc = -1;
 			break;
 		}
 		rc = write(fd, pBuf, nBuf);
+		if (rc < 0 && errno != EINTR) {
+			diag_set(SystemError,
+				 "failed to write %i bytes to file", nBuf);
+		}
 	} while (rc < 0 && errno == EINTR);
 
 	if (rc < 0)
@@ -873,6 +908,12 @@ unixWrite(sql_file * id, const void *pBuf, int amt, sql_int64 offset)
 			/* lastErrno set by seekAndWrite */
 			return -1;
 		} else {
+			/* Wrote to file less than planned. */
+			const char *err = tt_sprintf("wrote less (%i bytes) "
+						     "than planned (%i bytes) "
+						     "to file: %s",
+						     wrote, amt, pFile->zPath);
+			diag_set(ClientError, ER_SQL_EXECUTE, err);
 			storeLastErrno(pFile, 0);	/* not a system error */
 			return -1;
 		}
@@ -940,8 +981,12 @@ fcntlSizeHint(unixFile * pFile, i64 nByte)
 		i64 nSize;	/* Required file size */
 		struct stat buf;	/* Used to hold return values of fstat() */
 
-		if (fstat(pFile->h, &buf))
+		if (fstat(pFile->h, &buf) != 0) {
+			diag_set(SystemError,
+				 "failed to retrieve information about the"
+				 " file '%s'", pFile->zPath);
 			return -1;
+		}
 
 		nSize =
 		    ((nByte + pFile->szChunk -
@@ -1165,8 +1210,12 @@ unixMapfile(unixFile * pFd, i64 nMap)
 
 	if (nMap < 0) {
 		struct stat statbuf;	/* Low-level file information */
-		if (fstat(pFd->h, &statbuf))
+		if (fstat(pFd->h, &statbuf) != 0) {
+			diag_set(SystemError,
+				 "failed to retrieve information about the"
+				 " file '%s'", pFd->zPath);
 			return -1;
+		}
 		nMap = statbuf.st_size;
 	}
 	if (nMap > pFd->mmapSizeMax) {
@@ -1449,6 +1498,8 @@ unixTempFileDir(void)
 			break;
 		zDir = azDirs[i++];
 	}
+	diag_set(ClientError, ER_SYSTEM,
+		 "No access to any temporary directory");
 	return 0;
 }
 
@@ -1480,8 +1531,11 @@ unixGetTempname(int nBuf, char *zBuf)
 		sql_snprintf(nBuf, zBuf,
 				 "%s/" SQL_TEMP_FILE_PREFIX "%ld_%llx%c", zDir,
 				 (long)randomnessPid, r, 0);
-		if (zBuf[nBuf - 2] != 0 || (iLimit++) > 10)
+		if (zBuf[nBuf - 2] != 0 || (iLimit++) > 10) {
+			diag_set(ClientError, ER_SQL_EXECUTE,
+				 "can't create temporary file");
 			return -1;
+		}
 	} while (access(zBuf, 0) == 0);
 	return 0;
 }
@@ -1558,6 +1612,9 @@ getFileMode(const char *zFile,	/* File name */
 		*pUid = sStat.st_uid;
 		*pGid = sStat.st_gid;
 	} else {
+		diag_set(SystemError,
+			 "failed to retrieve information about the file '%s'",
+			 zFile);
 		rc = -1;
 	}
 	return rc;
@@ -1813,6 +1870,7 @@ unixDelete(sql_vfs * NotUsed,	/* VFS containing this as the xDelete method */
 	int rc = 0;
 	UNUSED_PARAMETER(NotUsed);
 	if (unlink(zPath) == (-1)) {
+		diag_set(SystemError, "failed to unlink the file '%s'", zPath);
 		return -1;
 	}
 	if ((dirSync & 1) != 0) {
@@ -1820,7 +1878,10 @@ unixDelete(sql_vfs * NotUsed,	/* VFS containing this as the xDelete method */
 		rc = openDirectory(zPath, &fd);
 		if (rc == 0) {
 			struct stat buf;
-			if (fstat(fd, &buf)) {
+			if (fstat(fd, &buf) != 0) {
+				diag_set(SystemError,
+					 "failed to retrieve information about"
+					 " the file '%s'", zPath);
 				rc = -1;
 			}
 			close(fd);
