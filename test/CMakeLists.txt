@@ -75,6 +75,9 @@ add_subdirectory(app-tap)
 add_subdirectory(box)
 add_subdirectory(box-tap)
 add_subdirectory(unit)
+if(ENABLE_FUZZER)
+    add_subdirectory(fuzz)
+endif()
 add_subdirectory(${PROJECT_SOURCE_DIR}/third_party/luajit/test
                  ${PROJECT_BINARY_DIR}/third_party/luajit/test)
 
