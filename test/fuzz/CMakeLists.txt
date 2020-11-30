@@ -14,6 +14,13 @@ target_compile_options(
         $<$<BOOL:${ENABLE_UB_SANITIZER}>:
         -fsanitize=fuzzer,undefined
         >
+        $<$<NOT:$<BOOL:${OSS_FUZZ}>>:
+          -fsanitize=fuzzer
+        >
+        $<$<BOOL:${OSS_FUZZ}>:
+        ${CXX}
+        ${CXXFLAGS}
+        >
 )
 target_link_libraries(
     fuzzer_config
@@ -23,6 +30,12 @@ target_link_libraries(
         >
         $<$<BOOL:${ENABLE_UB_SANITIZER}>:
         -fsanitize=fuzzer,undefined
+        >
+        $<$<NOT:$<BOOL:${OSS_FUZZ}>>:
+          -fsanitize=fuzzer
+        >
+        $<$<BOOL:${OSS_FUZZ}>:
+        $ENV{LIB_FUZZING_ENGINE}
         >
 )
 
