@@ -540,6 +540,7 @@ add_subdirectory(src)
 add_subdirectory(extra)
 add_subdirectory(test)
 add_subdirectory(doc)
+add_subdirectory(module_examples)
 
 option(WITH_NOTIFY_SOCKET "Enable notifications on NOTIFY_SOCKET" ON)
 

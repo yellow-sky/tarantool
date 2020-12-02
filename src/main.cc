@@ -76,6 +76,7 @@
 #include "box/lua/init.h" /* box_lua_init() */
 #include "box/session.h"
 #include "box/memtx_tx.h"
+#include "box/module.h"
 #include "systemd.h"
 #include "crypto/crypto.h"
 #include "core/popen.h"
@@ -642,6 +643,8 @@ tarantool_free(void)
 	/* Shutdown worker pool. Waits until threads terminate. */
 	coio_shutdown();
 
+	tarantool_destroy_modules();
+
 	box_free();
 
 	title_free(main_argc, main_argv);
@@ -838,6 +841,7 @@ main(int argc, char **argv)
 	crypto_init();
 	systemd_init();
 	tarantool_lua_init(tarantool_bin, main_argc, main_argv);
+	tarantool_init_modules();
 
 	start_time = ev_monotonic_time();
 

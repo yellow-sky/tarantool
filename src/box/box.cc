@@ -80,6 +80,7 @@
 #include "msgpack.h"
 #include "raft.h"
 #include "trivia/util.h"
+#include "module.h"
 
 static char status[64] = "unknown";
 
@@ -2678,6 +2679,8 @@ box_cfg_xc(void)
 			  FIBER_POOL_IDLE_TIMEOUT);
 	/* Add an extra endpoint for WAL wake up/rollback messages. */
 	cbus_endpoint_create(&tx_prio_endpoint, "tx_prio", tx_prio_cb, &tx_prio_endpoint);
+	/* Say to modules that tx endpoint ready */
+	tarantool_tx_thread_ready();
 
 	rmean_box = rmean_new(iproto_type_strs, IPROTO_TYPE_STAT_MAX);
 	rmean_error = rmean_new(rmean_error_strings, RMEAN_ERROR_LAST);
