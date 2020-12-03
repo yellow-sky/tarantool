@@ -29,6 +29,50 @@ ffi.cdef[[
     void PMurHash32_Process(uint32_t *ph1, uint32_t *pcarry, const void *key, int len);
     uint32_t PMurHash32_Result(uint32_t h1, uint32_t carry, uint32_t total_length);
     uint32_t PMurHash32(uint32_t seed, const void *key, int len);
+
+    /* from third_party/zstd/lib/common/xxhash.c */
+    typedef enum { XXH_OK=0, XXH_ERROR } XXH_errorcode;
+    struct XXH32_state_s {
+        unsigned total_len_32;
+        unsigned large_len;
+        unsigned v1;
+        unsigned v2;
+        unsigned v3;
+        unsigned v4;
+        unsigned mem32[4];   /* buffer defined as U32 for alignment */
+        unsigned memsize;
+        unsigned reserved;   /* never read nor write, will be removed in a future version */
+    };
+
+    struct XXH64_state_s {
+        unsigned long long total_len;
+        unsigned long long v1;
+        unsigned long long v2;
+        unsigned long long v3;
+        unsigned long long v4;
+        unsigned long long mem64[4];   /* buffer defined as U64 for alignment */
+        unsigned memsize;
+        unsigned reserved[2];          /* never read nor write, will be removed in a future version */
+    };
+
+    typedef unsigned int       XXH32_hash_t;
+    typedef unsigned long long XXH64_hash_t;
+    XXH32_hash_t XXH32 (const void* input, size_t length, unsigned int seed);
+    XXH64_hash_t XXH64 (const void* input, size_t length, unsigned long long seed);
+
+    typedef struct XXH32_state_s XXH32_state_t;
+    typedef struct XXH64_state_s XXH64_state_t;
+
+    XXH_errorcode XXH32_reset  (XXH32_state_t* statePtr, unsigned int seed);
+    XXH_errorcode XXH32_update (XXH32_state_t* statePtr, const void* input, size_t length);
+    XXH32_hash_t  XXH32_digest (const XXH32_state_t* statePtr);
+
+    XXH_errorcode XXH64_reset  (XXH64_state_t* statePtr, unsigned long long seed);
+    XXH_errorcode XXH64_update (XXH64_state_t* statePtr, const void* input, size_t length);
+    XXH64_hash_t  XXH64_digest (const XXH64_state_t* statePtr);
+
+    void XXH32_copyState(XXH32_state_t* restrict dst_state, const XXH32_state_t* restrict src_state);
+    void XXH64_copyState(XXH64_state_t* restrict dst_state, const XXH64_state_t* restrict src_state);
 ]]
 
 -- @sa base64.h
@@ -266,5 +310,75 @@ m['aes256cbc'] = {
         return crypto.cipher.aes256.cbc.decrypt(str, key, iv)
     end
 }
+
+local function check_unsigned(value)
+    local value_type = type(value)
+    if value_type == 'number' then
+        if value >= 0 and value < 2^53 and math.floor(value) == value then
+            return value
+        end
+    elseif value_type == 'cdata' and ffi.istype('uint64_t', value) then
+        return value
+    end
+end
+
+for _, var in ipairs({'32', '64'}) do
+    local xxHash
+
+    local update_fn_name = 'XXH' .. var .. '_update'
+    local digest_fn_name = 'XXH' .. var .. '_digest'
+    local reset_fn_name = 'XXH' .. var .. '_reset'
+    local copy_fn_name = 'XXH' .. var .. '_copyState'
+    local methods = {
+        update = function(self, str)
+            if type(str) ~= 'string' then
+                error("Usage xxhash" .. var .. ":update(string)")
+            end
+            return ffi.C[update_fn_name](self, str, #str) == ffi.C.XXH_OK
+        end,
+        result = function(self)
+            return ffi.C[digest_fn_name](self)
+        end,
+        clear = function(self, seed)
+            if check_unsigned(seed) == nil then
+                error("Usage xxhash" .. var .. ":clear(unsigned number)")
+            end
+            return ffi.C[reset_fn_name](self, seed) == ffi.C.XXH_OK
+        end,
+        copy = function(self)
+            local copy = xxHash.new()
+            ffi.C[copy_fn_name](copy, self)
+            return copy
+        end,
+    }
+
+    local XXH_state_t = ffi.typeof('XXH' .. var .. '_state_t')
+    ffi.metatype(XXH_state_t, {
+        __index = function(_, key)
+            return methods[key]
+        end,
+        __tostring = function(self)
+            return string.format('value: %s', self:result())
+        end,
+    })
+
+    xxHash = {
+        new = function()
+            return ffi.new(XXH_state_t)
+        end
+    }
+
+    local call_fn_name = 'XXH' .. var
+    setmetatable(xxHash, {
+        __call = function(_, str, seed)
+            if type(str) ~= 'string' or check_unsigned(seed) == nil  then
+                error("Usage digest.xxhash" .. var .. "(string, unsigned number)")
+            end
+            return ffi.C[call_fn_name](str, #str, seed)
+        end,
+    })
+
+    m['xxhash' .. var] = xxHash
+end
 
 return m
