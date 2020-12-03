@@ -775,3 +775,210 @@ s.index.i1:select()
 box.snapshot()
 
 s:drop()
+
+-- test ddl operation within begin/commit/rollback
+-- acquire free space id
+space = box.schema.space.create('ddl_test', {engine = engine})
+id = space.id
+space:drop()
+
+inspector:cmd("setopt delimiter ';'")
+box.begin()
+s = box.schema.space.create('ddl_test', {engine = engine, id = id})
+box.rollback();
+
+box.begin()
+s = box.schema.space.create('ddl_test', {engine = engine, id = id})
+box.commit();
+
+box.begin()
+s:create_index('pk')
+box.rollback();
+
+box.begin()
+s:create_index('pk')
+box.commit();
+
+s:replace({1});
+s:replace({2});
+s:replace({3});
+
+box.begin()
+s:truncate()
+box.commit();
+s:select();
+
+box.begin()
+box.schema.user.grant('guest', 'write', 'space', 'ddl_test')
+box.rollback();
+
+box.begin()
+box.schema.user.grant('guest', 'write', 'space', 'ddl_test')
+box.commit();
+
+box.begin()
+box.schema.user.revoke('guest', 'write', 'space', 'ddl_test')
+box.rollback();
+
+box.begin()
+box.schema.user.revoke('guest', 'write', 'space', 'ddl_test')
+box.commit();
+
+box.begin()
+s.index.pk:drop()
+s:drop()
+box.commit();
+
+--
+-- Only the first statement in a transaction is allowed to be
+-- a yielding DDL statement (index build, space format check).
+--
+s = box.schema.space.create('test', {engine = engine});
+_ = s:create_index('pk');
+s:insert{1, 1};
+
+-- ok
+box.begin()
+s:create_index('sk', {parts = {2, 'unsigned'}})
+box.commit();
+s.index.sk:drop();
+
+-- ok
+box.begin()
+s:format({{'a', 'unsigned'}, {'b', 'unsigned'}})
+box.commit();
+s:format({});
+
+-- error
+box.begin()
+s.index.pk:alter{sequence = true}
+s:create_index('sk', {parts = {2, 'unsigned'}});
+box.rollback();
+
+-- error
+box.begin()
+s.index.pk:alter{sequence = true}
+s:format({{'a', 'unsigned'}, {'b', 'unsigned'}});
+box.rollback();
+
+s:drop();
+
+--
+-- Check that all modifications done to the space during index build
+-- are reflected in the new index.
+--
+math.randomseed(os.time())
+
+s = box.schema.space.create('test', {engine = engine})
+_ = s:create_index('pk')
+
+inspector:cmd("setopt delimiter ';'")
+
+box.begin()
+for i = 1, 1000 do
+    if (i % 100 == 0) then
+        box.commit()
+        box.begin()
+    end
+    if i % 300 == 0 then
+        box.snapshot()
+    end
+    box.space.test:replace{i, i, i}
+end
+box.commit();
+
+last_val = 1000;
+
+function gen_load()
+    local s = box.space.test
+    for i = 1, 200 do
+        local op = math.random(4)
+        local key = math.random(1000)
+        local val1 = math.random(1000)
+        local val2 = last_val + 1
+        last_val = val2
+        if op == 1 then
+            pcall(s.insert, s, {key, val1, val2})
+        elseif op == 2 then
+            pcall(s.replace, s, {key, val1, val2})
+        elseif op == 3 then
+            pcall(s.delete, s, {key})
+        elseif op == 4 then
+            pcall(s.upsert, s, {key, val1, val2}, {{'=', 2, val1}, {'=', 3, val2}})
+        end
+    end
+end;
+
+function check_equal(check, pk, k)
+    if pk ~= k then
+        require('log').error("Error on fiber check: failed '" .. check .. 
+	                     "' check on equal pk " .. pk .. " and k = " .. k)
+        return false
+    end
+    return true
+end;
+
+function check_fiber()
+    _ = fiber.create(function() gen_load() ch:put(true) end)
+    _ = box.space.test:create_index('sk', {unique = false, parts = {2, 'unsigned'}})
+
+    ch:get(10)
+
+    local index = box.space.test.index
+    if not check_equal("1st step secondary keys", index.pk:count(), index.sk:count()) then
+        return false
+    end
+
+    _ = fiber.create(function() gen_load() ch:put(true) end)
+    _ = box.space.test:create_index('tk', {unique = true, parts = {3, 'unsigned'}})
+
+    ch:get(10)
+
+    index = box.space.test.index
+    if not check_equal("2nd step secondary keys", index.pk:count(), index.sk:count()) or
+            not check_equal("2nd step third keys", index.pk:count(), index.tk:count()) then
+        return false
+    end
+    return true
+end;
+
+inspector:cmd("setopt delimiter ''");
+
+fiber = require('fiber')
+ch = fiber.channel(1)
+check_fiber()
+
+inspector:cmd("restart server default")
+inspector = require('test_run').new()
+
+inspector:cmd("setopt delimiter ';'")
+
+function check_equal(check, pk, k)
+    if pk ~= k then
+        require('log').error("Error on server restart check: failed '" .. check ..
+                             "' check on equal pk " .. pk .. " and k = " .. k)
+        return false
+    end
+    return true
+end;
+
+function check_server_restart()
+    local index = box.space.test.index
+    if not check_equal("1rd step secondary keys", index.pk:count(), index.sk:count()) or
+            not check_equal("1rd step third keys", index.pk:count(), index.tk:count()) then
+        return false
+    end
+    box.snapshot()
+    index = box.space.test.index
+    if not check_equal("2th step secondary keys", index.pk:count(), index.sk:count()) or
+            not check_equal("2th step third keys", index.pk:count(), index.tk:count()) then
+        return false
+    end
+    return true
+end;
+
+inspector:cmd("setopt delimiter ''");
+
+check_server_restart()
+
+box.space.test:drop()
