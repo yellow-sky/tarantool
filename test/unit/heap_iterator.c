@@ -98,7 +98,7 @@ test_iterator_small()
 	}
 
 	struct heap_iterator it;
-	bool used_key[5];
+	bool used_key[4];
 	memset((void *)used_key, 0, sizeof(used_key));
 
 	test_heap_iterator_init(&heap, &it);
@@ -108,9 +108,9 @@ test_iterator_small()
 		if (value == NULL)
 			fail("NULL returned from iterator", "value == NULL");
 		uint32_t val = value->val1;
-		if (val < 1 || val > 5)
+		if (val < 1 || val > 4)
 			fail("from iterator returned incorrect value",
-			     "val < 1 || val > 5");
+			     "val < 1 || val > 4");
 		if (used_key[val - 1])
 			fail("from iterator some value returned twice",
 			     "used[val]");
@@ -118,8 +118,8 @@ test_iterator_small()
 	}
 
 	bool f = true;
-	for (uint32_t i = 1; i < 5; ++i)
-		f = used_key[i - 1] && f;
+	for (uint32_t i = 0; i < 4; ++i)
+		f = used_key[i] && f;
 	if (!f)
 		fail("some node was skipped", "!f");
 
