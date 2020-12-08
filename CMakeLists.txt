@@ -159,8 +159,11 @@ add_custom_target(ctags DEPENDS tags)
 #
 
 add_custom_target(luacheck)
+# luacheck requires a real path to a directory
+# see https://github.com/mpeterv/luacheck/issues/208
+get_filename_component(REALPATH ${PROJECT_SOURCE_DIR} REALPATH)
 add_custom_command(TARGET luacheck
-    COMMAND ${LUACHECK} --codes --config "${PROJECT_SOURCE_DIR}/.luacheckrc" "${PROJECT_SOURCE_DIR}"
+    COMMAND ${LUACHECK} --codes --config .luacheckrc "${REALPATH}"
     COMMENT "Perform static analysis of Lua code"
 )
 
