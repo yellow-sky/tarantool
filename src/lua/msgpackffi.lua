@@ -561,6 +561,7 @@ local decoder_hint = {
 decode_r = function(data)
     local c = data[0][0]
     data[0] = data[0] + 1
+    local fun = decoder_hint[c]
     if c <= 0x7f then
         return tonumber(c) -- fixint
     elseif c >= 0xa0 and c <= 0xbf then
@@ -579,10 +580,11 @@ decode_r = function(data)
         return true
     elseif c >= 0xd4 and c <= 0xd8 or c >= 0xc7 and c <= 0xc9 then
         return decode_ext(data)
-    else
-        local fun = decoder_hint[c];
+    elseif type(fun) == "function" then
         assert (type(fun) == "function")
         return fun(data)
+    else
+        error(string.format("mp_ext subtype 0x%02x is unsupported", c))
     end
 end
 
