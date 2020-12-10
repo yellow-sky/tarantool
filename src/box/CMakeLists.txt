@@ -218,6 +218,10 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   add_definitions(-DSQL_DEBUG=1)
 endif()
 add_definitions(-DSQL_TEST=1)
+# Set the maximum number of in-memory pages to use for temporary tables.
+# 20000 * 1024 = 20480000 bytes.
+# (https://www.sqlite.org/compile.html#default_cache_size)
+add_definitions(-DSQL_DEFAULT_CACHE_SIZE=-20000)
 
 set(EXT_SRC_DIR ${CMAKE_SOURCE_DIR}/extra)
 set(EXT_BIN_DIR ${CMAKE_BINARY_DIR}/extra)
