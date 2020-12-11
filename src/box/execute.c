@@ -687,8 +687,18 @@ sql_execute(struct sql_stmt *stmt, struct port *port, struct region *region)
 		rc = sql_step(stmt);
 		assert(rc != SQL_ROW && rc != 0);
 	}
-	if (rc != SQL_DONE)
+	if (rc != SQL_DONE) {
+		/*
+		 * In SQL, on failure sometimes an error sets to the diag,
+		 * sometimes not. So, let's call `panic()` in that case, because
+		 * something is very wrong, and it is not safe to continue
+		 * execution.
+		 */
+		if (diag_is_empty(diag_get()))
+			panic("failed to execute SQL statement");
+
 		return -1;
+	}
 	return 0;
 }
 
