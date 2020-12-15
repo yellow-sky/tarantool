@@ -257,10 +257,10 @@ base64_decode_block(const char *in_base64, int in_len,
 		{
 	case step_a:
 			do {
-				if (in_pos == in_end || out_pos >= out_end)
+				if (in_pos >= in_end)
 				{
 					state->step = step_a;
-					state->result = curr_byte;
+					/* curr_byte is useless now. */
 					return out_pos - out_bin;
 				}
 				fragment = base64_decode_value(*in_pos++);
@@ -268,7 +268,7 @@ base64_decode_block(const char *in_base64, int in_len,
 			curr_byte = (fragment & 0x03f) << 2;
 	case step_b:
 			do {
-				if (in_pos == in_end || out_pos >= out_end)
+				if (in_pos >= in_end)
 				{
 					state->step = step_b;
 					state->result = curr_byte;
@@ -276,14 +276,19 @@ base64_decode_block(const char *in_base64, int in_len,
 				}
 				fragment = base64_decode_value(*in_pos++);
 			} while (fragment < 0);
+			if (out_pos >= out_end)
+			{
+				/* We are losing some data. */
+				state->step = step_b;
+				state->result = curr_byte;
+				return out_pos - out_bin;
+			}
 			curr_byte |= (fragment & 0x030) >> 4;
 			*out_pos++ = curr_byte;
 			curr_byte = (fragment & 0x00f) << 4;
-			if (out_pos < out_end)
-				*out_pos = curr_byte;
 	case step_c:
 			do {
-				if (in_pos == in_end || out_pos >= out_end)
+				if (in_pos >= in_end)
 				{
 					state->step = step_c;
 					state->result = curr_byte;
@@ -291,14 +296,19 @@ base64_decode_block(const char *in_base64, int in_len,
 				}
 				fragment = base64_decode_value(*in_pos++);
 			} while (fragment < 0);
+			if (out_pos >= out_end)
+			{
+				/* We are losing some data. */
+				state->step = step_c;
+				state->result = curr_byte;
+				return out_pos - out_bin;
+			}
 			curr_byte |= (fragment & 0x03c) >> 2;
 			*out_pos++ = curr_byte;
 			curr_byte = (fragment & 0x003) << 6;
-			if (out_pos < out_end)
-				*out_pos = curr_byte;
 	case step_d:
 			do {
-				if (in_pos == in_end || out_pos >= out_end)
+				if (in_pos >= in_end)
 				{
 					state->step = step_d;
 					state->result = curr_byte;
@@ -306,6 +316,13 @@ base64_decode_block(const char *in_base64, int in_len,
 				}
 				fragment = base64_decode_value(*in_pos++);
 			} while (fragment < 0);
+			if (out_pos >= out_end)
+			{
+				/* We are losing some data. */
+				state->step = step_d;
+				state->result = curr_byte;
+				return out_pos - out_bin;
+			}
 			curr_byte |= (fragment & 0x03f);
 			*out_pos++ = curr_byte;
 		}
