@@ -58,9 +58,18 @@ base64_nowrap_test(const char *str)
 	base64_test(str, BASE64_NOWRAP, symbols, lengthof(symbols));
 }
 
+static void
+base64_no_space_test(void)
+{
+	const char *const in = "sIIpHw==";
+	const int in_len = strlen(in);
+	const int rc = base64_decode(in, in_len, NULL, 0);
+	is(rc, 0, "no space in out buffer");
+}
+
 int main(int argc, char *argv[])
 {
-	plan(28);
+	plan(29);
 	header();
 
 	const char *option_tests[] = {
@@ -77,6 +86,8 @@ int main(int argc, char *argv[])
 		base64_nopad_test(option_tests[i]);
 		base64_nowrap_test(option_tests[i]);
 	}
+
+	base64_no_space_test();
 
 	footer();
 	return check_plan();
