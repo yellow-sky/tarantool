@@ -7,7 +7,7 @@ static void
 base64_test(const char *str, int options, const char *no_symbols,
 	    int no_symbols_len)
 {
-	plan(3 + no_symbols_len);
+	plan(4 + no_symbols_len);
 
 	int len = strlen(str);
 	int base64_buflen = base64_bufsize(len + 1, options);
@@ -33,6 +33,11 @@ base64_test(const char *str, int options, const char *no_symbols,
 
 	free(base64_buf);
 	free(strbuf);
+
+	const char *in = "sIIpHw==";
+	int in_len = strlen(in);
+	rc = base64_decode(in, in_len, NULL, 0);
+	is(rc, 0, "no space in out buffer");
 
 	check_plan();
 }
