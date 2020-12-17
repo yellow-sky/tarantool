@@ -923,11 +923,11 @@ s:replace{1, 0}
 
 tx1:begin()
  | ---
- | - 
+ | -
  | ...
 tx2:begin()
  | ---
- | - 
+ | -
  | ...
 tx1('s:select{1}')
  | ---
@@ -947,7 +947,7 @@ tx2('s:replace{1, 2}')
  | ...
 tx1:commit()
  | ---
- | - 
+ | -
  | ...
 tx2:commit()
  | ---
