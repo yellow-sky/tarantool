@@ -207,7 +207,9 @@ lbox_tuple_format_new(struct lua_State *L)
 		if (! lua_isnil(L, -1)) {
 			const char *type_name = lua_tolstring(L, -1, &len);
 			fields[i].type = field_type_by_name(type_name, len);
-			assert(fields[i].type != field_type_MAX);
+			if (fields[i].type == field_type_MAX) {
+				fields[i].type = FIELD_TYPE_ANY;
+			}
 		}
 		lua_pop(L, 1);
 
