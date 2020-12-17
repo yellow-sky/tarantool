@@ -518,7 +518,8 @@ local function decode_ext(data)
     if type(fun) == 'function' then
         return fun(data, len)
     else
-        error("Unsupported extension type")
+        local mp_ext_raw = ffi.new("struct mp_ext_raw", {data, len})
+        return mp_ext_raw
     end
 end
 

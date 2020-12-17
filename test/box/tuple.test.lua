@@ -535,4 +535,18 @@ msgpack.decode(msgpack.encode(t))
 msgpackffi.decode(msgpackffi.encode(t))
 t:bsize()
 
+--
+-- gh-4632 Unknown MP_EXT in a tuple
+--
+-- Tuple with MP_EXT, ext 32, type 127
+t = box.tuple.new('9201c9000000017f01', 2)
+state, val = t:next()
+state
+val
+t:slice(1)
+t:slice(-1)
+t:slice(-2)
+msgpack.decode('9201c9000000017f01')
+t:bsize()
+
 msgpack.cfg({encode_max_depth = max_depth, encode_deep_as_nil = deep_as_nil})
