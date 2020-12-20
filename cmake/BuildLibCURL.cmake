@@ -178,6 +178,11 @@ macro(curl_build)
         set(CURL_LIBRARIES ${CURL_LIBRARIES} rt)
     endif()
 
+    # Install headers.
+    install(DIRECTORY "${CURL_INCLUDE_DIRS}/curl"
+            DESTINATION ${MODULE_FULL_INCLUDEDIR}
+            FILES_MATCHING PATTERN "*.h")
+
     unset(FOUND_ZLIB_ROOT_DIR)
     unset(FOUND_OPENSSL_ROOT_DIR)
     unset(LIBCURL_INSTALL_DIR)
