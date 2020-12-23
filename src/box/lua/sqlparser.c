@@ -2,89 +2,42 @@
 #include "execute.h"
 #include "lua/utils.h"
 #include "sqlInt.h"
-#include "../sql/vdbe.h"	// FIXME
-#include "../sql/vdbeInt.h"	// FIXME
-#include "../execute.h"		// FIXME
-#include "../schema.h"		// FIXME
-#include "../session.h"		// FIXME
-#include "../box.h"		// FIXME
-
+#include "sqlparser.h"
+#include "box/box.h"
+#include <small/ibuf.h>
 
 #ifndef DISABLE_AST_CACHING
 #include "box/sql_stmt_cache.h"
 #endif
 
 #include <stdlib.h>
+#include <strings.h>
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
 
-static uint32_t CTID_STRUCT_SQL_PARSED_AST = 0;
+uint32_t CTID_STRUCT_SQL_PARSED_AST = 0;
 static uint32_t CTID_STRUCT_SQL_STMT = 0;
 
-/*
- * Remember the SQL string for a prepared statement.
- * Looks same as sqlVdbeSetSql but for AST, not VDBE
- */
-static void
-sql_ast_set_sql(struct sql_parsed_ast *ast, const char *ps, int sz)
+
+struct sql_parsed_ast*
+sql_ast_alloc(void)
 {
-	if (ast == NULL)
-		return;
-	assert(ast->sql_query == NULL);
-	ast->sql_query = sqlDbStrNDup(sql_get(), ps, sz);
+	struct sql_parsed_ast *p = calloc(1, sizeof(*p));
+	if (p == NULL) {
+		diag_set(OutOfMemory, sizeof(*p), "malloc",
+			 "struct sql_parsed_ast");
+		return NULL;
+	}
+	return p;
 }
 
-int
-sql_stmt_parse(const char *zSql, sql_stmt **ppStmt, struct sql_parsed_ast *ast)
+void
+sql_ast_free(struct sql_parsed_ast *p)
 {
-	struct sql *db = sql_get();
-	int rc = 0;	/* Result code */
-	Parse sParse;
-	sql_parser_create(&sParse, db, current_session()->sql_flags);
-
-	sParse.parse_only = true;	// Parse and build AST only
-	sParse.parsed_ast.keep_ast = true;
-
-	*ppStmt = NULL;
-	/* assert( !db->mallocFailed ); // not true with SQL_USE_ALLOCA */
-
-	sqlRunParser(&sParse, zSql);
-	assert(0 == sParse.nQueryLoop);
-
-	if (sParse.is_aborted)
-		rc = -1;
-
-	if (rc != 0 || db->mallocFailed) {
-		sqlVdbeFinalize(sParse.pVdbe);
-		assert(!(*ppStmt));
-		goto exit_cleanup;
-	}
-	// we have either AST or VDBE, but not both
-	assert(SQL_PARSE_VALID_VDBE(&sParse) != SQL_PARSE_VALID_AST(&sParse));
-	if (SQL_PARSE_VALID_VDBE(&sParse)) {
-		if (db->init.busy == 0) {
-			Vdbe *pVdbe = sParse.pVdbe;
-			sqlVdbeSetSql(pVdbe, zSql, (int)(sParse.zTail - zSql));
-		}
-		*ppStmt = (sql_stmt *) sParse.pVdbe;
-
-		/* Delete any TriggerPrg structures allocated while parsing this statement. */
-		while (sParse.pTriggerPrg) {
-			TriggerPrg *pT = sParse.pTriggerPrg;
-			sParse.pTriggerPrg = pT->pNext;
-			sqlDbFree(db, pT);
-		}
-	} else {	// AST constructed
-		assert(SQL_PARSE_VALID_AST(&sParse));
-		*ast = sParse.parsed_ast;
-		assert(ast->keep_ast == true);
-		sql_ast_set_sql(ast, zSql, (int)(sParse.zTail - zSql));
-	}
-
-exit_cleanup:
-	sql_parser_destroy(&sParse);
-	return rc;
+	if (p == NULL)
+		return;
+	free(p);
 }
 
 #ifndef DISABLE_AST_CACHING
@@ -101,7 +54,7 @@ void sql_ast_reset(struct sql_parsed_ast *ast)
 }
 #endif
 
-static inline struct sql_parsed_ast *
+inline struct sql_parsed_ast *
 luaT_check_sql_parsed_ast(struct lua_State *L, int idx)
 {
 	if (lua_type(L, idx) != LUA_TCDATA)
@@ -125,7 +78,7 @@ lbox_sql_parsed_ast_gc(struct lua_State *L)
 	return 0;
 }
 
-static void
+void
 luaT_push_sql_parsed_ast(struct lua_State *L, struct sql_parsed_ast *ast)
 {
 	*(struct sql_parsed_ast **)
@@ -134,7 +87,7 @@ luaT_push_sql_parsed_ast(struct lua_State *L, struct sql_parsed_ast *ast)
 	luaL_setcdatagc(L, -2);
 }
 
-static inline struct sql_stmt *
+struct sql_stmt *
 luaT_check_sql_stmt(struct lua_State *L, int idx)
 {
 	if (lua_type(L, idx) != LUA_TCDATA)
@@ -151,17 +104,11 @@ luaT_check_sql_stmt(struct lua_State *L, int idx)
 static int
 lbox_sql_stmt_gc(struct lua_State *L)
 {
-#if 0
-	struct sql_stmt *stmt = luaT_check_sql_stmt(L, 1);
-	if (stmt)
-		sqlVdbeDelete((Vdbe *)stmt);
-#else
 	(void)L;
-#endif
 	return 0;
 }
 
-static void
+void
 luaT_push_sql_stmt(struct lua_State *L, struct sql_stmt *stmt)
 {
 	*(struct sql_stmt **)
@@ -207,13 +154,6 @@ lbox_sqlparser_parse(struct lua_State *L)
 		ast = entry->ast;
 		sql_ast_reset(ast);
 		//goto return_error; // FIXME - some odd problems here
-#if 0
-		if (sql_stmt_schema_version(stmt) != box_schema_version() &&
-		    !sql_stmt_busy(stmt)) {
-			; //if (sql_reprepare(&stmt) != 0)
-			//	goto error;
-		}
-#endif
 	}
 	assert(ast != NULL);
 	/* Add id to the list of available statements in session. */
@@ -233,6 +173,7 @@ return_error:
 	return luaT_push_nil_and_error(L);
 }
 
+#if 0
 static int
 lbox_sqlparser_unparse(struct lua_State *L)
 {
@@ -249,105 +190,17 @@ lbox_sqlparser_unparse(struct lua_State *L)
 		return luaT_push_nil_and_error(L);
 	return 0;
 }
-
-#ifndef DISABLE_AST_CACHING
-static struct sql_stmt*
-sql_ast_generate_vdbe(struct lua_State *L, struct stmt_cache_entry *entry)
-{
-	(void)L;
-	struct sql_parsed_ast * ast = entry->ast;
-	// nothing to generate yet - this kind of statement is
-	// not (yet) supported. Eventually this limitation
-	// will be lifted
-	if (!AST_VALID(entry->ast))
-		return entry->stmt;
-
-	// assumption is that we have not yet completed
-	// bytecode generation for parsed AST
-	struct sql_stmt *stmt = entry->stmt;
-	assert(stmt == NULL);
-#else
-static struct sql_stmt*
-sql_ast_generate_vdbe(struct lua_State *L, struct sql_parsed_ast * ast)
-{
-	(void)L;
-
-	// nothing to generate yet - this kind of statement is
-	// not (yet) supported. Eventually this limitation
-	// will be lifted
-	if ( !AST_VALID(ast))
-		return NULL;
 #endif
-	struct sql *db = sql_get();
-	Parse sParse = {0};
-	sql_parser_create(&sParse, db, current_session()->sql_flags);
-	sParse.parse_only = false;
 
-	struct Vdbe *v = sqlGetVdbe(&sParse);
-	if (v == NULL) {
-		sql_parser_destroy(&sParse);
-		diag_set(OutOfMemory, sizeof(struct Vdbe), "sqlGetVdbe",
-			 "sqlparser");
-		return NULL;
-	}
-
-	// we already parsed AST, thus not calling sqlRunParser
-
-	switch (ast->ast_type) {
-		case AST_TYPE_SELECT: 	// SELECT
-		{
-			Select *p = ast->select;
-			SelectDest dest = {SRT_Output, NULL, 0, 0, 0, 0, NULL};
-
-			int rc = sqlSelect(&sParse, p, &dest);
-			if (rc != 0)
-				return NULL;
-			break;
-		}
-
-		default:		// FIXME
-		{
-			assert(0);
-		}
-	}
-	sql_finish_coding(&sParse);
-	sql_parser_destroy(&sParse);
-
-	return (struct sql_stmt*)sParse.pVdbe;
-}
 
 static int
 lbox_sqlparser_execute(struct lua_State *L)
 {
-	int top = lua_gettop(L);
-#if 0
-	struct sql_bind *bind = NULL;
-	int bind_count = 0;
-	size_t length;
-	struct port port;
-
-	if (top == 2) {
-		if (! lua_istable(L, 2))
-			return luaL_error(L, "Second argument must be a table");
-		bind_count = lua_sql_bind_list_decode(L, &bind, 2);
-		if (bind_count < 0)
-			return luaT_push_nil_and_error(L);
-	}
-
-#endif
-	assert(top == 1);
-	(void)top;
 #ifndef DISABLE_AST_CACHING
 	// FIXME - assuming we are receiving a single
 	// argument of a prepared AST handle
 	assert(lua_type(L, 1) == LUA_TNUMBER);
 	lua_Integer query_id = lua_tointeger(L, 1);
-#if 0
-	if (!session_check_stmt_id(current_session(), stmt_id)) {
-		diag_set(ClientError, ER_WRONG_QUERY_ID, stmt_id);
-		return -1;
-	}
-#endif
 
 	struct stmt_cache_entry *entry = stmt_cache_find_entry(query_id);
 	assert(entry != NULL);
@@ -359,56 +212,50 @@ lbox_sqlparser_execute(struct lua_State *L)
 	struct sql_stmt *stmt = NULL;
 	if (ast == NULL)
 		stmt = luaT_check_sql_stmt(L, 1);
-	assert(ast != NULL || stmt != NULL); // FIXME - human readable error
-
-	// 2. generate
-	// 2a - supported case: SELECT
-	if (AST_VALID(ast)) {
-		stmt = sql_ast_generate_vdbe(L, ast);
-	}
-	// 2b - unsupported (yet) case - bail down to box.execute
-	else {
-		assert(stmt);
-	}
 #endif
-
-	if (stmt == NULL)
+	if (sql_parser_ast_execute(L, ast, stmt) == 0)
 		return luaT_push_nil_and_error(L);
-
-	struct port port;
-	struct region *region = &fiber()->gc;
-
-	enum sql_serialization_format format =
-		sql_column_count(stmt) > 0 ? DQL_EXECUTE : DML_EXECUTE;
-
-	port_sql_create(&port, stmt, format, true);
-	if (sql_execute(stmt, &port, region) != 0)
-		goto return_error;
-
-	sql_stmt_reset(stmt);
-	port_dump_lua(&port, L, false);
-	port_destroy(&port);
-
-	return 1;
-
-return_error:
-	if (stmt != NULL)
-		sql_stmt_reset(stmt);
-	port_destroy(&port);
-	return luaT_push_nil_and_error(L);
+	else
+		return 1;
 };
 
-static int
+int
 lbox_sqlparser_serialize(struct lua_State *L)
 {
-	lua_pushliteral(L, "sqlparser.serialize");
+	struct sql_parsed_ast *ast = luaT_check_sql_parsed_ast(L, 1);
+
+	if (AST_VALID(ast)) {
+		assert(ast->ast_type == AST_TYPE_SELECT);
+
+		struct ibuf ibuf;
+		ibuf_create(&ibuf, &cord()->slabc, 1024); // FIXME - precise estimate
+		ibuf_reset(&ibuf);
+
+		struct Parse parser;
+		struct sql *db = sql_get();
+		sql_parser_create(&parser, db, default_flags);
+		sqlparser_generate_msgpack_walker(&parser, &ibuf, ast->select);
+
+		lua_pushlstring(L, ibuf.buf, ibuf_used(&ibuf));
+		ibuf_reinit(&ibuf);
+	} else {
+		lua_pushnil(L);
+	}
 	return 1;
 }
 
-static int
+int
 lbox_sqlparser_deserialize(struct lua_State *L)
 {
-	lua_pushliteral(L, "sqlparser.deserialize");
+	int index = lua_gettop(L);
+	int type = index >= 1 ? lua_type(L, 1) : LUA_TNONE;
+	switch (type) {
+	case LUA_TSTRING:
+		return sqlparser_msgpack_decode_string(L, true);
+	default:
+		return luaL_error(L, "sqldeserialize: "
+				  "a Lua string or 'char *' expected");
+	}
 	return 1;
 }
 
@@ -430,7 +277,9 @@ box_lua_sqlparser_init(struct lua_State *L)
 
 	static const struct luaL_Reg meta[] = {
 		{ "parse", lbox_sqlparser_parse },
+#if 0
 		{ "unparse", lbox_sqlparser_unparse },
+#endif
 		{ "serialize", lbox_sqlparser_serialize },
 		{ "deserialize", lbox_sqlparser_deserialize },
 		{ "execute", lbox_sqlparser_execute },
