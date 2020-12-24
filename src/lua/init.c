@@ -121,7 +121,13 @@ extern char strict_lua[],
 	string_lua[],
 	swim_lua[],
 	p_lua[], /* LuaJIT 2.1 profiler */
-	zone_lua[] /* LuaJIT 2.1 profiler */;
+	zone_lua[], /* LuaJIT 2.1 profiler */
+	/* tools.* library. */
+	bufread_lua[],
+	humanize_lua[],
+	parse_lua[],
+	symtab_lua[]
+;
 
 static const char *lua_modules[] = {
 	/* Make it first to affect load of all other modules */
@@ -167,6 +173,11 @@ static const char *lua_modules[] = {
 	/* Profiler */
 	"jit.p", p_lua,
 	"jit.zone", zone_lua,
+	/* tools.* library. */
+	"utils.bufread", bufread_lua,
+	"utils.symtab", symtab_lua,
+	"memprof.parse", parse_lua,
+	"memprof.humanize", humanize_lua,
 	NULL
 };
 

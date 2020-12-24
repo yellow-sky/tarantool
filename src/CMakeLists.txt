@@ -61,6 +61,13 @@ lua_source(lua_sources "${CMAKE_BINARY_DIR}/third_party/luajit/src/jit/vmdef.lua
 lua_source(lua_sources "${CMAKE_BINARY_DIR}/third_party/luajit/src/jit/v.lua")
 lua_source(lua_sources "${CMAKE_BINARY_DIR}/third_party/luajit/src/jit/p.lua")
 lua_source(lua_sources "${CMAKE_BINARY_DIR}/third_party/luajit/src/jit/zone.lua")
+# LuaJIT tools.* library
+lua_source(lua_sources "${CMAKE_BINARY_DIR}/third_party/luajit/tools/memprof/humanize.lua")
+lua_source(lua_sources "${CMAKE_BINARY_DIR}/third_party/luajit/tools/memprof/parse.lua")
+lua_source(lua_sources "${CMAKE_BINARY_DIR}/third_party/luajit/tools/utils/bufread.lua")
+lua_source(lua_sources "${CMAKE_BINARY_DIR}/third_party/luajit/tools/utils/symtab.lua")
+# FIXME its not a module more like a script
+lua_source(lua_sources "${CMAKE_BINARY_DIR}/third_party/luajit/tools/memprof.lua")
 
 add_custom_target(generate_lua_sources
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/src/box
