@@ -356,6 +356,13 @@ local function guard_loop(self)
     self.shutdown:put("stopped")
 end
 
+-- An on_shutdown trigger to fire on tarantool exit.
+local function on_shutdown(self)
+    if self.control ~= nil then
+        self.control:put("send")
+    end
+end
+
 -- these functions are used for test purposes only
 local function start(self)
     self:stop()
@@ -402,6 +409,9 @@ setmetatable(daemon, {
         generate_feedback = function()
             return fill_in_feedback({ feedback_version = 5 })
         end,
+        on_shutdown = function()
+            on_shutdown(daemon)
+        end,
         start = function()
             start(daemon)
         end,
@@ -439,3 +449,6 @@ if box.internal == nil then
 else
     box.internal[PREFIX] = daemon
 end
+
+-- Send feedback on Tarantool exit.
+box.ctl.on_shutdown(function() daemon:on_shutdown() end)
