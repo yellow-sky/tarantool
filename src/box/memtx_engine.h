@@ -99,6 +99,10 @@ enum memtx_reserve_extents_num {
 	RESERVE_EXTENTS_BEFORE_REPLACE = 16
 };
 
+enum memtx_allocator_type {
+	MEMTX_SMALL_ALLOCATOR,
+};
+
 /**
  * The size of the biggest memtx iterator. Used with
  * mempool_create. This is the size of the block that will be
@@ -133,10 +137,6 @@ struct memtx_engine {
 	 * is reflected in box.slab.info(), @sa lua/slab.c.
 	 */
 	struct slab_arena arena;
-	/** Slab cache for allocating tuples. */
-	struct slab_cache slab_cache;
-	/** Tuple allocator. */
-	struct small_alloc alloc;
 	/** Slab cache for allocating index extents. */
 	struct slab_cache index_slab_cache;
 	/** Index extent allocator. */
@@ -178,6 +178,10 @@ struct memtx_engine {
 	 * memtx_gc_task::link.
 	 */
 	struct stailq gc_queue;
+	/**
+	 * TYpe of memtx allocator
+	 */
+	enum memtx_allocator_type allocator_type;
 };
 
 struct memtx_gc_task;
@@ -238,23 +242,15 @@ memtx_engine_set_max_tuple_size(struct memtx_engine *memtx, size_t max_size);
 void
 memtx_enter_delayed_free_mode(struct memtx_engine *memtx);
 
+/** Tuple format vtab for memtx engine. */
+extern struct tuple_format_vtab memtx_tuple_format_vtab;
+
 /**
  * Leave tuple delayed free mode. This function undoes the effect
  * of memtx_enter_delayed_free_mode().
  */
 void
 memtx_leave_delayed_free_mode(struct memtx_engine *memtx);
-
-/** Allocate a memtx tuple. @sa tuple_new(). */
-struct tuple *
-memtx_tuple_new(struct tuple_format *format, const char *data, const char *end);
-
-/** Free a memtx tuple. @sa tuple_delete(). */
-void
-memtx_tuple_delete(struct tuple_format *format, struct tuple *tuple);
-
-/** Tuple format vtab for memtx engine. */
-extern struct tuple_format_vtab memtx_tuple_format_vtab;
 
 enum {
 	MEMTX_EXTENT_SIZE = 16 * 1024,
@@ -294,6 +290,26 @@ memtx_index_def_change_requires_rebuild(struct index *index,
 } /* extern "C" */
 
 #include "diag.h"
+#include "tuple_format.h"
+
+/** Allocate a memtx tuple. @sa tuple_new(). */
+template<class Allocator>
+struct tuple *
+memtx_tuple_new(struct tuple_format *format, const char *data, const char *end);
+
+/** Free a memtx tuple. @sa tuple_delete(). */
+template<class Allocator>
+void
+memtx_tuple_delete(struct tuple_format *format, struct tuple *tuple);
+
+template <class Allocator>
+const char *
+memtx_tuple_chunk_new(MAYBE_UNUSED struct tuple_format *format, struct tuple *tuple,
+		      const char *data, uint32_t data_sz);
+
+template <class Allocator>
+void
+metmx_tuple_chunk_delete(MAYBE_UNUSED struct tuple_format *format, const char *data);
 
 static inline struct memtx_engine *
 memtx_engine_new_xc(const char *snap_dirname, bool force_recovery,

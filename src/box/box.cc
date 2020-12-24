@@ -33,6 +33,7 @@
 #include "trivia/config.h"
 
 #include "lua/utils.h" /* lua_hash() */
+#include "lua/slab.h" /* box_lua_slab_init */
 #include "fiber_pool.h"
 #include <say.h>
 #include <scoped_guard.h>
@@ -2947,6 +2948,7 @@ box_cfg_xc(void)
 
 	gc_init();
 	engine_init();
+	box_lua_slab_init(tarantool_L);
 	schema_init();
 	replication_init();
 	port_init();
