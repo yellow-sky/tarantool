@@ -129,6 +129,7 @@ add_library(box STATIC
     engine.c
     memtx_engine.cc
     memtx_space.cc
+    small_allocator.cc
     sysview.c
     blackhole.c
     service_engine.c
@@ -198,6 +199,7 @@ add_library(box STATIC
     lua/serialize_lua.c
     lua/tuple.c
     lua/slab.c
+    lua/slab.cc
     lua/index.c
     lua/space.cc
     lua/sequence.c
@@ -264,3 +266,4 @@ target_link_libraries(box box_error tuple stat xrow xlog vclock crc32 scramble
                       raft ${common_libraries})
 
 add_dependencies(box build_bundled_libs generate_sql_files)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --std=c++14")

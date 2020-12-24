@@ -320,6 +320,7 @@ dup_replace_mode(uint32_t op)
 	return op == IPROTO_INSERT ? DUP_INSERT : DUP_REPLACE_OR_INSERT;
 }
 
+template<class Allocator>
 static int
 memtx_space_execute_replace(struct space *space, struct txn *txn,
 			    struct request *request, struct tuple **result)
@@ -327,8 +328,8 @@ memtx_space_execute_replace(struct space *space, struct txn *txn,
 	struct memtx_space *memtx_space = (struct memtx_space *)space;
 	struct txn_stmt *stmt = txn_current_stmt(txn);
 	enum dup_replace_mode mode = dup_replace_mode(request->type);
-	stmt->new_tuple = memtx_tuple_new(space->format, request->tuple,
-					  request->tuple_end);
+	stmt->new_tuple = memtx_tuple_new<Allocator>(space->format,
+					request->tuple, request->tuple_end);
 	if (stmt->new_tuple == NULL)
 		return -1;
 	tuple_ref(stmt->new_tuple);
@@ -378,6 +379,7 @@ memtx_space_execute_delete(struct space *space, struct txn *txn,
 	return 0;
 }
 
+template<class Allocator>
 static int
 memtx_space_execute_update(struct space *space, struct txn *txn,
 			   struct request *request, struct tuple **result)
@@ -412,7 +414,7 @@ memtx_space_execute_update(struct space *space, struct txn *txn,
 	if (new_data == NULL)
 		return -1;
 
-	stmt->new_tuple = memtx_tuple_new(format, new_data,
+	stmt->new_tuple = memtx_tuple_new<Allocator>(format, new_data,
 					  new_data + new_size);
 	if (stmt->new_tuple == NULL)
 		return -1;
@@ -428,6 +430,7 @@ memtx_space_execute_update(struct space *space, struct txn *txn,
 	return 0;
 }
 
+template<class Allocator>
 static int
 memtx_space_execute_upsert(struct space *space, struct txn *txn,
 			   struct request *request)
@@ -483,7 +486,7 @@ memtx_space_execute_upsert(struct space *space, struct txn *txn,
 					  format, request->index_base) != 0) {
 			return -1;
 		}
-		stmt->new_tuple = memtx_tuple_new(format, request->tuple,
+		stmt->new_tuple = memtx_tuple_new<Allocator>(format, request->tuple,
 						  request->tuple_end);
 		if (stmt->new_tuple == NULL)
 			return -1;
@@ -507,7 +510,7 @@ memtx_space_execute_upsert(struct space *space, struct txn *txn,
 		if (new_data == NULL)
 			return -1;
 
-		stmt->new_tuple = memtx_tuple_new(format, new_data,
+		stmt->new_tuple = memtx_tuple_new<Allocator>(format, new_data,
 						  new_data + new_size);
 		if (stmt->new_tuple == NULL)
 			return -1;
@@ -554,19 +557,20 @@ memtx_space_execute_upsert(struct space *space, struct txn *txn,
  * destroyed space may lead to undefined behaviour. For this reason it
  * doesn't take txn as an argument.
  */
+template<class Allocator>
 static int
 memtx_space_ephemeral_replace(struct space *space, const char *tuple,
 				      const char *tuple_end)
 {
 	struct memtx_space *memtx_space = (struct memtx_space *)space;
-	struct tuple *new_tuple = memtx_tuple_new(space->format, tuple,
+	struct tuple *new_tuple = memtx_tuple_new<Allocator>(space->format, tuple,
 						  tuple_end);
 	if (new_tuple == NULL)
 		return -1;
 	struct tuple *old_tuple;
 	if (memtx_space->replace(space, NULL, new_tuple,
 				 DUP_REPLACE_OR_INSERT, &old_tuple) != 0) {
-		memtx_tuple_delete(space->format, new_tuple);
+		memtx_tuple_delete<Allocator>(space->format, new_tuple);
 		return -1;
 	}
 	if (old_tuple != NULL)
@@ -1165,15 +1169,15 @@ memtx_space_prepare_alter(struct space *old_space, struct space *new_space)
 }
 
 /* }}} DDL */
-
+template<class Allocator>
 static const struct space_vtab memtx_space_vtab = {
 	/* .destroy = */ memtx_space_destroy,
 	/* .bsize = */ memtx_space_bsize,
-	/* .execute_replace = */ memtx_space_execute_replace,
+	/* .execute_replace = */ memtx_space_execute_replace<Allocator>,
 	/* .execute_delete = */ memtx_space_execute_delete,
-	/* .execute_update = */ memtx_space_execute_update,
-	/* .execute_upsert = */ memtx_space_execute_upsert,
-	/* .ephemeral_replace = */ memtx_space_ephemeral_replace,
+	/* .execute_update = */ memtx_space_execute_update<Allocator>,
+	/* .execute_upsert = */ memtx_space_execute_upsert<Allocator>,
+	/* .ephemeral_replace = */ memtx_space_ephemeral_replace<Allocator>,
 	/* .ephemeral_delete = */ memtx_space_ephemeral_delete,
 	/* .ephemeral_rowid_next = */ memtx_space_ephemeral_rowid_next,
 	/* .init_system_space = */ memtx_init_system_space,
@@ -1189,6 +1193,7 @@ static const struct space_vtab memtx_space_vtab = {
 	/* .invalidate = */ generic_space_invalidate,
 };
 
+template<class Allocator>
 struct space *
 memtx_space_new(struct memtx_engine *memtx,
 		struct space_def *def, struct rlist *key_list)
@@ -1209,7 +1214,7 @@ memtx_space_new(struct memtx_engine *memtx,
 		return NULL;
 	}
 	struct tuple_format *format =
-		tuple_format_new(&memtx_tuple_format_vtab, memtx, keys, key_count,
+		tuple_format_new(&memtx_tuple_format_vtab<Allocator>, memtx, keys, key_count,
 				 def->fields, def->field_count,
 				 def->exact_field_count, def->dict,
 				 def->opts.is_temporary, def->opts.is_ephemeral);
@@ -1220,7 +1225,7 @@ memtx_space_new(struct memtx_engine *memtx,
 	tuple_format_ref(format);
 
 	if (space_create((struct space *)memtx_space, (struct engine *)memtx,
-			 &memtx_space_vtab, def, key_list, format) != 0) {
+			 &memtx_space_vtab<Allocator>, def, key_list, format) != 0) {
 		tuple_format_unref(format);
 		free(memtx_space);
 		return NULL;
@@ -1234,3 +1239,8 @@ memtx_space_new(struct memtx_engine *memtx,
 	memtx_space->replace = memtx_space_replace_no_keys;
 	return (struct space *)memtx_space;
 }
+
+template
+struct space *
+memtx_space_new<SmallAllocator>(struct memtx_engine *memtx,
+		struct space_def *def, struct rlist *key_list);

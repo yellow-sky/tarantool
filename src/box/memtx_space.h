@@ -84,10 +84,6 @@ int
 memtx_space_replace_all_keys(struct space *, struct tuple *, struct tuple *,
 			     enum dup_replace_mode, struct tuple **);
 
-struct space *
-memtx_space_new(struct memtx_engine *memtx,
-		struct space_def *def, struct rlist *key_list);
-
 static inline bool
 memtx_space_is_recovering(struct space *space)
 {
@@ -98,6 +94,19 @@ memtx_space_is_recovering(struct space *space)
 
 #if defined(__cplusplus)
 } /* extern "C" */
+
+struct SmallAllocator;
+
+template<class Allocator>
+struct space *
+memtx_space_new(struct memtx_engine *memtx,
+		struct space_def *def, struct rlist *key_list);
+
+extern template
+struct space *
+memtx_space_new<SmallAllocator>(struct memtx_engine *memtx,
+		struct space_def *def, struct rlist *key_list);
+
 #endif /* defined(__cplusplus) */
 
 #endif /* TARANTOOL_BOX_MEMTX_SPACE_H_INCLUDED */
