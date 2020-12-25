@@ -51,6 +51,7 @@
 #include "gc.h"
 #include "raft.h"
 #include "small_allocator.h"
+#include "system_allocator.h"
 
 /* sync snapshot every 16MB */
 #define SNAP_SYNC_INTERVAL	(1 << 24)
@@ -155,6 +156,8 @@ memtx_engine_shutdown(struct engine *engine)
 	case MEMTX_SMALL_ALLOCATOR:
 		SmallAllocator::destroy();
 		break;
+	case MEMTX_SYSTEM_ALLOCATOR:
+		SystemAllocator::destroy();
 	default:
 		;
 	}
@@ -994,6 +997,14 @@ small_stats_noop_cb(const struct mempool_stats *stats, void *cb_ctx)
 	return 0;
 }
 
+static int
+system_stats_noop_cb(const struct system_stats *stats, void *cb_ctx)
+{
+	(void)stats;
+	(void)cb_ctx;
+	return 0;
+}
+
 template <class allocator_stats, class cb_stats, class Allocator,
 	  int (*stats_cb)(const cb_stats *stats, void *cb_ctx)>
 static void
@@ -1164,6 +1175,9 @@ memtx_engine_new(const char *snap_dirname, bool force_recovery,
 		say_info("Actual slab_alloc_factor calculated on the basis of desired "
 			 "slab_alloc_factor = %f", actual_alloc_factor);
 		break;
+	case MEMTX_SYSTEM_ALLOCATOR:
+		SystemAllocator::create(&memtx->arena);
+		break;
 	default:
 		;
 	}
@@ -1235,6 +1249,9 @@ memtx_enter_delayed_free_mode(struct memtx_engine *memtx)
 		case MEMTX_SMALL_ALLOCATOR:
 			SmallAllocator::enter_delayed_free_mode();
 			break;
+		case MEMTX_SYSTEM_ALLOCATOR:
+			SystemAllocator::enter_delayed_free_mode();
+			break;
 		default:
 			;
 		}
@@ -1249,6 +1266,9 @@ memtx_leave_delayed_free_mode(struct memtx_engine *memtx)
 		switch (memtx->allocator_type) {
 		case MEMTX_SMALL_ALLOCATOR:
 			SmallAllocator::leave_delayed_free_mode();
+			break;
+		case MEMTX_SYSTEM_ALLOCATOR:
+			SystemAllocator::leave_delayed_free_mode();
 			break;
 		default:
 			;

@@ -101,6 +101,7 @@ enum memtx_reserve_extents_num {
 
 enum memtx_allocator_type {
 	MEMTX_SMALL_ALLOCATOR,
+	MEMTX_SYSTEM_ALLOCATOR,
 };
 
 /**
