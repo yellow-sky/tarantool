@@ -1244,3 +1244,8 @@ template
 struct space *
 memtx_space_new<SmallAllocator>(struct memtx_engine *memtx,
 		struct space_def *def, struct rlist *key_list);
+
+template
+struct space *
+memtx_space_new<SystemAllocator>(struct memtx_engine *memtx,
+		struct space_def *def, struct rlist *key_list);

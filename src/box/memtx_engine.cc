@@ -51,6 +51,7 @@
 #include "gc.h"
 #include "raft.h"
 #include "small_allocator.h"
+#include "system_allocator.h"
 
 /* sync snapshot every 16MB */
 #define SNAP_SYNC_INTERVAL	(1 << 24)
@@ -146,6 +147,8 @@ memtx_engine_shutdown(struct engine *engine)
 	case MEMTX_SMALL_ALLOCATOR:
 		SmallAllocator::destroy();
 		break;
+	case MEMTX_SYSTEM_ALLOCATOR:
+		SystemAllocator::destroy();
 	default:
 		;
 	}
@@ -370,6 +373,8 @@ memtx_engine_create_space(struct engine *engine, struct space_def *def,
 	switch (memtx->allocator_type) {
 	case MEMTX_SMALL_ALLOCATOR:
 		return memtx_space_new<SmallAllocator>(memtx, def, key_list);
+	case MEMTX_SYSTEM_ALLOCATOR:
+		return memtx_space_new<SystemAllocator>(memtx, def, key_list);
 	default:
 		;
 	}
@@ -991,6 +996,14 @@ small_stats_noop_cb(const struct mempool_stats *stats, void *cb_ctx)
 	return 0;
 }
 
+static int
+system_stats_noop_cb(const struct system_stats *stats, void *cb_ctx)
+{
+	(void)stats;
+	(void)cb_ctx;
+	return 0;
+}
+
 template <class allocator_stats, class cb_stats, class Allocator,
 	  int (*stats_cb)(const cb_stats *stats, void *cb_ctx)>
 static void
@@ -1094,6 +1107,8 @@ memtx_engine_new(const char *snap_dirname, bool force_recovery,
 	assert(allocator != NULL);
 	if (!strcmp(allocator, "small")) {
 		memtx->allocator_type = MEMTX_SMALL_ALLOCATOR;
+	} else if (!strcmp(allocator, "system")) {
+		memtx->allocator_type = MEMTX_SYSTEM_ALLOCATOR;
 	} else {
 		diag_set(IllegalParams, "Invalid memory allocator name");
 		free(memtx);
@@ -1153,6 +1168,12 @@ memtx_engine_new(const char *snap_dirname, bool force_recovery,
 		memtx->base.vtab = &memtx_engine_vtab<struct small_stats,
 			struct mempool_stats, SmallAllocator,
 			small_stats_noop_cb>;
+		break;
+	case MEMTX_SYSTEM_ALLOCATOR:
+		SystemAllocator::create(&memtx->quota);
+		memtx->base.vtab = &memtx_engine_vtab<struct system_stats,
+			struct system_stats, SystemAllocator,
+			system_stats_noop_cb>;
 		break;
 	default:
 		;
@@ -1224,6 +1245,9 @@ memtx_enter_delayed_free_mode(struct memtx_engine *memtx)
 		case MEMTX_SMALL_ALLOCATOR:
 			SmallAllocator::enter_delayed_free_mode();
 			break;
+		case MEMTX_SYSTEM_ALLOCATOR:
+			SystemAllocator::enter_delayed_free_mode();
+			break;
 		default:
 			;
 		}
@@ -1237,7 +1261,10 @@ memtx_leave_delayed_free_mode(struct memtx_engine *memtx)
 	if (--memtx->delayed_free_mode == 0) {
 		switch (memtx->allocator_type) {
 		case MEMTX_SMALL_ALLOCATOR:
-			SmallAllocator::enter_delayed_free_mode();
+			SmallAllocator::leave_delayed_free_mode();
+			break;
+		case MEMTX_SYSTEM_ALLOCATOR:
+			SystemAllocator::leave_delayed_free_mode();
 			break;
 		default:
 			;
@@ -1366,6 +1393,8 @@ memtx_tuple_chunk_new(MAYBE_UNUSED struct tuple_format *format, struct tuple *tu
 
 template
 struct tuple_format_vtab memtx_tuple_format_vtab<SmallAllocator>;
+template
+struct tuple_format_vtab memtx_tuple_format_vtab<SystemAllocator>;
 
 /**
  * Allocate a block of size MEMTX_EXTENT_SIZE for memtx index

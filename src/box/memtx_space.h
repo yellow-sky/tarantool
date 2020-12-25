@@ -96,6 +96,7 @@ memtx_space_is_recovering(struct space *space)
 } /* extern "C" */
 
 struct SmallAllocator;
+struct SystemAllocator;
 
 template<class Allocator>
 struct space *
@@ -105,6 +106,11 @@ memtx_space_new(struct memtx_engine *memtx,
 extern template
 struct space *
 memtx_space_new<SmallAllocator>(struct memtx_engine *memtx,
+		struct space_def *def, struct rlist *key_list);
+
+extern template
+struct space *
+memtx_space_new<SystemAllocator>(struct memtx_engine *memtx,
 		struct space_def *def, struct rlist *key_list);
 
 #endif /* defined(__cplusplus) */
