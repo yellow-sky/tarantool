@@ -31,6 +31,7 @@ local function wait_process_completion(pid, timeout)
             process_completed = true
             break
         end
+        fiber.sleep(0.01)
     end
     return process_completed
 end
