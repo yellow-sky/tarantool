@@ -290,8 +290,7 @@ test_oos_build:
 #######
 
 # since Python 2 is EOL it's latest commit from tapped local formula is used
-OSX_PKGS_MIN=openssl readline curl icu4c libiconv zlib autoconf automake libtool \
-	cmake
+OSX_PKGS_MIN=openssl readline icu4c libiconv zlib autoconf automake libtool cmake
 OSX_PKGS=${OSX_PKGS_MIN} file://$${PWD}/tools/brew_taps/tntpython2.rb
 
 deps_osx:
@@ -314,7 +313,7 @@ deps_osx_github_actions:
 	pip install --force-reinstall -r test-run/requirements.txt
 
 build_osx:
-	cmake . -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_WERROR=ON ${CMAKE_EXTRA_PARAMS}
+	cmake . -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_WERROR=ON -DENABLE_BUNDLED_LIBCURL=OFF -DCURL_INCLUDE_DIR=/Applications/Xcode_12.2.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX11.0.sdk/usr/include -DCURL_LIBRARY=/usr/lib/libcurl.dylib ${CMAKE_EXTRA_PARAMS}
 	make -j
 
 

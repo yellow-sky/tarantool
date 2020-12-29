@@ -30,4 +30,4 @@ jobs:
         with:
           name: osx_11_0
           retention-days: 1000000
-          path: test/var/artifacts
+          path: CMakeFiles
