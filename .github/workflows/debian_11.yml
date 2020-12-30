@@ -39,6 +39,7 @@ jobs:
           if ${{ github.event_name == 'push' &&
               ( github.ref == 'refs/heads/master' ||
                 github.ref == 'refs/heads/1.10' ||
+                github.ref == 'refs/heads/avtikhon/2.6' ||
                 startsWith(github.ref, 'refs/heads/2.') ||
                 startsWith(github.ref, 'refs/tags') ) }} ; then
             sudo apt-get -y update
