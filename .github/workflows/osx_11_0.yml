@@ -22,6 +22,10 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
+      - name: look at /usr/lib/
+        run: ls -hal /usr/lib/
+      - name: look at .../SDKs/MacOSX11.0.sdk/usr/lib/
+        run: ls -hal /Applications/Xcode_12.2.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX11.0.sdk/usr/lib/
       - name: test
         run: ${CI_MAKE} test_osx_github_actions
       - name: artifacts
