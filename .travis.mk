@@ -313,7 +313,7 @@ deps_osx_github_actions:
 	pip install --force-reinstall -r test-run/requirements.txt
 
 build_osx:
-	cmake . -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_WERROR=ON -DENABLE_BUNDLED_LIBCURL=OFF -DCURL_INCLUDE_DIR=/Applications/Xcode_12.2.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX11.0.sdk/usr/include -DCURL_LIBRARY=/Applications/Xcode_12.2.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX11.0.sdk/usr/lib/libcurl.tdb ${CMAKE_EXTRA_PARAMS} --trace-expand
+	cmake . -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_WERROR=ON -DENABLE_BUNDLED_LIBCURL=OFF -DCURL_INCLUDE_DIR=/Applications/Xcode_12.2.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX11.0.sdk/usr/include -DCURL_LIBRARY=/Applications/Xcode_12.2.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX11.0.sdk/usr/lib/libcurl.tbd ${CMAKE_EXTRA_PARAMS} --trace-expand
 	make -j
 
 
