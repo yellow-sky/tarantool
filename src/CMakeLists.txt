@@ -146,6 +146,7 @@ set(api_headers
     ${CMAKE_SOURCE_DIR}/src/lib/core/fiber_cond.h
     ${CMAKE_SOURCE_DIR}/src/lib/core/coio.h
     ${CMAKE_SOURCE_DIR}/src/lib/core/coio_task.h
+    ${CMAKE_SOURCE_DIR}/src/lib/xtm_api/xtm_api.h
     ${CMAKE_SOURCE_DIR}/src/box/ibuf.h
     ${CMAKE_SOURCE_DIR}/src/lua/utils.h
     ${CMAKE_SOURCE_DIR}/src/lua/error.h

@@ -37,6 +37,7 @@ src/Makefile
 src/*/Makefile
 src/*/*/Makefile
 src/*/*/*/Makefile
+module_examples/Makefile
 doc/Makefile
 doc/*/Makefile
 extra/Makefile
