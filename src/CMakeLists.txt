@@ -275,7 +275,7 @@ add_executable(
     ${LIBUTIL_FREEBSD_SRC}/pidfile.c)
 
 add_dependencies(tarantool build_bundled_libs)
-target_link_libraries(tarantool box ${common_libraries})
+target_link_libraries(tarantool box -Wl,--whole-archive on_shutdown -Wl,--no-whole-archive ${common_libraries})
 
 if (TARGET_OS_FREEBSD AND NOT TARGET_OS_DEBIAN_FREEBSD)
     # Without rdynamic FreeBSD does not export some symbols even

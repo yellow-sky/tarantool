@@ -1,7 +1,6 @@
 #include "xtm_api.h"
 #include "xtm_scsp_queue.h"
 
-#include <sys/eventfd.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -141,15 +140,17 @@ xtm_fd(const struct xtm_queue *queue)
 }
 
 unsigned
-xtm_fun_invoke(struct xtm_queue *queue)
+xtm_fun_invoke(struct xtm_queue *queue, bool is_pipe_flushed)
 {
-	unsigned char tmp[XTM_PIPE_SIZE];
-	ssize_t read_bytes;
-	int save_errno = errno;
-	while ((read_bytes = read(queue->filedes[0], tmp, sizeof(tmp))) < 0 && errno == EINTR)
-		;
-	assert(read_bytes > 0 || errno == EAGAIN);
-	errno = save_errno;
+	if (!is_pipe_flushed) {
+		unsigned char tmp[XTM_PIPE_SIZE];
+		ssize_t read_bytes;
+		int save_errno = errno;
+		while ((read_bytes = read(queue->filedes[0], tmp, sizeof(tmp))) < 0 && errno == EINTR)
+			;
+		assert(read_bytes > 0 || errno == EAGAIN);
+		errno = save_errno;
+	}
 	unsigned cnt = xtm_scsp_queue_execute(queue->queue);
 	pm_atomic_fetch_sub(&queue->n_input, cnt);
 	return cnt;

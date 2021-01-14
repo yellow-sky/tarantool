@@ -115,6 +115,15 @@ module_thread_stop(void)
 }
 
 /*
+ * Shutdown function
+ */
+static void
+on_shutdown_module_func(void *arg)
+{
+	return module_thread_stop();
+}
+
+/*
  * Timer function, called in module thread
  * Allocate msg and send it to tx thread
  */
@@ -151,7 +160,7 @@ uv_read_pipe(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf)
 {
 	if (nread > 0) {
 		struct xtm_queue *queue = (struct xtm_queue *)((uv_handle_t *)client)->data;
-		while (xtm_fun_invoke(queue))
+		while (xtm_fun_invoke(queue, true))
 			;
 	}
 	if (buf->base)
@@ -174,7 +183,7 @@ tx_fiber_func(va_list arg)
 	int pipe_fd = xtm_fd(module.out);
 	while(__atomic_load_n(&module.is_running, __ATOMIC_SEQ_CST) == 1) {
 		if (coio_wait(pipe_fd, COIO_READ, ~0) & COIO_READ) {
-			while (xtm_fun_invoke(module.out))
+			while (xtm_fun_invoke(module.out, false))
 			;
 		}
 	}
@@ -222,6 +231,7 @@ static int
 stop(lua_State *L)
 {
 	if (__atomic_load_n(&module.is_running, __ATOMIC_SEQ_CST) == 1) {
+		on_shutdown(&module, NULL, on_shutdown_module_func);
 		module_thread_stop();
 		fiber_join(module.tx_fiber);
 	}
@@ -237,10 +247,20 @@ cfg(lua_State *L)
 	 * In case module already running, stop it
 	 */
 	if (__atomic_load_n(&module.is_running, __ATOMIC_SEQ_CST) == 1) {
+		on_shutdown(&module, NULL, on_shutdown_module_func);
 		module_thread_stop();
 		fiber_join(module.tx_fiber);
 	}
+	/*
+	 * Register shutdown function, in this simple sample there is only one
+	 * shutdown function.
+	 */
+	if (on_shutdown(&module, on_shutdown_module_func, NULL) < 0) {
+		lua_pushfstring(L, "error: failed to register module shutdown function");
+		lua_error(L);
+	}
 	if (pthread_create(&module.thread, NULL, main_module_func, NULL) < 0) {
+		on_shutdown(&module, NULL, on_shutdown_module_func);
 		lua_pushfstring(L, "error: failed to create module thread");
 		lua_error(L);
 	}
@@ -250,10 +270,12 @@ cfg(lua_State *L)
 	while (__atomic_load_n(&module.is_running, __ATOMIC_SEQ_CST) == 0)
 		;
 	/*
-	 * In case it failed join too module thread, set module
-	 * state to 0 (no running) and print error
+	 * In case it failed, reset shutdown function,
+	 * join to module thread, set module state to 0 (no running)
+	 * and print error.
 	 */
 	if (__atomic_load_n(&module.is_running, __ATOMIC_SEQ_CST) == -1) {
+		on_shutdown(&module, NULL, on_shutdown_module_func);
 		pthread_join(module.thread, NULL);
 		__atomic_store_n(&module.is_running, 0, __ATOMIC_SEQ_CST);
 		lua_pushfstring(L, "error: error in module thread");
@@ -265,6 +287,7 @@ cfg(lua_State *L)
 		 * In case we can't create fiber, stop module thread
 		 * and print error
 		 */
+		on_shutdown(&module, NULL, on_shutdown_module_func);
 		module_thread_stop();
 		lua_pushfstring(L, "error: failed to create tx fiber");
 		lua_error(L);
