@@ -1,21 +1,16 @@
 #include "xtm_api.h"
 
-#include <trigger.h>
 #include <stdlib.h>
 #include <small/rlist.h>
-#include <box/box.h>
-#include <pthread.h>
 #include <trivia/util.h>
+#include <fiber.h>
+#include <libev/ev.h>
 
 struct on_shutdown_trigger {
 	/*
 	 * rlist entry
 	 */
 	struct rlist entry;
-	/*
-	 * trigger for box_on_shutdown
-	 */
-	struct trigger trigger;
 	/*
 	 * Shutdown handler arg
 	 */
@@ -24,29 +19,35 @@ struct on_shutdown_trigger {
 	 * Shutdown handler
 	 */
 	void (*handler)(void *);
+	/*
+	 * Async event set when module main thread finished
+	 */
+	struct ev_async on_shutdown_async;
+	/*
+	 * Module shutdown fiber
+	 */
+	struct fiber *on_shutdown_fiber;
+	/*
+	 * Main loop
+	 */
+	struct ev_loop *loop;
 };
 
 /*
  * Shutdown trigger list, not need mutex, because access is
  * avaliable only from tx thread
  */
-static RLIST_HEAD(shutdown_trigger_list);
+static RLIST_HEAD(on_shutdown_trigger_list);
 
-/*
- * Common function for shutdown triggers
- */
-static int
-on_shutdown_trigger_common(struct trigger *trigger, MAYBE_UNUSED void *event)
+static void
+on_shutdown_fiber_wakeup(MAYBE_UNUSED struct ev_loop *loop, ev_async *ev, MAYBE_UNUSED int revents)
 {
-	struct on_shutdown_trigger *shutdown_trigger = trigger->data;
-	shutdown_trigger->handler(shutdown_trigger->arg);
-	rlist_del_entry(shutdown_trigger, entry);
-	free(shutdown_trigger);
-	return 0;
+	struct on_shutdown_trigger *on_shutdown_trigger = ev->data;
+	fiber_wakeup(on_shutdown_trigger->on_shutdown_fiber);
 }
 
 static int
-create_new_shutdown_trigger(void *arg, void (*handler)(void *))
+create_new_on_shutdown_trigger(void *arg, void (*handler)(void *), void **opaque)
 {
 	struct on_shutdown_trigger *trigger = (struct on_shutdown_trigger *)
 		malloc(sizeof(struct on_shutdown_trigger));
@@ -54,50 +55,116 @@ create_new_shutdown_trigger(void *arg, void (*handler)(void *))
 		return -1;
 	trigger->arg = arg;
 	trigger->handler = handler;
-	trigger_create(&trigger->trigger, on_shutdown_trigger_common, trigger, NULL);
-	trigger_add(&box_on_shutdown, &trigger->trigger);
-	rlist_add_entry(&shutdown_trigger_list, trigger, entry);
+	ev_async_init(&trigger->on_shutdown_async, on_shutdown_fiber_wakeup);
+	trigger->on_shutdown_async.data = trigger;
+	*opaque = trigger;
+	trigger->loop = loop();
+	rlist_add_entry(&on_shutdown_trigger_list, trigger, entry);
 	return 0;
 }
 
 int
-on_shutdown(void *arg, void (*new_hadler)(void *), void (*old_handler)(void *))
+on_shutdown_register(void *arg, void (*new_hadler)(void *), void (*old_handler)(void *),
+	void **opaque)
 {
-	struct on_shutdown_trigger *shutdown_trigger, *tmp;
+	struct on_shutdown_trigger *on_shutdown_trigger, *tmp;
 	if (old_handler == NULL)
-		return create_new_shutdown_trigger(arg, new_hadler);
+		return create_new_on_shutdown_trigger(arg, new_hadler, opaque);
 
-	bool is_shutdown_find = false;
-	rlist_foreach_entry_safe(shutdown_trigger, &shutdown_trigger_list, entry, tmp) {
-		if (shutdown_trigger->handler == old_handler) {
+	bool is_on_shutdown_trigger_find = false;
+	rlist_foreach_entry_safe(on_shutdown_trigger, &on_shutdown_trigger_list, entry, tmp) {
+		if (on_shutdown_trigger->handler == old_handler) {
 			if (new_hadler != NULL) {
 				/*
-				 * Change shutdown trigger handler, and arg
+				 * Change on_shutdown trigger handler, and arg
 				 */
-				shutdown_trigger->handler = new_hadler;
-				shutdown_trigger->arg = arg;
+				on_shutdown_trigger->handler = new_hadler;
+				on_shutdown_trigger->arg = arg;
 			} else {
 				/*
 				 * In case new_handler == NULL
-				 * Remove old shutdown trigger and destroy it
+				 * Remove old on_shutdown trigger and destroy it
 				 */
-				rlist_del_entry(shutdown_trigger, entry);
-				trigger_clear(&shutdown_trigger->trigger);
-				free(shutdown_trigger);
+				*opaque = NULL;
+				rlist_del_entry(on_shutdown_trigger, entry);
+				free(on_shutdown_trigger);
 			}
-			is_shutdown_find = true;
+			is_on_shutdown_trigger_find = true;
 		}
 	}
-	if (!is_shutdown_find && new_hadler) {
+	if (!is_on_shutdown_trigger_find && new_hadler) {
 		/*
-		 * If we not find shutdown trigger but new handler is set
-		 * create new shutdown trigger
+		 * If we not findn on_shutdown trigger but new handler is set
+		 * create new on_shutdown trigger
 		 */
-		return create_new_shutdown_trigger(arg, new_hadler);
+		return create_new_on_shutdown_trigger(arg, new_hadler, opaque);
 	}
 	/*
-	 * Return 0 (success) if shutdown trigger find, othrewise return -1
+	 * Return 0 (success) if on_shutdown trigger find, othrewise return -1
 	 */
-	return (is_shutdown_find ? 0 : -1);
+	return (is_on_shutdown_trigger_find ? 0 : -1);
+}
+
+static int
+on_shutdown_f(va_list ap)
+{
+	struct on_shutdown_trigger *on_shutdown_trigger = va_arg(ap, struct on_shutdown_trigger *);
+	on_shutdown_trigger->handler(on_shutdown_trigger->arg);
+	return 0;
+}
+
+/*
+ * Common function called all module shutdown triggers
+ */
+int
+on_shutdown_trigger_common(MAYBE_UNUSED struct trigger *trigger, MAYBE_UNUSED void *event)
+{
+	struct on_shutdown_trigger *on_shutdown_trigger, *tmp;
+	rlist_foreach_entry_safe(on_shutdown_trigger, &on_shutdown_trigger_list, entry, tmp) {
+		on_shutdown_trigger->on_shutdown_fiber = fiber_new("shutdown", on_shutdown_f);
+		if (on_shutdown_trigger->on_shutdown_fiber != NULL) {
+			fiber_set_joinable(on_shutdown_trigger->on_shutdown_fiber, true);
+			fiber_start(on_shutdown_trigger->on_shutdown_fiber, on_shutdown_trigger);
+		} else {
+			/*
+			 * Unable to create fiber, wait here
+			 */
+			on_shutdown_trigger->handler(on_shutdown_trigger->arg);
+			rlist_del_entry(on_shutdown_trigger, entry);
+			free(on_shutdown_trigger);
+		}
+	}
+
+	rlist_foreach_entry_safe(on_shutdown_trigger, &on_shutdown_trigger_list, entry, tmp) {
+		fiber_join(on_shutdown_trigger->on_shutdown_fiber);
+		rlist_del_entry(on_shutdown_trigger, entry);
+		free(on_shutdown_trigger);
+	}
+	return 0;
+}
+
+void
+on_shutdown_notify(void *opaque)
+{
+	struct on_shutdown_trigger *on_shutdown_trigger = opaque;
+	if (on_shutdown_trigger && on_shutdown_trigger->on_shutdown_fiber)
+		ev_async_send(on_shutdown_trigger->loop, &on_shutdown_trigger->on_shutdown_async);
+}
+
+void
+on_shutdown_wait(void *opaque)
+{
+	struct on_shutdown_trigger *on_shutdown_trigger = opaque;
+	/*
+	 * In case this function called in special fiber we wait
+	 * otherwise do nothing
+	 */
+	if (on_shutdown_trigger && on_shutdown_trigger->on_shutdown_fiber) {
+		ev_async_start(on_shutdown_trigger->loop, &on_shutdown_trigger->on_shutdown_async);
+		bool cancellable = fiber_set_cancellable(false);
+		fiber_yield();
+		fiber_set_cancellable(cancellable);
+		ev_async_stop(on_shutdown_trigger->loop, &on_shutdown_trigger->on_shutdown_async);
+	}
 }
 

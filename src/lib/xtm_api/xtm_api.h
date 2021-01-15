@@ -29,6 +29,7 @@
  * THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#include <trigger.h>
 #include <stdbool.h>
 
 #if defined(__cplusplus)
@@ -62,9 +63,19 @@ unsigned
 xtm_fun_invoke(struct xtm_queue *queue, bool is_pipe_flushed);
 
 int
-on_shutdown(void *arg, void (*new_hadler)(void *), void (*old_handler)(void *));
+on_shutdown_register(void *arg, void (*new_hadler)(void *), void (*old_handler)(void *),
+	void **opaque);
+
+void
+on_shutdown_notify(void *opaque);
+
+void
+on_shutdown_wait(void *opaque);
 
 /** \endcond public */
+
+int
+on_shutdown_trigger_common(struct trigger *trigger, void *event);
 
 #if defined(__cplusplus)
 } /* extern "C" */

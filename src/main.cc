@@ -80,6 +80,7 @@
 #include "crypto/crypto.h"
 #include "core/popen.h"
 #include "core/crash.h"
+#include "xtm_api/xtm_api.h"
 
 static pid_t master_pid = getpid();
 static struct pidfh *pid_file_handle;
@@ -99,6 +100,8 @@ static struct fiber *on_shutdown_fiber = NULL;
 static bool is_shutting_down = false;
 /** A trigger which will break the event loop on shutdown. */
 static struct trigger break_loop_trigger;
+/** Common trigger which shutdown all modules. */
+static struct trigger on_shutdown_module_trigger;
 static int exit_code = 0;
 
 double
@@ -737,7 +740,12 @@ main(int argc, char **argv)
 		 */
 		trigger_create(&break_loop_trigger, break_loop, NULL, NULL);
 		trigger_add(&box_on_shutdown, &break_loop_trigger);
-
+		/*
+		 * Register on_shutdown trigger which call on_shutdown functions
+		 * for all modules.
+		 */
+		trigger_create(&on_shutdown_module_trigger, on_shutdown_trigger_common, NULL, NULL);
+		trigger_add(&box_on_shutdown, &on_shutdown_module_trigger);
 		/*
 		 * The call to tarantool_free() below, thanks to
 		 * on_shutdown triggers, works all the time
