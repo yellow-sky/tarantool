@@ -87,8 +87,8 @@ deps_debian:
 		build-essential cmake coreutils sed \
 		libreadline-dev libncurses5-dev libyaml-dev libssl-dev \
 		libcurl4-openssl-dev libunwind-dev libicu-dev \
-		python python-pip python-setuptools python-dev \
-		python-msgpack python-yaml python-argparse python-six python-gevent \
+		python3 python3-pip python3-setuptools python3-dev \
+		python3-msgpack python3-yaml python-argparse python3-six python3-gevent \
 		lcov ruby clang llvm llvm-dev zlib1g-dev autoconf automake libtool
 
 deps_buster_clang_8: deps_debian
@@ -134,7 +134,7 @@ build_debian: configure_debian
 
 test_debian_no_deps: build_debian
 	make LuaJIT-test
-	cd test && /usr/bin/python test-run.py --force $(TEST_RUN_EXTRA_PARAMS)
+	cd test && ./test-run.py --force $(TEST_RUN_EXTRA_PARAMS)
 
 test_debian: deps_debian test_debian_no_deps
 
@@ -149,7 +149,7 @@ build_coverage_debian:
 test_coverage_debian_no_deps: build_coverage_debian
 	make LuaJIT-test
 	# Enable --long tests for coverage
-	cd test && /usr/bin/python test-run.py --force $(TEST_RUN_EXTRA_PARAMS) --long
+	cd test && ./test-run.py --force $(TEST_RUN_EXTRA_PARAMS) --long
 	lcov --compat-libtool --directory src/ --capture --output-file coverage.info.tmp \
 		--rc lcov_branch_coverage=1 --rc lcov_function_coverage=1
 	lcov --compat-libtool --remove coverage.info.tmp 'tests/*' 'third_party/*' '/usr/*' \
@@ -205,7 +205,7 @@ build_asan_debian:
 		-DENABLE_FUZZER=ON ${CMAKE_EXTRA_PARAMS}
 	make -j
 
-test_asan_debian_no_deps: build_asan_debian
+test_asan_debian_no_deps: build_asan_debian deps_debian
 	ASAN=ON \
 		LSAN_OPTIONS=suppressions=${PWD}/asan/lsan.supp \
 		ASAN_OPTIONS=heap_profile=0:unmap_shadow_on_exit=1:detect_invalid_pointer_pairs=1:symbolize=1:detect_leaks=1:dump_instruction_bytes=1:print_suppressions=0 \
@@ -242,7 +242,7 @@ test_static_build_cmake_linux:
 	cd static-build && cmake -DCMAKE_TARANTOOL_ARGS="-DCMAKE_BUILD_TYPE=RelWithDebInfo;-DENABLE_WERROR=ON" . && \
 	make -j && ctest -V
 	make -C ${PWD}/static-build/tarantool-prefix/src/tarantool-build LuaJIT-test
-	cd test && /usr/bin/python test-run.py --force \
+	cd test && ./test-run.py --force \
 		--builddir ${PWD}/static-build/tarantool-prefix/src/tarantool-build $(TEST_RUN_EXTRA_PARAMS)
 
 # ###################
@@ -302,9 +302,7 @@ test_oos_build:
 # OSX #
 #######
 
-# since Python 2 is EOL it's latest commit from tapped local formula is used
-OSX_PKGS_MIN=openssl readline curl icu4c libiconv zlib cmake
-OSX_PKGS=${OSX_PKGS_MIN} file://$${PWD}/tools/brew_taps/tntpython2.rb
+OSX_PKGS=openssl readline curl icu4c libiconv zlib cmake python3
 
 deps_osx:
 	# install brew using command from Homebrew repository instructions:
@@ -317,13 +315,13 @@ deps_osx:
 	# try to install the packages either upgrade it to avoid of fails
 	# if the package already exists with the previous version
 	brew install --force ${OSX_PKGS} || brew upgrade ${OSX_PKGS}
-	pip install --force-reinstall -r test-run/requirements.txt
+	pip3 install --user --force-reinstall -r test-run/requirements.txt
 
 deps_osx_github_actions:
 	# try to install the packages either upgrade it to avoid of fails
 	# if the package already exists with the previous version
-	brew install --force ${OSX_PKGS_MIN} || brew upgrade ${OSX_PKGS_MIN}
-	pip install --force-reinstall -r test-run/requirements.txt
+	brew install --force ${OSX_PKGS} || brew upgrade ${OSX_PKGS}
+	pip3 install --force-reinstall -r test-run/requirements.txt
 
 build_osx:
 	cmake . -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_WERROR=ON ${CMAKE_EXTRA_PARAMS}
@@ -360,19 +358,18 @@ test_osx_github_actions: deps_osx_github_actions test_osx_no_deps
 
 # Static macOS build
 
-STATIC_OSX_PKGS_MIN=cmake
-STATIC_OSX_PKGS=${STATIC_OSX_PKGS_MIN} file://$${PWD}/tools/brew_taps/tntpython2.rb
+STATIC_OSX_PKGS=cmake
 base_deps_osx:
 	brew update || echo | /usr/bin/ruby -e \
 		"$$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 	brew install --force ${STATIC_OSX_PKGS} || brew upgrade ${STATIC_OSX_PKGS}
-	pip install --force-reinstall -r test-run/requirements.txt
+	pip3 install --user --force-reinstall -r test-run/requirements.txt
 
 base_deps_osx_github_actions:
 	# try to install the packages either upgrade it to avoid of fails
 	# if the package already exists with the previous version
-	brew install --force ${STATIC_OSX_PKGS_MIN} || brew upgrade ${STATIC_OSX_PKGS_MIN}
-	pip install --force-reinstall -r test-run/requirements.txt
+	brew install --force ${STATIC_OSX_PKGS} || brew upgrade ${STATIC_OSX_PKGS}
+	pip3 install --force-reinstall -r test-run/requirements.txt
 
 # builddir used in this target - is a default build path from cmake
 # ExternalProject_Add()
@@ -405,15 +402,16 @@ test_static_build_cmake_osx_github_actions: base_deps_osx_github_actions test_st
 
 deps_freebsd:
 	sudo pkg install -y git cmake gmake icu libiconv \
-		python27 py27-yaml py27-six py27-gevent
+		python37 py37-yaml py37-gevent py37-six py37-msgpack
+	[ ! -e /usr/bin/python3 ] && sudo ln -s /usr/local/bin/python3.7 /usr/bin/python3
 
 build_freebsd:
 	cmake . -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_WERROR=ON ${CMAKE_EXTRA_PARAMS}
 	gmake -j
 
-test_freebsd_no_deps: build_freebsd
+test_freebsd_no_deps: build_freebsd deps_freebsd
 	make LuaJIT-test
-	cd test && python2.7 test-run.py --force $(TEST_RUN_EXTRA_PARAMS)
+	cd test && ./test-run.py --force $(TEST_RUN_EXTRA_PARAMS)
 
 test_freebsd: deps_freebsd test_freebsd_no_deps
 
