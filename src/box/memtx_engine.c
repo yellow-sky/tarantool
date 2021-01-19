@@ -1331,6 +1331,31 @@ struct tuple_format_vtab memtx_tuple_format_vtab = {
 	memtx_tuple_chunk_new,
 };
 
+struct tuple *
+memtx_truncate_tuple_new(struct tuple_format *format,
+                         const char *data, const char *end)
+{
+	quota_disable(&((struct memtx_engine *)format->engine)->quota);
+	struct tuple *tuple = memtx_tuple_new(format, data, end);
+	quota_enable(&((struct memtx_engine *)format->engine)->quota);
+	return tuple;
+}
+
+void
+memtx_truncate_tuple_delete(struct tuple_format *format, struct tuple *tuple)
+{
+	quota_disable(&((struct memtx_engine *)format->engine)->quota);
+	memtx_tuple_delete(format, tuple);
+	quota_enable(&((struct memtx_engine *)format->engine)->quota);
+}
+
+struct tuple_format_vtab memtx_truncate_tuple_format_vtab = {
+	memtx_truncate_tuple_delete,
+	memtx_truncate_tuple_new,
+	metmx_tuple_chunk_delete,
+	memtx_tuple_chunk_new,
+};
+
 /**
  * Allocate a block of size MEMTX_EXTENT_SIZE for memtx index
  */

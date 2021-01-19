@@ -255,6 +255,8 @@ memtx_tuple_delete(struct tuple_format *format, struct tuple *tuple);
 
 /** Tuple format vtab for memtx engine. */
 extern struct tuple_format_vtab memtx_tuple_format_vtab;
+/** Tuple format vtab for space _truncate. */
+extern struct tuple_format_vtab memtx_truncate_tuple_format_vtab;
 
 enum {
 	MEMTX_EXTENT_SIZE = 16 * 1024,
