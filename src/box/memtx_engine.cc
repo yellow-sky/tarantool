@@ -1092,7 +1092,7 @@ memtx_engine_gc_f(va_list va)
 struct memtx_engine *
 memtx_engine_new(const char *snap_dirname, bool force_recovery,
 		 uint64_t tuple_arena_max_size, uint32_t objsize_min,
-		 bool dontdump, float alloc_factor)
+		 bool dontdump, const char *allocator, float alloc_factor)
 {
 	int64_t snap_signature;
 	struct memtx_engine *memtx = (struct memtx_engine *)calloc(1, sizeof(*memtx));
@@ -1102,13 +1102,28 @@ memtx_engine_new(const char *snap_dirname, bool force_recovery,
 		return NULL;
 	}
 
-	memtx->allocator_type = MEMTX_SMALL_ALLOCATOR;
-	MEMXT_TUPLE_FORMAT_VTAB(SmallAllocator)
-	memtx_engine_vtab.memory_stat =
-		memtx_engine_memory_stat<struct small_stats,
-					 struct mempool_stats,
-					 SmallAllocator,
-					 small_stats_noop_cb>;
+	assert(allocator != NULL);
+	if (!strcmp(allocator, "small")) {
+		memtx->allocator_type = MEMTX_SMALL_ALLOCATOR;
+		MEMXT_TUPLE_FORMAT_VTAB(SmallAllocator)
+		memtx_engine_vtab.memory_stat =
+			memtx_engine_memory_stat<struct small_stats,
+						 struct mempool_stats,
+						 SmallAllocator,
+						 small_stats_noop_cb>;
+	} else if (!strcmp(allocator, "system")) {
+		memtx->allocator_type = MEMTX_SYSTEM_ALLOCATOR;
+		MEMXT_TUPLE_FORMAT_VTAB(SystemAllocator)
+		memtx_engine_vtab.memory_stat =
+			memtx_engine_memory_stat<struct system_stats,
+						 struct system_stats,
+						 SystemAllocator,
+						 system_stats_noop_cb>;
+	} else {
+		diag_set(IllegalParams, "Invalid memory allocator name");
+		free(memtx);
+		return NULL;
+	}
 
 	xdir_create(&memtx->snap_dir, snap_dirname, SNAP, &INSTANCE_UUID,
 		    &xlog_opts_default);
