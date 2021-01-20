@@ -166,6 +166,7 @@ set(api_headers
     ${CMAKE_SOURCE_DIR}/src/box/lua/tuple.h
     ${CMAKE_SOURCE_DIR}/src/lib/core/latch.h
     ${CMAKE_SOURCE_DIR}/src/lib/core/clock.h
+    ${CMAKE_SOURCE_DIR}/src/lib/xtm/xtm_api.h
 )
 rebuild_module_api(${api_headers})
 
