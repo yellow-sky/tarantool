@@ -618,6 +618,101 @@ mem_set_map(struct Mem *mem, char *value, uint32_t size, int alloc_type);
 int
 mem_set_array(struct Mem *mem, char *value, uint32_t size, int alloc_type);
 
+static inline bool
+mem_is_null(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Null) != 0;
+}
+
+static inline bool
+mem_is_undefined(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Undefined) != 0;
+}
+
+static inline bool
+mem_is_frame(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Frame) != 0;
+}
+
+static inline bool
+mem_is_neg_int(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Int) != 0;
+}
+
+static inline bool
+mem_is_pos_int(const struct Mem *mem)
+{
+	return (mem->flags & MEM_UInt) != 0;
+}
+
+static inline bool
+mem_is_integer(const struct Mem *mem)
+{
+	return mem_is_neg_int(mem) || mem_is_pos_int(mem);
+}
+
+static inline bool
+mem_is_double(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Real) != 0;
+}
+
+static inline bool
+mem_is_number(const struct Mem *mem)
+{
+	return mem_is_integer(mem) || mem_is_double(mem);
+}
+
+static inline bool
+mem_is_string(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Str) != 0;
+}
+
+static inline bool
+mem_is_binary(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Blob) != 0;
+}
+
+static inline bool
+mem_is_varstring(const struct Mem *mem)
+{
+	return mem_is_string(mem) || mem_is_binary(mem);
+}
+
+static inline bool
+mem_is_map(const struct Mem *mem)
+{
+	return mem_is_binary(mem) && ((mem->flags & MEM_Subtype) != 0) &&
+	       mem->subtype == SQL_SUBTYPE_MSGPACK &&
+	       mp_typeof(*mem->z) == MP_MAP;
+}
+
+static inline bool
+mem_is_array(const struct Mem *mem)
+{
+	return mem_is_binary(mem) && ((mem->flags & MEM_Subtype) != 0) &&
+	       mem->subtype == SQL_SUBTYPE_MSGPACK &&
+	       mp_typeof(*mem->z) == MP_ARRAY;
+}
+
+static inline bool
+mem_is_bool(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Bool) != 0;
+}
+
+static inline bool
+mems_have_same_type(const struct Mem *mem1, const struct Mem *mem2)
+{
+	return (mem1->flags & MEM_PURE_TYPE_MASK) ==
+	       (mem2->flags & MEM_PURE_TYPE_MASK);
+}
+
 void sqlVdbeMemInit(Mem *, sql *, u32);
 void sqlVdbeMemSetNull(Mem *);
 void sqlVdbeMemSetZeroBlob(Mem *, int);
