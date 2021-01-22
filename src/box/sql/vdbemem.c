@@ -981,6 +981,21 @@ mem_set_array(struct Mem *mem, char *value, uint32_t size, int alloc_type)
 	return 0;
 }
 
+int
+mem_convert_to_binary(struct Mem *mem)
+{
+	if (mem_is_null(mem) || mem_is_binary(mem))
+		return 0;
+	if (mem_is_string(mem)) {
+		mem->flags = (mem->flags & (MEM_Dyn | MEM_Static | MEM_Ephem)) |
+			     MEM_Blob;
+		return 0;
+	}
+	diag_set(ClientError, ER_SQL_TYPE_MISMATCH, sql_value_to_diag_str(mem),
+		 "varbinary");
+	return -1;
+}
+
 /*
  * Return true if the Mem object contains a TEXT or BLOB that is
  * too large - whose size exceeds SQL_MAX_LENGTH.

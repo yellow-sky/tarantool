@@ -713,6 +713,14 @@ mems_have_same_type(const struct Mem *mem1, const struct Mem *mem2)
 	       (mem2->flags & MEM_PURE_TYPE_MASK);
 }
 
+/**
+ * Cast MEM to varbinary according to explicit cast rules.
+ *
+ * @param mem VDBE memory register to convert.
+ */
+int
+mem_convert_to_binary(struct Mem *mem);
+
 void sqlVdbeMemInit(Mem *, sql *, u32);
 void sqlVdbeMemSetNull(Mem *);
 void sqlVdbeMemSetZeroBlob(Mem *, int);
