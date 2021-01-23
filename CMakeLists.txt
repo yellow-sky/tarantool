@@ -16,3 +16,8 @@ add_definitions(${FUSE_DEFINITIONS})
 add_executable(${PROJECT_NAME} ${UNRELIABLEFS_SRC})
 target_include_directories(${PROJECT_NAME} PRIVATE ${FUSE_INCLUDE_DIRS})
 target_link_libraries(${PROJECT_NAME} ${FUSE_LIBRARIES})
+
+enable_testing()
+
+add_test(NAME pytest COMMAND pytest tests/
+         WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})

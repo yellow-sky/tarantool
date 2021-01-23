@@ -57,7 +57,8 @@ static struct fuse_operations unreliable_ops = {
 
 int main(int argc, char *argv[])
 {
-    int fuse_argc = 4;
+    /*
+    int fuse_argc = 3;
     char *fuse_argv[fuse_argc];
 
     if (argc != 2) {
@@ -73,7 +74,8 @@ int main(int argc, char *argv[])
 	fuse_argv[2] = "-osuid,dev,allow_other,default_permissions";
     #endif
     fuse_argv[3] = NULL;
+    */
 
     fprintf(stdout, "Starting FUSE filesystem\n");
-    return fuse_main(fuse_argc, fuse_argv, &unreliable_ops, NULL);
+    return fuse_main(argc, argv, &unreliable_ops, NULL);
 }

@@ -8,8 +8,10 @@ dist: bionic
 addons:
   apt:
     packages:
-      - libfuse-dev fuse
+      - libfuse-dev fuse python-pytest
 
 script:
-  - mkdir build && cd build && cmake ..
-  - make -j
+  - mkdir build
+  - cmake -S . -B build
+  - cmake --build build
+  - make -C build test
