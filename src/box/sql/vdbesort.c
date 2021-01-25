@@ -2163,13 +2163,8 @@ sqlVdbeSorterRowkey(const VdbeCursor * pCsr, Mem * pOut)
 	assert(pCsr->eCurType == CURTYPE_SORTER);
 	pSorter = pCsr->uc.pSorter;
 	pKey = vdbeSorterRowkey(pSorter, &nKey);
-	if (sqlVdbeMemClearAndResize(pOut, nKey)) {
+	if (mem_set_bin(pOut, pKey, nKey, 0, false) != 0)
 		return -1;
-	}
-	pOut->n = nKey;
-	MemSetTypeFlag(pOut, MEM_Blob);
-	memcpy(pOut->z, pKey, nKey);
-
 	return 0;
 }
 
@@ -2217,7 +2212,7 @@ sqlVdbeSorterCompare(const VdbeCursor * pCsr,	/* Sorter cursor */
 	pKey = vdbeSorterRowkey(pSorter, &nKey);
 	sqlVdbeRecordUnpackMsgpack(pCsr->key_def, pKey, r2);
 	for (i = 0; i < nKeyCol; i++) {
-		if (r2->aMem[i].flags & MEM_Null) {
+		if (mem_is_null(&r2->aMem[i])) {
 			*pRes = -1;
 			return 0;
 		}
