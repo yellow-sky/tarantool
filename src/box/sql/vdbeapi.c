@@ -111,7 +111,7 @@ sql_clear_bindings(sql_stmt * pStmt)
 	Vdbe *p = (Vdbe *) pStmt;
 	for (i = 0; i < p->nVar; i++) {
 		sqlVdbeMemRelease(&p->aVar[i]);
-		p->aVar[i].flags = MEM_Null;
+		mem_set_null(&p->aVar[i]);
 	}
 	return rc;
 }
@@ -130,12 +130,12 @@ const void *
 sql_value_blob(sql_value * pVal)
 {
 	Mem *p = (Mem *) pVal;
-	if (p->flags & (MEM_Blob | MEM_Str)) {
+	if (mem_is_varstring(p)) {
 		if (ExpandBlob(p) != 0) {
-			assert(p->flags == MEM_Null && p->z == 0);
+			assert(mem_is_null(p) && p->z == 0);
 			return 0;
 		}
-		p->flags |= MEM_Blob;
+		mem_convert_to_binary(p);
 		return p->n ? p->z : 0;
 	} else {
 		return sql_value_text(pVal);
@@ -232,7 +232,7 @@ sql_value_dup(const sql_value * pOrig)
 	memcpy(pNew, pOrig, MEMCELLSIZE);
 	pNew->flags &= ~MEM_Dyn;
 	pNew->db = 0;
-	if (pNew->flags & (MEM_Str | MEM_Blob)) {
+	if (mem_is_varstring(pNew)) {
 		pNew->flags &= ~(MEM_Static | MEM_Dyn);
 		pNew->flags |= MEM_Ephem;
 		if (sqlVdbeMemMakeWriteable(pNew) != 0) {
@@ -588,39 +588,17 @@ sql_data_count(sql_stmt * pStmt)
 static const Mem *
 columnNullValue(void)
 {
-	/* Even though the Mem structure contains an element
-	 * of type i64, on certain architectures (x86) with certain compiler
-	 * switches (-Os), gcc may align this Mem object on a 4-byte boundary
-	 * instead of an 8-byte one. This all works fine, except that when
-	 * running with SQL_DEBUG defined the sql code sometimes assert()s
-	 * that a Mem structure is located on an 8-byte boundary. To prevent
-	 * these assert()s from failing, when building with SQL_DEBUG defined
-	 * using gcc, we force nullMem to be 8-byte aligned using the magical
-	 * __attribute__((aligned(8))) macro.
-	 */
-	static const Mem nullMem
 #if defined(SQL_DEBUG) && defined(__GNUC__)
-	    __attribute__ ((aligned(8)))
+	static struct Mem nullMem __attribute__ ((aligned(8)));
+#else
+	static struct Mem nullMem;
 #endif
-	    = {
-		/* .u          = */  {
-		0},
-		    /* .flags      = */ (u16) MEM_Null,
-		    /* .eSubtype   = */ (u8) 0,
-		    /* .field_type = */ field_type_MAX,
-		    /* .n          = */ (int)0,
-		    /* .z          = */ (char *)0,
-		    /* .zMalloc    = */ (char *)0,
-		    /* .szMalloc   = */ (int)0,
-		    /* .uTemp      = */ (u32) 0,
-		    /* .db         = */ (sql *) 0,
-		    /* .xDel       = */ (void (*)(void *))0,
-#ifdef SQL_DEBUG
-		    /* .pScopyFrom = */ (Mem *) 0,
-		    /* .pFiller    = */ (void *)0,
-#endif
-	};
-	return &nullMem;
+	static struct Mem *null_mem_ptr = NULL;
+	if (null_mem_ptr == NULL) {
+		mem_init(&nullMem);
+		null_mem_ptr = &nullMem;
+	}
+	return null_mem_ptr;
 }
 
 /*
@@ -879,8 +857,7 @@ vdbeUnbind(Vdbe * p, int i)
 	i--;
 	pVar = &p->aVar[i];
 	sqlVdbeMemRelease(pVar);
-	pVar->flags = MEM_Null;
-	pVar->field_type = field_type_MAX;
+	mem_set_null(pVar);
 	return 0;
 }
 
