@@ -256,6 +256,8 @@ include_directories(${PROJECT_SOURCE_DIR}/src/lib/small)
 include_directories(${PROJECT_SOURCE_DIR}/src/lib/small/third_party)
 include_directories(${PROJECT_SOURCE_DIR}/src/lib/core)
 include_directories(${PROJECT_SOURCE_DIR})
+include_directories(${PROJECT_SOURCE_DIR}/../h2o/include)
+include_directories(${PROJECT_SOURCE_DIR}/third_party)
 
 #
 # Specify Tarantool modules prefixes
@@ -551,6 +553,7 @@ add_subdirectory(src)
 add_subdirectory(extra)
 add_subdirectory(test)
 add_subdirectory(doc)
+add_subdirectory(h2o)
 
 option(WITH_NOTIFY_SOCKET "Enable notifications on NOTIFY_SOCKET" ON)
 
