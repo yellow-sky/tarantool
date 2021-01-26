@@ -116,7 +116,7 @@ int sql_max_blobsize = 0;
 static void
 updateMaxBlobsize(Mem *p)
 {
-	if ((p->flags & (MEM_Str|MEM_Blob))!=0 && p->n>sql_max_blobsize) {
+	if (mem_is_varstring(p) && p->n>sql_max_blobsize) {
 		sql_max_blobsize = p->n;
 	}
 }
@@ -185,7 +185,7 @@ vdbeTakeBranch(int iSrcLine, u8 I, u8 M)
  * already. Return non-zero if a malloc() fails.
  */
 #define Stringify(P)						\
-	if(((P)->flags&(MEM_Str|MEM_Blob))==0 && sqlVdbeMemStringify(P)) \
+	if(!mem_is_varstring(P) && sqlVdbeMemStringify(P)) \
 	{ goto no_mem; }
 
 /*
@@ -260,7 +260,7 @@ allocateCursor(
 int
 mem_apply_numeric_type(struct Mem *record)
 {
-	if ((record->flags & MEM_Str) == 0)
+	if (!mem_is_string(record))
 		return -1;
 	int64_t integer_value;
 	bool is_neg;
@@ -311,17 +311,17 @@ mem_apply_numeric_type(struct Mem *record)
 static int
 mem_apply_type(struct Mem *record, enum field_type type)
 {
-	if ((record->flags & MEM_Null) != 0)
+	if (mem_is_null(record))
 		return 0;
 	assert(type < field_type_MAX);
 	switch (type) {
 	case FIELD_TYPE_INTEGER:
 	case FIELD_TYPE_UNSIGNED:
-		if ((record->flags & (MEM_Bool | MEM_Blob)) != 0)
+		if (mem_is_bool(record) || mem_is_binary(record))
 			return -1;
-		if ((record->flags & MEM_UInt) == MEM_UInt)
+		if (mem_is_pos_int(record))
 			return 0;
-		if ((record->flags & MEM_Real) == MEM_Real) {
+		if (mem_is_double(record)) {
 			double d = record->u.r;
 			if (d >= 0) {
 				if (double_compare_uint64(d, UINT64_MAX,
@@ -337,29 +337,29 @@ mem_apply_type(struct Mem *record, enum field_type type)
 			}
 			return 0;
 		}
-		if ((record->flags & MEM_Str) != 0) {
+		if (mem_is_string(record)) {
 			bool is_neg;
 			int64_t i;
 			if (sql_atoi64(record->z, &i, &is_neg, record->n) != 0)
 				return -1;
 			mem_set_int(record, i, is_neg);
 		}
-		if ((record->flags & MEM_Int) == MEM_Int) {
+		if (mem_is_neg_int(record)) {
 			if (type == FIELD_TYPE_UNSIGNED)
 				return -1;
 			return 0;
 		}
 		return 0;
 	case FIELD_TYPE_BOOLEAN:
-		if ((record->flags & MEM_Bool) == MEM_Bool)
+		if (mem_is_bool(record))
 			return 0;
 		return -1;
 	case FIELD_TYPE_NUMBER:
-		if ((record->flags & (MEM_Real | MEM_Int | MEM_UInt)) != 0)
+		if (mem_is_number(record))
 			return 0;
 		return sqlVdbeMemRealify(record);
 	case FIELD_TYPE_DOUBLE:
-		if ((record->flags & MEM_Real) != 0)
+		if (mem_is_double(record))
 			return 0;
 		return sqlVdbeMemRealify(record);
 	case FIELD_TYPE_STRING:
@@ -368,34 +368,24 @@ mem_apply_type(struct Mem *record, enum field_type type)
 		 * an integer or real representation (BLOB and
 		 * NULL do not get converted).
 		 */
-		if ((record->flags & MEM_Str) == 0 &&
-		    (record->flags & (MEM_Real | MEM_Int | MEM_UInt)) != 0)
+		if (!mem_is_string(record) && mem_is_number(record))
 			sqlVdbeMemStringify(record);
-		record->flags &= ~(MEM_Real | MEM_Int | MEM_UInt);
 		return 0;
 	case FIELD_TYPE_VARBINARY:
-		if ((record->flags & MEM_Blob) == 0)
+		if (!mem_is_binary(record))
 			return -1;
 		return 0;
 	case FIELD_TYPE_SCALAR:
 		/* Can't cast MAP and ARRAY to scalar types. */
-		if ((record->flags & MEM_Subtype) != 0 &&
-		    record->subtype == SQL_SUBTYPE_MSGPACK) {
-			assert(mp_typeof(*record->z) == MP_MAP ||
-			       mp_typeof(*record->z) == MP_ARRAY);
+		if (mem_is_map(record) || mem_is_array(record))
 			return -1;
-		}
 		return 0;
 	case FIELD_TYPE_MAP:
-		if ((record->flags & MEM_Subtype) != 0 &&
-		    record->subtype == SQL_SUBTYPE_MSGPACK &&
-		    mp_typeof(*record->z) == MP_MAP)
+		if (mem_is_map(record))
 			return 0;
 		return -1;
 	case FIELD_TYPE_ARRAY:
-		if ((record->flags & MEM_Subtype) != 0 &&
-		    record->subtype == SQL_SUBTYPE_MSGPACK &&
-		    mp_typeof(*record->z) == MP_ARRAY)
+		if (mem_is_array(record))
 			return 0;
 		return -1;
 	case FIELD_TYPE_ANY:
@@ -442,12 +432,12 @@ mem_is_type_compatible(struct Mem *mem, enum field_type type)
 static int
 mem_convert_to_double(struct Mem *mem)
 {
-	if ((mem->flags & MEM_Real) != 0)
+	if (mem_is_double(mem))
 		return 0;
-	if ((mem->flags & (MEM_Int | MEM_UInt)) == 0)
+	if (!mem_is_integer(mem))
 		return -1;
 	double d;
-	if ((mem->flags & MEM_Int) != 0)
+	if (mem_is_neg_int(mem))
 		d = (double)mem->u.i;
 	else
 		d = (double)mem->u.u;
@@ -464,11 +454,11 @@ mem_convert_to_double(struct Mem *mem)
 static int
 mem_convert_to_unsigned(struct Mem *mem)
 {
-	if ((mem->flags & MEM_UInt) != 0)
+	if (mem_is_pos_int(mem))
 		return 0;
-	if ((mem->flags & MEM_Int) != 0)
+	if (mem_is_neg_int(mem))
 		return -1;
-	if ((mem->flags & MEM_Real) == 0)
+	if (!mem_is_double(mem))
 		return -1;
 	double d = mem->u.r;
 	if (d < 0.0 || d >= (double)UINT64_MAX)
@@ -486,9 +476,9 @@ mem_convert_to_unsigned(struct Mem *mem)
 static int
 mem_convert_to_integer(struct Mem *mem)
 {
-	if ((mem->flags & (MEM_UInt | MEM_Int)) != 0)
+	if (mem_is_integer(mem))
 		return 0;
-	if ((mem->flags & MEM_Real) == 0)
+	if (!mem_is_double(mem))
 		return -1;
 	double d = mem->u.r;
 	if (d >= (double)UINT64_MAX || d < (double)INT64_MIN)
@@ -528,16 +518,21 @@ mem_convert_to_numeric(struct Mem *mem, enum field_type type)
  * numeric type, if has one.  Set the pMem->u.r and pMem->u.i fields
  * accordingly.
  */
-static u16 SQL_NOINLINE computeNumericType(Mem *pMem)
+static struct Mem *
+SQL_NOINLINE computeNumericType(struct Mem *pMem, struct Mem *tmp_mem)
 {
-	assert((pMem->flags & (MEM_Int | MEM_UInt | MEM_Real)) == 0);
-	assert((pMem->flags & (MEM_Str|MEM_Blob))!=0);
-	if (sqlAtoF(pMem->z, &pMem->u.r, pMem->n)==0)
-		return 0;
+	assert(!mem_is_number(pMem));
+	assert(mem_is_varstring(pMem));
+	double r;
+	if (sqlAtoF(pMem->z, &r, pMem->n)==0)
+		return pMem;
 	bool is_neg;
-	if (sql_atoi64(pMem->z, (int64_t *) &pMem->u.i, &is_neg, pMem->n) == 0)
-		return is_neg ? MEM_Int : MEM_UInt;
-	return MEM_Real;
+	int64_t i;
+	if (sql_atoi64(pMem->z, &i, &is_neg, pMem->n) == 0)
+		mem_set_int(tmp_mem, i, is_neg);
+	else
+		mem_set_double(tmp_mem, r);
+	return tmp_mem;
 }
 
 /*
@@ -547,14 +542,13 @@ static u16 SQL_NOINLINE computeNumericType(Mem *pMem)
  * Unlike mem_apply_numeric_type(), this routine does not modify pMem->flags.
  * But it does set pMem->u.r and pMem->u.i appropriately.
  */
-static u16 numericType(Mem *pMem)
+static struct Mem *
+numericType(struct Mem *pMem, struct Mem *tmp_mem)
 {
-	if ((pMem->flags & (MEM_Int | MEM_UInt | MEM_Real)) != 0)
-		return pMem->flags & (MEM_Int | MEM_UInt | MEM_Real);
-	if (pMem->flags & (MEM_Str|MEM_Blob)) {
-		return computeNumericType(pMem);
+	if (mem_is_varstring(pMem)) {
+		return computeNumericType(pMem, tmp_mem);
 	}
-	return 0;
+	return pMem;
 }
 
 #ifdef SQL_DEBUG
@@ -568,7 +562,7 @@ sqlVdbeMemPrettyPrint(Mem *pMem, char *zBuf)
 	char *zCsr = zBuf;
 	int f = pMem->flags;
 
-	if (f&MEM_Blob) {
+	if (mem_is_binary(pMem)) {
 		int i;
 		char c;
 		if (f & MEM_Dyn) {
@@ -604,7 +598,7 @@ sqlVdbeMemPrettyPrint(Mem *pMem, char *zBuf)
 			zCsr += sqlStrlen30(zCsr);
 		}
 		*zCsr = '\0';
-	} else if (f & MEM_Str) {
+	} else if (mem_is_string(pMem)) {
 		int j, k;
 		zBuf[0] = ' ';
 		if (f & MEM_Dyn) {
@@ -646,19 +640,17 @@ sqlVdbeMemPrettyPrint(Mem *pMem, char *zBuf)
 static void
 memTracePrint(Mem *p)
 {
-	if (p->flags & MEM_Undefined) {
+	if (mem_is_undefined(p)) {
 		printf(" undefined");
-	} else if (p->flags & MEM_Null) {
+	} else if (mem_is_null(p)) {
 		printf(" NULL");
-	} else if ((p->flags & (MEM_Int|MEM_Str))==(MEM_Int|MEM_Str)) {
-		printf(" si:%lld", p->u.i);
-	} else if (p->flags & MEM_Int) {
+	} else if (mem_is_neg_int(p)) {
 		printf(" i:%lld", p->u.i);
-	} else if (p->flags & MEM_UInt) {
+	} else if (mem_is_pos_int(p)) {
 		printf(" u:%"PRIu64"", p->u.u);
-	} else if (p->flags & MEM_Real) {
+	} else if (mem_is_double(p)) {
 		printf(" r:%g", p->u.r);
-	} else if (p->flags & MEM_Bool) {
+	} else if (mem_is_bool(p)) {
 		printf(" bool:%s", SQL_TOKEN_BOOLEAN(p->u.b));
 	} else {
 		char zBuf[200];
@@ -731,35 +723,32 @@ char *
 mem_type_to_str(const struct Mem *p)
 {
 	assert(p != NULL);
-	switch (p->flags & MEM_PURE_TYPE_MASK) {
-	case MEM_Null:
+	if (mem_is_null(p))
 		return "NULL";
-	case MEM_Str:
+	if (mem_is_string(p))
 		return "text";
-	case MEM_Int:
+	if (mem_is_neg_int(p))
 		return "integer";
-	case MEM_UInt:
+	if (mem_is_pos_int(p))
 		return "unsigned";
-	case MEM_Real:
+	if (mem_is_double(p))
 		return "real";
-	case MEM_Blob:
+	if (mem_is_binary(p))
 		return "varbinary";
-	case MEM_Bool:
-		return "boolean";
-	default:
-		unreachable();
-	}
+	assert(mem_is_bool(p));
+	return "boolean";
 }
 
 /* Allocate memory for internal VDBE structure on region. */
 static int
 vdbe_mem_alloc_blob_region(struct Mem *vdbe_mem, uint32_t size)
 {
-	vdbe_mem->n = size;
-	vdbe_mem->z = region_alloc(&fiber()->gc, size);
-	if (vdbe_mem->z == NULL)
+	char *buf = region_alloc(&fiber()->gc, size);
+	if (buf == NULL) {
+		diag_set(OutOfMemory, size, "region_alloc", "buf");
 		return -1;
-	vdbe_mem->flags = MEM_Ephem | MEM_Blob;
+	}
+	mem_set_bin(vdbe_mem, buf, size, MEM_Ephem, false);
 	assert(sqlVdbeCheckMemInvariants(vdbe_mem));
 	return 0;
 }
@@ -884,29 +873,20 @@ vdbe_field_ref_fetch(struct vdbe_field_ref *field_ref, uint32_t fieldno,
 	 * Wrap it in a blob verbatim.
 	 */
 	if (dest_mem->flags == 0) {
-		dest_mem->z = (char *) data;
-		dest_mem->n = vdbe_field_ref_fetch_data(field_ref,
-							fieldno + 1) - data;
-		dest_mem->flags = MEM_Blob | MEM_Ephem | MEM_Subtype;
-		dest_mem->subtype = SQL_SUBTYPE_MSGPACK;
+		uint32_t size =  vdbe_field_ref_fetch_data(field_ref,
+							   fieldno + 1) - data;
+		if (mp_typeof(*data) == MP_MAP)
+			mem_set_map(dest_mem, (char *)data, size, MEM_Ephem);
+		else
+			mem_set_array(dest_mem, (char *)data, size, MEM_Ephem);
 	}
-	/*
-	 * Add 0 termination (at most for strings)
-	 * Not sure why do we check MEM_Ephem
-	 */
-	if ((dest_mem->flags & (MEM_Ephem | MEM_Str)) ==
-	    (MEM_Ephem | MEM_Str)) {
-		int len = dest_mem->n;
-		if (dest_mem->szMalloc < len + 1) {
-			if (sqlVdbeMemGrow(dest_mem, len + 1, 1) != 0)
-				return -1;
+	if (mem_is_string(dest_mem) && (dest_mem->flags & MEM_Ephem) != 0) {
+		if (dest_mem->n > 0) {
+			mem_set_str(dest_mem, dest_mem->z, dest_mem->n, 0,
+				    (dest_mem->flags & MEM_Term) != 0);
 		} else {
-			dest_mem->z =
-				memcpy(dest_mem->zMalloc, dest_mem->z, len);
-			dest_mem->flags &= ~MEM_Ephem;
+			mem_set_str(dest_mem, "", 0, MEM_Static, true);
 		}
-		dest_mem->z[len] = 0;
-		dest_mem->flags |= MEM_Term;
 	}
 	UPDATE_MAX_BLOBSIZE(dest_mem);
 	dest_mem->field_type = vdbe_field_ref_fetch_type(field_ref, fieldno);
@@ -1129,9 +1109,9 @@ case OP_Gosub: {            /* jump */
  */
 case OP_Return: {           /* in1 */
 	pIn1 = &aMem[pOp->p1];
-	assert(pIn1->flags==MEM_UInt);
+	assert(mem_is_pos_int(pIn1));
 	pOp = &aOp[pIn1->u.u];
-	pIn1->flags = MEM_Undefined;
+	mem_set_undefined(pIn1);
 	break;
 }
 
@@ -1168,13 +1148,13 @@ case OP_InitCoroutine: {     /* jump */
 case OP_EndCoroutine: {           /* in1 */
 	VdbeOp *pCaller;
 	pIn1 = &aMem[pOp->p1];
-	assert(pIn1->flags == MEM_UInt);
+	assert(mem_is_pos_int(pIn1));
 	assert(pIn1->u.u < (uint64_t) p->nOp);
 	pCaller = &aOp[pIn1->u.u];
 	assert(pCaller->opcode==OP_Yield);
 	assert(pCaller->p2>=0 && pCaller->p2<p->nOp);
 	pOp = &aOp[pCaller->p2 - 1];
-	pIn1->flags = MEM_Undefined;
+	mem_set_undefined(pIn1);
 	break;
 }
 
@@ -1342,10 +1322,8 @@ case OP_String8: {         /* same as TK_STRING, out2 */
  */
 case OP_String: {          /* out2 */
 	assert(pOp->p4.z!=0);
-	pOut = vdbe_prepare_null_out(p, pOp->p2);
-	pOut->flags = MEM_Str|MEM_Static|MEM_Term;
-	pOut->z = pOp->p4.z;
-	pOut->n = pOp->p1;
+	pOut = &p->aMem[pOp->p2];
+	mem_set_str(pOut, pOp->p4.z, pOp->p1, MEM_Static, true);
 	UPDATE_MAX_BLOBSIZE(pOut);
 	break;
 }
@@ -1364,19 +1342,18 @@ case OP_String: {          /* out2 */
  */
 case OP_Null: {           /* out2 */
 	int cnt;
-	u16 nullFlag;
 	pOut = vdbe_prepare_null_out(p, pOp->p2);
 	cnt = pOp->p3-pOp->p2;
 	assert(pOp->p3<=(p->nMem+1 - p->nCursor));
-	pOut->flags = nullFlag = pOp->p1 ? (MEM_Null|MEM_Cleared) : MEM_Null;
-	pOut->n = 0;
+	mem_set_null(pOut);
+	if (pOp->p1)
+		pOut->flags |= MEM_Cleared;
 	while( cnt>0) {
 		pOut++;
 		memAboutToChange(p, pOut);
-		sqlVdbeMemSetNull(pOut);
-		pOut->flags = nullFlag;
-		pOut->field_type = field_type_MAX;
-		pOut->n = 0;
+		mem_set_null(pOut);
+		if (pOp->p1)
+			pOut->flags |= MEM_Cleared;
 		cnt--;
 	}
 	break;
@@ -1390,12 +1367,13 @@ case OP_Null: {           /* out2 */
  */
 case OP_Blob: {                /* out2 */
 	assert(pOp->p1 <= SQL_MAX_LENGTH);
-	pOut = vdbe_prepare_null_out(p, pOp->p2);
-	sqlVdbeMemSetStr(pOut, pOp->p4.z, pOp->p1, 0, 0);
-	if (pOp->p3!=0) {
-		pOut->flags |= MEM_Subtype;
-		pOut->subtype = pOp->p3;
-	}
+	pOut = &p->aMem[pOp->p2];
+	if (pOp->p3 == 0)
+		mem_set_bin(pOut, pOp->p4.z, pOp->p1, MEM_Static, false);
+	else if (mp_typeof(*pOp->p4.z) == MP_MAP)
+		mem_set_map(pOut, pOp->p4.z, pOp->p1, MEM_Static);
+	else
+		mem_set_array(pOut, pOp->p4.z, pOp->p1, MEM_Static);
 	UPDATE_MAX_BLOBSIZE(pOut);
 	break;
 }
@@ -1547,7 +1525,7 @@ case OP_ResultRow: {
 		assert(memIsValid(&pMem[i]));
 		Deephemeralize(&pMem[i]);
 		assert((pMem[i].flags & MEM_Ephem)==0
-		       || (pMem[i].flags & (MEM_Str|MEM_Blob))==0);
+		       || !mem_is_varstring(&pMem[i]));
 		sqlVdbeMemNulTerminate(&pMem[i]);
 		REGISTER_TRACE(p, pOp->p1+i, &pMem[i]);
 	}
@@ -1587,7 +1565,7 @@ case OP_Concat: {           /* same as TK_CONCAT, in1, in2, out3 */
 	pIn2 = &aMem[pOp->p2];
 	pOut = vdbe_prepare_null_out(p, pOp->p3);
 	assert(pIn1!=pOut);
-	if ((pIn1->flags | pIn2->flags) & MEM_Null) {
+	if (mem_is_null(pIn1) || mem_is_null(pIn2)) {
 		/* Force NULL be of type STRING. */
 		pOut->field_type = FIELD_TYPE_STRING;
 		break;
@@ -1596,10 +1574,8 @@ case OP_Concat: {           /* same as TK_CONCAT, in1, in2, out3 */
 	 * Concatenation operation can be applied only to
 	 * strings and blobs.
 	 */
-	uint32_t str_type_p1 = pIn1->flags & (MEM_Blob | MEM_Str);
-	uint32_t str_type_p2 = pIn2->flags & (MEM_Blob | MEM_Str);
-	if (str_type_p1 == 0 || str_type_p2 == 0) {
-		char *inconsistent_type = str_type_p1 == 0 ?
+	if (!mem_is_varstring(pIn1) || !mem_is_varstring(pIn2)) {
+		char *inconsistent_type = !mem_is_varstring(pIn1) ?
 					  mem_type_to_str(pIn1) :
 					  mem_type_to_str(pIn2);
 		diag_set(ClientError, ER_INCONSISTENT_TYPES,
@@ -1608,7 +1584,7 @@ case OP_Concat: {           /* same as TK_CONCAT, in1, in2, out3 */
 	}
 
 	/* Moreover, both operands must be of the same type. */
-	if (str_type_p1 != str_type_p2) {
+	if (!mems_have_same_type(pIn1, pIn2)) {
 		diag_set(ClientError, ER_INCONSISTENT_TYPES,
 			 mem_type_to_str(pIn2), mem_type_to_str(pIn1));
 		goto abort_due_to_error;
@@ -1619,21 +1595,19 @@ case OP_Concat: {           /* same as TK_CONCAT, in1, in2, out3 */
 	if (nByte>db->aLimit[SQL_LIMIT_LENGTH]) {
 		goto too_big;
 	}
-	if (sqlVdbeMemGrow(pOut, (int)nByte+2, pOut==pIn2)) {
-		goto no_mem;
+	size_t svp = region_used(&fiber()->gc);
+	char *buf = region_alloc(&fiber()->gc, nByte);
+	if (buf == NULL) {
+		diag_set(OutOfMemory, nByte, "region_alloc", "buf");
+		goto abort_due_to_error;
 	}
-	if (pIn1->flags & MEM_Str)
-		MemSetTypeFlag(pOut, MEM_Str);
+	memcpy(buf, pIn2->z, pIn2->n);
+	memcpy(&buf[pIn2->n], pIn1->z, pIn1->n);
+	if (mem_is_binary(pIn1))
+		mem_set_bin(pOut, buf, nByte, 0, false);
 	else
-		MemSetTypeFlag(pOut, MEM_Blob);
-	if (pOut!=pIn2) {
-		memcpy(pOut->z, pIn2->z, pIn2->n);
-	}
-	memcpy(&pOut->z[pIn2->n], pIn1->z, pIn1->n);
-	pOut->z[nByte]=0;
-	pOut->z[nByte+1] = 0;
-	pOut->flags |= MEM_Term;
-	pOut->n = (int)nByte;
+		mem_set_str(pOut, buf, nByte, 0, false);
+	region_truncate(&fiber()->gc, svp);
 	UPDATE_MAX_BLOBSIZE(pOut);
 	break;
 }
@@ -1681,27 +1655,26 @@ case OP_Subtract:              /* same as TK_MINUS, in1, in2, out3 */
 case OP_Multiply:              /* same as TK_STAR, in1, in2, out3 */
 case OP_Divide:                /* same as TK_SLASH, in1, in2, out3 */
 case OP_Remainder: {           /* same as TK_REM, in1, in2, out3 */
-	u32 flags;      /* Combined MEM_* flags from both inputs */
-	u16 type1;      /* Numeric type of left operand */
-	u16 type2;      /* Numeric type of right operand */
 	i64 iA;         /* Integer value of left operand */
 	i64 iB;         /* Integer value of right operand */
 	double rA;      /* Real value of left operand */
 	double rB;      /* Real value of right operand */
 
+	struct Mem tmp_mem1, tmp_mem2, *mem1, *mem2;
+	mem_init(&tmp_mem1);
+	mem_init(&tmp_mem2);
 	pIn1 = &aMem[pOp->p1];
-	type1 = numericType(pIn1);
+	mem1 = numericType(&aMem[pOp->p1], &tmp_mem1);
 	pIn2 = &aMem[pOp->p2];
-	type2 = numericType(pIn2);
+	mem2 = numericType(&aMem[pOp->p2], &tmp_mem2);
 	pOut = vdbe_prepare_null_out(p, pOp->p3);
-	flags = pIn1->flags | pIn2->flags;
-	if ((flags & MEM_Null)!=0) goto arithmetic_result_is_null;
-	if ((type1 & (MEM_Int | MEM_UInt)) != 0 &&
-	    (type2 & (MEM_Int | MEM_UInt)) != 0) {
-		iA = pIn1->u.i;
-		iB = pIn2->u.i;
-		bool is_lhs_neg = pIn1->flags & MEM_Int;
-		bool is_rhs_neg = pIn2->flags & MEM_Int;
+	if (mem_is_null(mem1) || mem_is_null(mem2))
+		goto arithmetic_result_is_null;
+	if (mem_is_integer(mem1) && mem_is_integer(mem2)) {
+		iA = mem1->u.i;
+		iB = mem2->u.i;
+		bool is_lhs_neg = mem_is_neg_int(pIn1);
+		bool is_rhs_neg = mem_is_neg_int(pIn2);
 		bool is_res_neg;
 		switch( pOp->opcode) {
 		case OP_Add: {
@@ -1752,7 +1725,7 @@ case OP_Remainder: {           /* same as TK_REM, in1, in2, out3 */
 				 sql_value_to_diag_str(pIn2), "numeric");
 			goto abort_due_to_error;
 		}
-		assert(((type1 | type2) & MEM_Real) != 0);
+		assert(mem_is_double(mem1) || mem_is_double(mem2));
 		switch( pOp->opcode) {
 		case OP_Add:         rB += rA;       break;
 		case OP_Subtract:    rB -= rA;       break;
@@ -1908,7 +1881,7 @@ case OP_BuiltinFunction: {
 		goto abort_due_to_error;
 
 	/* Copy the result of the function into register P3 */
-	if (pOut->flags & (MEM_Str|MEM_Blob)) {
+	if (mem_is_varstring(pOut)) {
 		if (sqlVdbeMemTooBig(pCtx->pOut)) goto too_big;
 	}
 
@@ -1967,7 +1940,7 @@ case OP_FunctionByName: {
 	 * Copy the result of the function invocation into
 	 * register P3.
 	 */
-	if ((pOut->flags & (MEM_Str | MEM_Blob)) != 0)
+	if (mem_is_varstring(pOut))
 		if (sqlVdbeMemTooBig(pOut)) goto too_big;
 
 	REGISTER_TRACE(p, pOp->p3, pOut);
@@ -2017,7 +1990,7 @@ case OP_ShiftRight: {           /* same as TK_RSHIFT, in1, in2, out3 */
 	pIn1 = &aMem[pOp->p1];
 	pIn2 = &aMem[pOp->p2];
 	pOut = vdbe_prepare_null_out(p, pOp->p3);
-	if ((pIn1->flags | pIn2->flags) & MEM_Null) {
+	if (mem_is_null(pIn1) || mem_is_null(pIn2)) {
 		/* Force NULL be of type INTEGER. */
 		pOut->field_type = FIELD_TYPE_INTEGER;
 		break;
@@ -2076,7 +2049,7 @@ case OP_ShiftRight: {           /* same as TK_RSHIFT, in1, in2, out3 */
 case OP_AddImm: {            /* in1 */
 	pIn1 = &aMem[pOp->p1];
 	memAboutToChange(p, pIn1);
-	assert((pIn1->flags & MEM_UInt) != 0 && pOp->p2 >= 0);
+	assert(mem_is_pos_int(pIn1) && pOp->p2 >= 0);
 	pIn1->u.u += pOp->p2;
 	break;
 }
@@ -2090,9 +2063,9 @@ case OP_AddImm: {            /* in1 */
  */
 case OP_MustBeInt: {            /* jump, in1 */
 	pIn1 = &aMem[pOp->p1];
-	if ((pIn1->flags & (MEM_Int | MEM_UInt)) == 0) {
+	if (!mem_is_integer(pIn1)) {
 		mem_apply_type(pIn1, FIELD_TYPE_INTEGER);
-		if ((pIn1->flags & (MEM_Int | MEM_UInt)) == 0) {
+		if (!mem_is_integer(pIn1)) {
 			if (pOp->p2==0) {
 				diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
 					 sql_value_to_diag_str(pIn1), "integer");
@@ -2116,7 +2089,7 @@ case OP_MustBeInt: {            /* jump, in1 */
  */
 case OP_Realify: {                  /* in1 */
 	pIn1 = &aMem[pOp->p1];
-	if ((pIn1->flags & (MEM_Int | MEM_UInt)) != 0) {
+	if (mem_is_integer(pIn1)) {
 		sqlVdbeMemRealify(pIn1);
 	}
 	break;
@@ -2257,7 +2230,7 @@ case OP_Ge: {             /* same as TK_GE, jump, in1, in3 */
 	flags3 = pIn3->flags;
 	enum field_type ft_p1 = pIn1->field_type;
 	enum field_type ft_p3 = pIn3->field_type;
-	if ((flags1 | flags3)&MEM_Null) {
+	if (mem_is_null(pIn1) || mem_is_null(pIn3)) {
 		/* One or both operands are NULL */
 		if (pOp->p5 & SQL_NULLEQ) {
 			/* If SQL_NULLEQ is set (which will only happen if the operator is
@@ -2267,7 +2240,7 @@ case OP_Ge: {             /* same as TK_GE, jump, in1, in3 */
 			assert(pOp->opcode==OP_Eq || pOp->opcode==OP_Ne);
 			assert((flags1 & MEM_Cleared)==0);
 			assert((pOp->p5 & SQL_JUMPIFNULL)==0);
-			if ((flags1&flags3&MEM_Null)!=0
+			if (mem_is_null(pIn1) && mem_is_null(pIn3)
 			    && (flags3&MEM_Cleared)==0
 				) {
 				res = 0;  /* Operands are equal */
@@ -2291,20 +2264,20 @@ case OP_Ge: {             /* same as TK_GE, jump, in1, in3 */
 			}
 			break;
 		}
-	} else if (((flags1 | flags3) & MEM_Bool) != 0 ||
-		   ((flags1 | flags3) & MEM_Blob) != 0) {
+	} else if (mem_is_bool(pIn1) || mem_is_bool(pIn3) ||
+		   mem_is_binary(pIn1) || mem_is_binary(pIn3)) {
 		/*
 		 * If one of values is of type BOOLEAN or VARBINARY,
 		 * then the second one must be of the same type as
 		 * well. Otherwise an error is raised.
 		 */
-		int type_arg1 = flags1 & (MEM_Bool | MEM_Blob);
-		int type_arg3 = flags3 & (MEM_Bool | MEM_Blob);
-		if (type_arg1 != type_arg3) {
-			char *inconsistent_type = type_arg1 != 0 ?
+		if (!mems_have_same_type(pIn1, pIn3)) {
+			char *inconsistent_type = mem_is_bool(pIn1) ||
+						  mem_is_binary(pIn1) ?
 						  mem_type_to_str(pIn3) :
 						  mem_type_to_str(pIn1);
-			char *expected_type     = type_arg1 != 0 ?
+			char *expected_type     = mem_is_bool(pIn1) ||
+						  mem_is_binary(pIn1) ?
 						  mem_type_to_str(pIn1) :
 						  mem_type_to_str(pIn3);
 			diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
@@ -2315,13 +2288,13 @@ case OP_Ge: {             /* same as TK_GE, jump, in1, in3 */
 	} else {
 		enum field_type type = pOp->p5 & FIELD_TYPE_MASK;
 		if (sql_type_is_numeric(type)) {
-			if ((flags1 | flags3)&MEM_Str) {
-				if ((flags1 & MEM_Str) == MEM_Str) {
+			if (mem_is_string(pIn1) || mem_is_string(pIn3)) {
+				if (mem_is_string(pIn1)) {
 					mem_apply_numeric_type(pIn1);
 					testcase( flags3!=pIn3->flags); /* Possible if pIn1==pIn3 */
 					flags3 = pIn3->flags;
 				}
-				if ((flags3 & MEM_Str) == MEM_Str) {
+				if (mem_is_string(pIn3)) {
 					if (mem_apply_numeric_type(pIn3) != 0) {
 						diag_set(ClientError,
 							 ER_SQL_TYPE_MISMATCH,
@@ -2335,8 +2308,9 @@ case OP_Ge: {             /* same as TK_GE, jump, in1, in3 */
 			/* Handle the common case of integer comparison here, as an
 			 * optimization, to avoid a call to sqlMemCompare()
 			 */
-			if ((pIn1->flags & pIn3->flags & (MEM_Int | MEM_UInt)) != 0) {
-				if ((pIn1->flags & pIn3->flags & MEM_Int) != 0) {
+			if (mem_is_integer(pIn1) && mem_is_integer(pIn3)) {
+				if (mem_is_neg_int(pIn1) &&
+				    mem_is_neg_int(pIn3)) {
 					if (pIn3->u.i > pIn1->u.i)
 						res = +1;
 					else if (pIn3->u.i < pIn1->u.i)
@@ -2345,7 +2319,8 @@ case OP_Ge: {             /* same as TK_GE, jump, in1, in3 */
 						res = 0;
 					goto compare_op;
 				}
-				if ((pIn1->flags & pIn3->flags & MEM_UInt) != 0) {
+				if (mem_is_pos_int(pIn1) &&
+				    mem_is_pos_int(pIn3)) {
 					if (pIn3->u.u > pIn1->u.u)
 						res = +1;
 					else if (pIn3->u.u < pIn1->u.u)
@@ -2354,8 +2329,8 @@ case OP_Ge: {             /* same as TK_GE, jump, in1, in3 */
 						res = 0;
 					goto compare_op;
 				}
-				if ((pIn1->flags & MEM_UInt) != 0 &&
-				    (pIn3->flags & MEM_Int) != 0) {
+				if (mem_is_pos_int(pIn1) &&
+				    mem_is_neg_int(pIn3)) {
 					res = -1;
 					goto compare_op;
 				}
@@ -2363,21 +2338,13 @@ case OP_Ge: {             /* same as TK_GE, jump, in1, in3 */
 				goto compare_op;
 			}
 		} else if (type == FIELD_TYPE_STRING) {
-			if ((flags1 & MEM_Str) == 0 &&
-			    (flags1 & (MEM_Int | MEM_UInt | MEM_Real)) != 0) {
-				testcase( pIn1->flags & MEM_Int);
-				testcase( pIn1->flags & MEM_Real);
+			if (mem_is_number(pIn1)) {
 				sqlVdbeMemStringify(pIn1);
-				testcase( (flags1&MEM_Dyn) != (pIn1->flags&MEM_Dyn));
 				flags1 = (pIn1->flags & ~MEM_TypeMask) | (flags1 & MEM_TypeMask);
 				assert(pIn1!=pIn3);
 			}
-			if ((flags3 & MEM_Str) == 0 &&
-			    (flags3 & (MEM_Int | MEM_UInt | MEM_Real)) != 0) {
-				testcase( pIn3->flags & MEM_Int);
-				testcase( pIn3->flags & MEM_Real);
+			if (mem_is_number(pIn3)) {
 				sqlVdbeMemStringify(pIn3);
-				testcase( (flags3&MEM_Dyn) != (pIn3->flags&MEM_Dyn));
 				flags3 = (pIn3->flags & ~MEM_TypeMask) | (flags3 & MEM_TypeMask);
 			}
 		}
@@ -2585,9 +2552,9 @@ case OP_Or: {             /* same as TK_OR, in1, in2, out3 */
 	int v2;    /* Right operand: 0==FALSE, 1==TRUE, 2==UNKNOWN or NULL */
 
 	pIn1 = &aMem[pOp->p1];
-	if (pIn1->flags & MEM_Null) {
+	if (mem_is_null(pIn1)) {
 		v1 = 2;
-	} else if ((pIn1->flags & MEM_Bool) != 0) {
+	} else if (mem_is_bool(pIn1)) {
 		v1 = pIn1->u.b;
 	} else {
 		diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
@@ -2595,9 +2562,9 @@ case OP_Or: {             /* same as TK_OR, in1, in2, out3 */
 		goto abort_due_to_error;
 	}
 	pIn2 = &aMem[pOp->p2];
-	if (pIn2->flags & MEM_Null) {
+	if (mem_is_null(pIn2)) {
 		v2 = 2;
-	} else if ((pIn2->flags & MEM_Bool) != 0) {
+	} else if (mem_is_bool(pIn2)) {
 		v2 = pIn2->u.b;
 	} else {
 		diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
@@ -2628,8 +2595,8 @@ case OP_Not: {                /* same as TK_NOT, in1, out2 */
 	pIn1 = &aMem[pOp->p1];
 	pOut = vdbe_prepare_null_out(p, pOp->p2);
 	pOut->field_type = FIELD_TYPE_BOOLEAN;
-	if ((pIn1->flags & MEM_Null)==0) {
-		if ((pIn1->flags & MEM_Bool) == 0) {
+	if (!mem_is_null(pIn1)) {
+		if (!mem_is_bool(pIn1)) {
 			diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
 				 sql_value_to_diag_str(pIn1), "boolean");
 			goto abort_due_to_error;
@@ -2651,7 +2618,7 @@ case OP_BitNot: {             /* same as TK_BITNOT, in1, out2 */
 	pOut = vdbe_prepare_null_out(p, pOp->p2);
 	/* Force NULL be of type INTEGER. */
 	pOut->field_type = FIELD_TYPE_INTEGER;
-	if ((pIn1->flags & MEM_Null)==0) {
+	if (!mem_is_null(pIn1)) {
 		int64_t i;
 		bool is_neg;
 		if (sqlVdbeIntValue(pIn1, &i, &is_neg) != 0) {
@@ -2696,9 +2663,9 @@ case OP_If:                 /* jump, in1 */
 case OP_IfNot: {            /* jump, in1 */
 	int c;
 	pIn1 = &aMem[pOp->p1];
-	if (pIn1->flags & MEM_Null) {
+	if (mem_is_null(pIn1)) {
 		c = pOp->p3;
-	} else if ((pIn1->flags & MEM_Bool) != 0) {
+	} else if (mem_is_bool(pIn1)) {
 		c = pOp->opcode == OP_IfNot ? ! pIn1->u.b : pIn1->u.b;
 	} else {
 		diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
@@ -2719,8 +2686,8 @@ case OP_IfNot: {            /* jump, in1 */
  */
 case OP_IsNull: {            /* same as TK_ISNULL, jump, in1 */
 	pIn1 = &aMem[pOp->p1];
-	VdbeBranchTaken( (pIn1->flags & MEM_Null)!=0, 2);
-	if ((pIn1->flags & MEM_Null)!=0) {
+	VdbeBranchTaken(mem_is_null(pIn1), 2);
+	if (mem_is_null(pIn1)) {
 		goto jump_to_p2;
 	}
 	break;
@@ -2733,8 +2700,8 @@ case OP_IsNull: {            /* same as TK_ISNULL, jump, in1 */
  */
 case OP_NotNull: {            /* same as TK_NOTNULL, jump, in1 */
 	pIn1 = &aMem[pOp->p1];
-	VdbeBranchTaken( (pIn1->flags & MEM_Null)==0, 2);
-	if ((pIn1->flags & MEM_Null)==0) {
+	VdbeBranchTaken(!mem_is_null(pIn1), 2);
+	if (!mem_is_null(pIn1)) {
 		goto jump_to_p2;
 	}
 	break;
@@ -2788,7 +2755,7 @@ case OP_Column: {
 			if (pC->eCurType==CURTYPE_PSEUDO) {
 				assert(pC->uc.pseudoTableReg>0);
 				pReg = &aMem[pC->uc.pseudoTableReg];
-				assert(pReg->flags & MEM_Blob);
+				assert(mem_is_binary(pReg));
 				assert(memIsValid(pReg));
 				vdbe_field_ref_prepare_data(&pC->field_ref,
 							    pReg->z, pReg->n);
@@ -2817,7 +2784,7 @@ case OP_Column: {
 	if (vdbe_field_ref_fetch(&pC->field_ref, p2, pDest) != 0)
 		goto abort_due_to_error;
 
-	if ((pDest->flags & MEM_Null) &&
+	if (mem_is_null(pDest) &&
 	    (uint32_t) p2  >= pC->field_ref.field_count &&
 	    default_val_mem != NULL) {
 		sqlVdbeMemShallowCopy(pDest, default_val_mem, MEM_Static);
@@ -2969,21 +2936,16 @@ case OP_MakeRecord: {
 	 * routine.
 	 */
 	if (bIsEphemeral) {
-		if (sqlVdbeMemClearAndResize(pOut, tuple_size) != 0)
+		if (mem_set_bin(pOut, tuple, tuple_size, 0, false) != 0)
 			goto abort_due_to_error;
-		pOut->flags = MEM_Blob;
-		pOut->n = tuple_size;
-		memcpy(pOut->z, tuple, tuple_size);
 		region_truncate(region, used);
 	} else {
 		/* Allocate memory on the region for the tuple
 		 * to be passed to Tarantool. Before that, make
 		 * sure previously allocated memory has gone.
 		 */
-		sqlVdbeMemRelease(pOut);
-		pOut->flags = MEM_Blob | MEM_Ephem;
-		pOut->n = tuple_size;
-		pOut->z = tuple;
+		if (mem_set_bin(pOut, tuple, tuple_size, MEM_Ephem, false) != 0)
+			goto abort_due_to_error;
 	}
 	assert(sqlVdbeCheckMemInvariants(pOut));
 	assert(pOp->p3>0 && pOp->p3<=(p->nMem+1 - p->nCursor));
@@ -3261,8 +3223,7 @@ case OP_OpenTEphemeral: {
 
 	if (space == NULL)
 		goto abort_due_to_error;
-	aMem[pOp->p1].u.p = space;
-	aMem[pOp->p1].flags = MEM_Ptr;
+	mem_set_ptr(&aMem[pOp->p1], (void *)space);
 	break;
 }
 
@@ -3491,18 +3452,18 @@ case OP_SeekGT: {       /* jump, in3 */
 		 * the seek, so convert it.
 		 */
 		pIn3 = &aMem[int_field];
-		if ((pIn3->flags & MEM_Null) != 0)
+		if (mem_is_null(pIn3))
 			goto skip_truncate;
-		if ((pIn3->flags & MEM_Str) != 0)
+		if (mem_is_string(pIn3))
 			mem_apply_numeric_type(pIn3);
 		int64_t i;
-		if ((pIn3->flags & MEM_Int) == MEM_Int) {
+		if (mem_is_neg_int(pIn3)) {
 			i = pIn3->u.i;
 			is_neg = true;
-		} else if ((pIn3->flags & MEM_UInt) == MEM_UInt) {
+		} else if (mem_is_pos_int(pIn3)) {
 			i = pIn3->u.u;
 			is_neg = false;
-		} else if ((pIn3->flags & MEM_Real) == MEM_Real) {
+		} else if (mem_is_double(pIn3)) {
 			if (pIn3->u.r > (double)INT64_MAX)
 				i = INT64_MAX;
 			else if (pIn3->u.r < (double)INT64_MIN)
@@ -3520,8 +3481,8 @@ case OP_SeekGT: {       /* jump, in3 */
 		/* If the P3 value could not be converted into an integer without
 		 * loss of information, then special processing is required...
 		 */
-		if ((pIn3->flags & (MEM_Int | MEM_UInt)) == 0) {
-			if ((pIn3->flags & MEM_Real)==0) {
+		if (!mem_is_integer(pIn3)) {
+			if (!mem_is_double(pIn3)) {
 				/* If the P3 value cannot be converted into any kind of a number,
 				 * then the seek is not possible, so jump to P2
 				 */
@@ -3737,7 +3698,7 @@ case OP_Found: {        /* jump, in3 */
 	} else {
 		pFree = pIdxKey = sqlVdbeAllocUnpackedRecord(db, pC->key_def);
 		if (pIdxKey==0) goto no_mem;
-		assert(pIn3->flags & MEM_Blob );
+		assert(mem_is_binary(pIn3));
 		(void)ExpandBlob(pIn3);
 		sqlVdbeRecordUnpackMsgpack(pC->key_def,
 					       pIn3->z, pIdxKey);
@@ -3751,7 +3712,7 @@ case OP_Found: {        /* jump, in3 */
 		 * conflict
 		 */
 		for(ii=0; ii<pIdxKey->nField; ii++) {
-			if (pIdxKey->aMem[ii].flags & MEM_Null) {
+			if (mem_is_null(&pIdxKey->aMem[ii])) {
 				takeJump = 1;
 				break;
 			}
@@ -3861,14 +3822,14 @@ case OP_FCopy: {     /* out2 */
 		pIn1 = &aMem[pOp->p1];
 	}
 
-	if ((pOp->p3 & OPFLAG_NOOP_IF_NULL) && (pIn1->flags & MEM_Null)) {
+	if ((pOp->p3 & OPFLAG_NOOP_IF_NULL) && mem_is_null(pIn1)) {
 		pOut = vdbe_prepare_null_out(p, pOp->p2);
 	} else {
 		assert(memIsValid(pIn1));
-		assert((pIn1->flags & (MEM_Int | MEM_UInt)) != 0);
+		assert(mem_is_integer(pIn1));
 
 		pOut = vdbe_prepare_null_out(p, pOp->p2);
-		mem_set_int(pOut, pIn1->u.i, pIn1->flags == MEM_Int);
+		mem_set_int(pOut, pIn1->u.i, mem_is_neg_int(pIn1));
 		pOut->field_type = pIn1->field_type;
 	}
 	break;
@@ -4000,7 +3961,7 @@ case OP_SorterData: {
 	assert(isSorter(pC));
 	if (sqlVdbeSorterRowkey(pC, pOut) != 0)
 		goto abort_due_to_error;
-	assert(pOut->flags & MEM_Blob);
+	assert(mem_is_binary(pOut));
 	assert(pOp->p1>=0 && pOp->p1<p->nCursor);
 	p->apCsr[pOp->p3]->cacheStatus = CACHE_STALE;
 	break;
@@ -4358,7 +4319,7 @@ case OP_SorterInsert: {      /* in2 */
 	assert(cursor != NULL);
 	assert(isSorter(cursor));
 	pIn2 = &aMem[pOp->p2];
-	assert((pIn2->flags & MEM_Blob) != 0);
+	assert(mem_is_binary(pIn2));
 	if (ExpandBlob(pIn2) != 0 ||
 	    sqlVdbeSorterWrite(cursor, pIn2) != 0)
 		goto abort_due_to_error;
@@ -4392,7 +4353,7 @@ case OP_SorterInsert: {      /* in2 */
 case OP_IdxReplace:
 case OP_IdxInsert: {
 	pIn2 = &aMem[pOp->p1];
-	assert((pIn2->flags & MEM_Blob) != 0);
+	assert(mem_is_binary(pIn2));
 	if (ExpandBlob(pIn2) != 0)
 		goto abort_due_to_error;
 	struct space *space;
@@ -4437,7 +4398,7 @@ case OP_IdxInsert: {
 	}
 	if ((pOp->p5 & OPFLAG_NCHANGE) != 0)
 		p->nChange++;
-	if (pOp->p3 > 0 && ((aMem[pOp->p3].flags) & MEM_Null) != 0) {
+	if (pOp->p3 > 0 && mem_is_null(&aMem[pOp->p3])) {
 		assert(space->sequence != NULL);
 		int64_t value;
 		if (sequence_get_value(space->sequence, &value) != 0)
@@ -4483,10 +4444,10 @@ case OP_Update: {
 	assert(pOp->p4type == P4_SPACEPTR);
 
 	struct Mem *key_mem = &aMem[pOp->p2];
-	assert((key_mem->flags & MEM_Blob) != 0);
+	assert(mem_is_binary(key_mem));
 
 	struct Mem *upd_fields_mem = &aMem[pOp->p3];
-	assert((upd_fields_mem->flags & MEM_Blob) != 0);
+	assert(mem_is_binary(upd_fields_mem));
 	uint32_t *upd_fields = (uint32_t *)upd_fields_mem->z;
 	uint32_t upd_fields_cnt = upd_fields_mem->n / sizeof(uint32_t);
 
@@ -4915,7 +4876,7 @@ case OP_Program: {        /* jump */
 	 * the trigger program. If this trigger has been fired before, then pRt
 	 * is already allocated. Otherwise, it must be initialized.
 	 */
-	if ((pRt->flags&MEM_Frame)==0) {
+	if (!mem_is_frame(pRt)) {
 		/* SubProgram.nMem is set to the number of memory cells used by the
 		 * program stored in SubProgram.aOp. As well as these, one memory
 		 * cell is required for each cursor used by the program. Set local
@@ -4931,9 +4892,7 @@ case OP_Program: {        /* jump */
 		if (!pFrame) {
 			goto no_mem;
 		}
-		sqlVdbeMemRelease(pRt);
-		pRt->flags = MEM_Frame;
-		pRt->u.pFrame = pFrame;
+		mem_set_frame(pRt, pFrame);
 
 		pFrame->v = p;
 		pFrame->nChildMem = nMem;
@@ -4949,7 +4908,7 @@ case OP_Program: {        /* jump */
 
 		pEnd = &VdbeFrameMem(pFrame)[pFrame->nChildMem];
 		for(pMem=VdbeFrameMem(pFrame); pMem!=pEnd; pMem++) {
-			pMem->flags = MEM_Undefined;
+			mem_set_undefined(pMem);
 			pMem->db = db;
 		}
 	} else {
@@ -5055,8 +5014,8 @@ case OP_FkIfZero: {         /* jump */
  */
 case OP_IfPos: {        /* jump, in1 */
 	pIn1 = &aMem[pOp->p1];
-	assert((pIn1->flags & (MEM_Int | MEM_UInt)) != 0);
-	if ((pIn1->flags & MEM_UInt) != 0 && pIn1->u.u != 0) {
+	assert(mem_is_integer(pIn1));
+	if (mem_is_pos_int(pIn1) && pIn1->u.u != 0) {
 		assert(pOp->p3 >= 0);
 		uint64_t res = pIn1->u.u - (uint64_t) pOp->p3;
 		/*
@@ -5090,8 +5049,8 @@ case OP_OffsetLimit: {    /* in1, out2, in3 */
 	pIn3 = &aMem[pOp->p3];
 	pOut = vdbe_prepare_null_out(p, pOp->p2);
 
-	assert((pIn1->flags & MEM_UInt) != 0);
-	assert((pIn3->flags & MEM_UInt) != 0);
+	assert(mem_is_pos_int(pIn1));
+	assert(mem_is_pos_int(pIn3));
 	uint64_t x = pIn1->u.u;
 	uint64_t rhs = pIn3->u.u;
 	bool unused;
@@ -5114,7 +5073,7 @@ case OP_OffsetLimit: {    /* in1, out2, in3 */
  */
 case OP_IfNotZero: {        /* jump, in1 */
 	pIn1 = &aMem[pOp->p1];
-	assert((pIn1->flags & MEM_UInt) != 0);
+	assert(mem_is_pos_int(pIn1));
 	if (pIn1->u.u > 0) {
 		pIn1->u.u--;
 		goto jump_to_p2;
@@ -5130,7 +5089,7 @@ case OP_IfNotZero: {        /* jump, in1 */
  */
 case OP_DecrJumpZero: {      /* jump, in1 */
 	pIn1 = &aMem[pOp->p1];
-	assert((pIn1->flags & MEM_UInt) != 0);
+	assert(mem_is_pos_int(pIn1));
 	if (pIn1->u.u > 0)
 		pIn1->u.u--;
 	if (pIn1->u.u == 0) goto jump_to_p2;
@@ -5216,7 +5175,7 @@ case OP_AggStep: {
 #endif
 
 	pMem->n++;
-	sqlVdbeMemInit(&t, db, MEM_Null);
+	mem_init(&t);
 	pCtx->pOut = &t;
 	pCtx->is_aborted = false;
 	pCtx->skipFlag = 0;
@@ -5227,7 +5186,7 @@ case OP_AggStep: {
 		sqlVdbeMemRelease(&t);
 		goto abort_due_to_error;
 	}
-	assert(t.flags==MEM_Null);
+	assert(mem_is_null(&t));
 	if (pCtx->skipFlag) {
 		assert(pOp[-1].opcode==OP_CollSeq);
 		i = pOp[-1].p1;
@@ -5253,7 +5212,7 @@ case OP_AggFinal: {
 	Mem *pMem;
 	assert(pOp->p1>0 && pOp->p1<=(p->nMem+1 - p->nCursor));
 	pMem = &aMem[pOp->p1];
-	assert((pMem->flags & ~(MEM_Null|MEM_Agg))==0);
+	assert(mem_is_null(pMem) || (pMem->flags & ~MEM_Agg)==0);
 	if (sql_vdbemem_finalize(pMem, pOp->p4.func) != 0)
 		goto abort_due_to_error;
 	UPDATE_MAX_BLOBSIZE(pMem);
@@ -5355,11 +5314,11 @@ case OP_Init: {          /* jump */
  */
 case OP_IncMaxid: {
 	assert(pOp->p1 > 0);
-	pOut = vdbe_prepare_null_out(p, pOp->p1);
-
-	if (tarantoolsqlIncrementMaxid(&pOut->u.u) != 0)
+	pOut = &p->aMem[pOp->p1];
+	uint64_t id;
+	if (tarantoolsqlIncrementMaxid(&id) != 0)
 		goto abort_due_to_error;
-	pOut->flags = MEM_UInt;
+	mem_set_u64(pOut, id);
 	break;
 }
 
@@ -5380,7 +5339,7 @@ case OP_SetSession: {
 	struct session_setting *setting = &session_settings[sid];
 	switch (setting->field_type) {
 	case FIELD_TYPE_BOOLEAN: {
-		if ((pIn1->flags & MEM_Bool) == 0)
+		if (!mem_is_bool(pIn1))
 			goto invalid_type;
 		bool value = pIn1->u.b;
 		size_t size = mp_sizeof_bool(value);
@@ -5391,7 +5350,7 @@ case OP_SetSession: {
 		break;
 	}
 	case FIELD_TYPE_STRING: {
-		if ((pIn1->flags & MEM_Str) == 0)
+		if (!mem_is_string(pIn1))
 			goto invalid_type;
 		const char *str = pIn1->z;
 		uint32_t size = mp_sizeof_str(pIn1->n);
