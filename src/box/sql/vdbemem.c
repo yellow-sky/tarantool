@@ -1020,34 +1020,40 @@ mem_convert_to_binary(struct Mem *mem)
 	return -1;
 }
 
+static inline int
+pure_type(const struct Mem *mem)
+{
+	return mem->flags & MEM_PURE_TYPE_MASK;
+}
+
 bool
 mem_is_null(const struct Mem *mem)
 {
-	return (mem->flags & MEM_Null) != 0;
+	return pure_type(mem) == MEM_Null;
 }
 
 bool
 mem_is_undefined(const struct Mem *mem)
 {
-	return (mem->flags & MEM_Undefined) != 0;
+	return mem->flags == MEM_Undefined;
 }
 
 bool
 mem_is_frame(const struct Mem *mem)
 {
-	return (mem->flags & MEM_Frame) != 0;
+	return mem->flags == MEM_Frame;
 }
 
 bool
 mem_is_neg_int(const struct Mem *mem)
 {
-	return (mem->flags & MEM_Int) != 0;
+	return pure_type(mem) == MEM_Int;
 }
 
 bool
 mem_is_pos_int(const struct Mem *mem)
 {
-	return (mem->flags & MEM_UInt) != 0;
+	return pure_type(mem) == MEM_UInt;
 }
 
 bool
@@ -1059,7 +1065,7 @@ mem_is_integer(const struct Mem *mem)
 bool
 mem_is_double(const struct Mem *mem)
 {
-	return (mem->flags & MEM_Real) != 0;
+	return pure_type(mem) == MEM_Real;
 }
 
 bool
@@ -1071,13 +1077,13 @@ mem_is_number(const struct Mem *mem)
 bool
 mem_is_string(const struct Mem *mem)
 {
-	return (mem->flags & MEM_Str) != 0;
+	return pure_type(mem) == MEM_Str;
 }
 
 bool
 mem_is_binary(const struct Mem *mem)
 {
-	return (mem->flags & MEM_Blob) != 0;
+	return pure_type(mem) == MEM_Blob;
 }
 
 bool
@@ -1105,7 +1111,7 @@ mem_is_array(const struct Mem *mem)
 bool
 mem_is_bool(const struct Mem *mem)
 {
-	return (mem->flags & MEM_Bool) != 0;
+	return pure_type(mem) == MEM_Bool;
 }
 
 bool
