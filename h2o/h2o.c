@@ -70,6 +70,11 @@ typedef struct thread_ctx {
 	pthread_t tid;
 } thread_ctx_t;
 
+static struct {
+	uint32_t space_id;
+	uint32_t index_id;
+} our_userdata; /* Site/path-specific */
+
 typedef struct {
 	int fd;
 } listener_cfg_t;
@@ -85,7 +90,7 @@ static struct {
         unsigned max_conn_per_thread;
 	unsigned num_threads;
 	int tfo_queues;
-	bool tx_fiber_should_work;
+	volatile bool tx_fiber_should_work;
 } conf = {
 	.tfo_queues = H2O_DEFAULT_LENGTH_TCP_FASTOPEN_QUEUE,
 	.num_threads = 4, /* Stub */
@@ -182,30 +187,32 @@ static void post_process_req(shuttle_t *shuttle)
 	h2o_send(req, &buf, 1, H2O_SEND_STATE_FINAL);
 }
 
+/* Launched in TX thread; note that queue_from_tx is not created yet */
+static bool init_userdata_in_tx(void)
+{
+	static const char space_name[] = "tester";
+	if ((our_userdata.space_id = box_space_id_by_name(space_name, sizeof(space_name) - 1)) == BOX_ID_NIL)
+		return false;
+	static const char index_name[] = "primary";
+	if ((our_userdata.index_id = box_index_id_by_name(our_userdata.space_id, index_name, sizeof(index_name) - 1)) == BOX_ID_NIL)
+		return false;
+
+	return true;
+}
+
 /* Launched in TX thread */
 static void process_req_in_tx(shuttle_t *shuttle)
 {
 	static_assert(sizeof(simple_response_t) <= SHUTTLE_PAYLOAD_SIZE);
 	simple_response_t *const response = (simple_response_t *)&shuttle->payload;
 
-	//FIXME: Query space_id and index_id beforehand
-	static const char space_name[] = "tester";
-	const uint32_t space_id = box_space_id_by_name(space_name, sizeof(space_name) - 1);
-	if (space_id == BOX_ID_NIL) {
-		static const char error_str[] = "Space not found";
-		memcpy(&response->data, error_str, sizeof(error_str) - 1);
-		response->len = sizeof(error_str) - 1;
-		goto Response;
-	}
-	static const char index_name[] = "primary";
-	const uint32_t index_id = box_index_id_by_name(space_id, index_name, sizeof(index_name) - 1);
 	const unsigned entry_index = 2; //FIXME: extract it from HTTP request
 	char entry_index_msgpack[16];
 	char *key_end = mp_encode_array(entry_index_msgpack, 1);
 	key_end = mp_encode_uint(key_end, entry_index);
 	assert(key_end < &entry_index_msgpack[0] + sizeof(entry_index_msgpack));
 	box_tuple_t *tuple;
-	if (box_index_get(space_id, index_id, entry_index_msgpack, key_end, &tuple)) {
+	if (box_index_get(our_userdata.space_id, our_userdata.index_id, entry_index_msgpack, key_end, &tuple)) {
 		static const char error_str[] = "Query error";
 		memcpy(&response->data, error_str, sizeof(error_str) - 1);
 		response->len = sizeof(error_str) - 1;
@@ -233,12 +240,11 @@ static void process_req_in_tx(shuttle_t *shuttle)
 		}
 	}
 
-Response: ;
 	thread_ctx_t *const thread_ctx = &conf.thread_ctxs[shuttle->thread_idx];
 	struct xtm_queue *const queue_from_tx = thread_ctx->queue_from_tx;
 	while (xtm_fun_dispatch(queue_from_tx, (void(*)(void *))&post_process_req, shuttle, 0)) {
 		/* Error; we must not fail so retry a little later */
-		fiber_yield();
+		fiber_sleep(0);
 	}
 }
 
@@ -501,6 +507,8 @@ int init(lua_State *L)
 	if (conf.num_accepts < 8)
 		conf.num_accepts = 8;
 
+	if (conf.num_threads > (1ULL << (8 * sizeof(((shuttle_t *)0)->thread_idx))))
+		goto Error;
 	if ((conf.thread_ctxs = (thread_ctx_t *)malloc(conf.num_threads * sizeof(thread_ctx_t))) == NULL)
 		goto Error;
 
@@ -526,8 +534,13 @@ int init(lua_State *L)
 	if ((conf.listener_cfgs = (listener_cfg_t *)malloc(conf.num_listeners * sizeof(listener_cfg_t))) == NULL)
 		goto Error;
 
-	if ((conf.listener_cfgs[0].fd = open_listener_ipv4("127.0.0.1", 7890)) == -1) //x x x: customizable
-		goto Error;
+	{
+		unsigned listener_idx;
+
+		for (listener_idx = 0; listener_idx < conf.num_listeners; ++listener_idx)
+			if ((conf.listener_cfgs[listener_idx].fd = open_listener_ipv4("127.0.0.1", 7890)) == -1) //x x x //customizable
+				goto Error;
+	}
 
 	if ((conf.tx_fiber_ptrs = (struct fiber **)malloc(sizeof(struct fiber *) * conf.num_threads)) == NULL)
 		goto Error;
@@ -548,6 +561,10 @@ int init(lua_State *L)
 		}
 	}
 
+	if (!init_userdata_in_tx())
+		goto Error;
+
+	/* Start processing HTTP requests and requests from TX thread */
 	{
 		unsigned i;
 		for (i = 0; i < conf.num_threads; ++i) {
