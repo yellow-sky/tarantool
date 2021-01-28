@@ -21,7 +21,7 @@ local line = ('%s -e "assert(false)" > %s 2>&1 & echo $!'):
 local process_waiting_timeout = 60.0
 local file_read_timeout = 60.0
 local file_open_timeout = 60.0
-local file_read_interval = 0.2
+local file_read_interval = 0.1
 
 local res = tap.test('gh-4983-tnt-e-assert-false-hangs', function(test)
     test:plan(2)
