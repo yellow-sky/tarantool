@@ -18,22 +18,10 @@
 
 #include <lua.h>
 #include <lauxlib.h>
-#include <fiber.h>
-#include <coio.h>
-#include <box/box.h>
-//#include <module.h> //Problematic
+#include <module.h>
 #include <msgpuck/msgpuck.h>
 
 #include "../../xtm/xtm_api.h"
-
-/* FIXME: Stopgaps until we solve include problems */
-#define BOX_ID_NIL 2147483647
-extern int
-box_index_get(uint32_t space_id, uint32_t index_id, const char *key,
-	      const char *key_end, box_tuple_t **result);
-extern const char *
-box_tuple_field(box_tuple_t *tuple, uint32_t fieldno);
-/* End stopgaps */
 
 #ifdef TCP_FASTOPEN
 #define H2O_DEFAULT_LENGTH_TCP_FASTOPEN_QUEUE 4096
