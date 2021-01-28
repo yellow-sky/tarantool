@@ -43,6 +43,30 @@
 #include "box/tuple.h"
 #include "mpstream/mpstream.h"
 
+#define MEM_Null      0x0001	/* Value is NULL */
+#define MEM_Str       0x0002	/* Value is a string */
+#define MEM_Int       0x0004	/* Value is an integer */
+#define MEM_Real      0x0008	/* Value is a real number */
+#define MEM_Blob      0x0010	/* Value is a BLOB */
+#define MEM_Bool      0x0020    /* Value is a bool */
+#define MEM_UInt      0x0040	/* Value is an unsigned integer */
+#define MEM_Frame     0x0080	/* Value is a VdbeFrame object */
+#define MEM_Undefined 0x0100	/* Value is undefined */
+
+/**
+ * In contrast to Mem_TypeMask, this one allows to get
+ * pure type of memory cell, i.e. without _Dyn/_Zero and other
+ * auxiliary flags.
+ */
+enum {
+	MEM_PURE_TYPE_MASK = 0x7f
+};
+
+static_assert(MEM_PURE_TYPE_MASK == (MEM_Null | MEM_Str | MEM_Int | MEM_Real |
+				     MEM_Blob | MEM_Bool | MEM_UInt),
+	      "value of type mask must consist of corresponding to memory "\
+	      "type bits");
+
 #ifdef SQL_DEBUG
 /*
  * Check invariants on a Mem object.

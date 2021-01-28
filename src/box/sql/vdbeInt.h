@@ -219,15 +219,6 @@ struct Mem {
  * set, then the string is nul terminated. The MEM_Int and MEM_Real
  * flags may coexist with the MEM_Str flag.
  */
-#define MEM_Null      0x0001	/* Value is NULL */
-#define MEM_Str       0x0002	/* Value is a string */
-#define MEM_Int       0x0004	/* Value is an integer */
-#define MEM_Real      0x0008	/* Value is a real number */
-#define MEM_Blob      0x0010	/* Value is a BLOB */
-#define MEM_Bool      0x0020    /* Value is a bool */
-#define MEM_UInt      0x0040	/* Value is an unsigned integer */
-#define MEM_Frame     0x0080	/* Value is a VdbeFrame object */
-#define MEM_Undefined 0x0100	/* Value is undefined */
 #define MEM_Cleared   0x0200	/* NULL set by OP_Null, not from data */
 #define MEM_TypeMask  0x83ff	/* Mask of type bits */
 
@@ -244,20 +235,6 @@ struct Mem {
 #define MEM_Zero      0x8000	/* Mem.i contains count of 0s appended to blob */
 #define MEM_Subtype   0x10000	/* Mem.eSubtype is valid */
 #define MEM_Ptr       0x20000	/* Value is a generic pointer */
-
-/**
- * In contrast to Mem_TypeMask, this one allows to get
- * pure type of memory cell, i.e. without _Dyn/_Zero and other
- * auxiliary flags.
- */
-enum {
-	MEM_PURE_TYPE_MASK = 0x7f
-};
-
-static_assert(MEM_PURE_TYPE_MASK == (MEM_Null | MEM_Str | MEM_Int | MEM_Real |
-				     MEM_Blob | MEM_Bool | MEM_UInt),
-	      "value of type mask must consist of corresponding to memory "\
-	      "type bits");
 
 /**
  * Simple type to str convertor. It is used to simplify
@@ -284,7 +261,7 @@ mem_apply_numeric_type(struct Mem *record);
  * that needs to be deallocated to avoid a leak.
  */
 #define VdbeMemDynamic(X)  \
-  (((X)->flags&(MEM_Agg|MEM_Dyn|MEM_Frame))!=0)
+  (((X)->flags & (MEM_Agg|MEM_Dyn)) != 0 || mem_is_frame(X))
 
 /*
  * Clear any existing type flags from a Mem and replace them with f
@@ -297,7 +274,7 @@ mem_apply_numeric_type(struct Mem *record);
  * is for use inside assert() statements only.
  */
 #ifdef SQL_DEBUG
-#define memIsValid(M)  ((M)->flags & MEM_Undefined)==0
+#define memIsValid(M) !mem_is_undefined(M)
 #endif
 
 /*
