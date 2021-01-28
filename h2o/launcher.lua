@@ -28,6 +28,7 @@ s:insert{1, 'First'}
 s:insert{2, 'Second'}
 
 local h2o_lib = require "h2o"
-local init_func = h2o_lib.init;
+local init_func = h2o_lib.init
 
-init_func()
+local sample_site_lib = require "sample_site"
+init_func(sample_site_lib.get_path_descs, nil)

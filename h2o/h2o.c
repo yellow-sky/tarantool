@@ -1,27 +1,12 @@
-#define H2O_USE_EPOLL 1 /* FIXME */
-
-#include <errno.h>
-#include <limits.h>
-#include <netinet/in.h>
-#include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <fcntl.h>
 #include <float.h>
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <h2o.h>
-#include <h2o/http1.h>
-#include <h2o/http2.h>
-#include <h2o/memcached.h>
-#include <h2o/socket/evloop.h>
 
-#include <lua.h>
 #include <lauxlib.h>
 #include <module.h>
-#include <msgpuck/msgpuck.h>
 
 #include "../../xtm/xtm_api.h"
+
+#include "h2o_module.h"
 
 #ifdef TCP_FASTOPEN
 #define H2O_DEFAULT_LENGTH_TCP_FASTOPEN_QUEUE 4096
@@ -40,28 +25,12 @@
 #define H2O_DEFAULT_PORT_FOR_PROTOCOL_USED 65535
 
 struct thread_ctx;
-typedef struct {
+typedef struct listener_ctx {
 	h2o_accept_ctx_t accept_ctx;
 	h2o_socket_t *sock;
 	struct thread_ctx *thread_ctx;
 	int fd;
 } listener_ctx_t;
-
-typedef struct thread_ctx {
-	h2o_context_t ctx;
-	listener_ctx_t *listener_ctxs;
-	struct xtm_queue *queue_to_tx;
-	struct xtm_queue *queue_from_tx;
-	h2o_socket_t *sock_from_tx;
-	unsigned num_connections;
-	unsigned idx;
-	pthread_t tid;
-} thread_ctx_t;
-
-static struct {
-	uint32_t space_id;
-	uint32_t index_id;
-} our_userdata; /* Site/path-specific */
 
 typedef struct {
 	int fd;
@@ -84,7 +53,7 @@ static struct {
 	.num_threads = 4, /* Stub */
 };
 
-static __thread thread_ctx_t *curr_thread_ctx;
+__thread thread_ctx_t *curr_thread_ctx;
 
 static h2o_pathconf_t *register_handler(h2o_hostconf_t *hostconf, const char *path, int (*on_req)(h2o_handler_t *, h2o_req_t *))
 {
@@ -94,23 +63,6 @@ static h2o_pathconf_t *register_handler(h2o_hostconf_t *hostconf, const char *pa
 	handler->on_req = on_req;
 	return pathconf;
 }
-
-struct anchor;
-#define SHUTTLE_SIZE 256
-#define SHUTTLE_PAYLOAD_SIZE (SHUTTLE_SIZE - 3 * sizeof(void *))
-typedef struct {
-	char payload[SHUTTLE_PAYLOAD_SIZE];
-	h2o_req_t *never_access_this_req_from_tx_thread;
-	struct anchor *anchor;
-	uint16_t thread_idx;
-	bool disposed; /* never_access_this_req_from_tx_thread can only be used if disposed is false */
-	char unused[sizeof(void *) - sizeof(uint16_t) - sizeof(bool)];
-} shuttle_t;
-
-typedef struct anchor {
-	shuttle_t *shuttle;
-	bool should_free_shuttle;
-} anchor_t;
 
 static inline shuttle_t *alloc_shuttle(thread_ctx_t *thread_ctx)
 {
@@ -122,7 +74,7 @@ static inline shuttle_t *alloc_shuttle(thread_ctx_t *thread_ctx)
 	return shuttle;
 }
 
-static inline void free_shuttle(shuttle_t *shuttle, thread_ctx_t *thread_ctx)
+void free_shuttle(shuttle_t *shuttle, thread_ctx_t *thread_ctx)
 {
 	(void)thread_ctx;
 	free(shuttle);
@@ -134,7 +86,7 @@ static void anchor_dispose(void *param)
 	anchor_t *const anchor = param;
 	shuttle_t *const shuttle = anchor->shuttle;
 	if (anchor->should_free_shuttle)
-		free_shuttle(shuttle, &conf.thread_ctxs[shuttle->thread_idx]);
+		free_shuttle(shuttle, shuttle->thread_ctx);
 	else
 		shuttle->disposed = true;
 
@@ -153,116 +105,18 @@ typedef struct {
 } simple_response_t;
 #pragma pack(pop)
 
-/* Launched in HTTP server thread */
-static void post_process_req(shuttle_t *shuttle)
+shuttle_t *prepare_shuttle(h2o_req_t *req)
 {
-	if (shuttle->disposed) {
-		free_shuttle(shuttle, &conf.thread_ctxs[shuttle->thread_idx]);
-		return;
-	}
-	h2o_req_t *req = shuttle->never_access_this_req_from_tx_thread;
-	static h2o_generator_t generator = {NULL, NULL};
-	req->res.status = 200;
-	req->res.reason = "OK";
-	h2o_add_header(&req->pool, &req->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("text/plain; charset=utf-8"));
-	h2o_start_response(req, &generator);
-
-	h2o_iovec_t buf;
-	simple_response_t *const response = (simple_response_t *)(&shuttle->payload);
-	buf.base = response->data;
-	buf.len = response->len;
-	shuttle->anchor->should_free_shuttle = true;
-	h2o_send(req, &buf, 1, H2O_SEND_STATE_FINAL);
-}
-
-/* Launched in TX thread; note that queue_from_tx is not created yet */
-static bool init_userdata_in_tx(void)
-{
-	static const char space_name[] = "tester";
-	if ((our_userdata.space_id = box_space_id_by_name(space_name, sizeof(space_name) - 1)) == BOX_ID_NIL)
-		return false;
-	static const char index_name[] = "primary";
-	if ((our_userdata.index_id = box_index_id_by_name(our_userdata.space_id, index_name, sizeof(index_name) - 1)) == BOX_ID_NIL)
-		return false;
-
-	return true;
-}
-
-/* Launched in TX thread */
-static void process_req_in_tx(shuttle_t *shuttle)
-{
-	static_assert(sizeof(simple_response_t) <= SHUTTLE_PAYLOAD_SIZE);
-	simple_response_t *const response = (simple_response_t *)&shuttle->payload;
-
-	const unsigned entry_index = 2; //FIXME: extract it from HTTP request
-	char entry_index_msgpack[16];
-	char *key_end = mp_encode_array(entry_index_msgpack, 1);
-	key_end = mp_encode_uint(key_end, entry_index);
-	assert(key_end < &entry_index_msgpack[0] + sizeof(entry_index_msgpack));
-	box_tuple_t *tuple;
-	if (box_index_get(our_userdata.space_id, our_userdata.index_id, entry_index_msgpack, key_end, &tuple)) {
-		static const char error_str[] = "Query error";
-		memcpy(&response->data, error_str, sizeof(error_str) - 1);
-		response->len = sizeof(error_str) - 1;
-	} else if (tuple == NULL) {
-		static const char error_str[] = "Entry not found";
-		memcpy(&response->data, error_str, sizeof(error_str) - 1);
-		response->len = sizeof(error_str) - 1;
-	} else {
-		const char *name_msgpack = box_tuple_field(tuple, 1);
-		if (name_msgpack == NULL) {
-			static const char error_str[] = "Invalid entry format";
-			memcpy(&response->data, error_str, sizeof(error_str) - 1);
-			response->len = sizeof(error_str) - 1;
-		} else {
-			uint32_t len;
-			const char *const name = mp_decode_str(&name_msgpack, &len);
-			if (len > sizeof(response->data)) {
-				/* Real implementation should probably report error
-				 * or use complex response logic to allocate and pass large buffers
-				 * to send via HTTP(S) */
-				len = sizeof(response->data);
-			}
-			memcpy(&response->data, name, len);
-			response->len = len;
-		}
-	}
-
-	thread_ctx_t *const thread_ctx = &conf.thread_ctxs[shuttle->thread_idx];
-	struct xtm_queue *const queue_from_tx = thread_ctx->queue_from_tx;
-	while (xtm_fun_dispatch(queue_from_tx, (void(*)(void *))&post_process_req, shuttle, 0)) {
-		/* Error; we must not fail so retry a little later */
-		fiber_sleep(0);
-	}
-}
-
-static int req_handler(h2o_handler_t *self, h2o_req_t *req)
-{
-	(void)self;
-	if (!(h2o_memis(req->method.base, req->method.len, H2O_STRLIT("GET")) &&
-	    h2o_memis(req->path_normalized.base, req->path_normalized.len, H2O_STRLIT("/"))))
-		return -1;
-
-	anchor_t *anchor = h2o_mem_alloc_shared(&req->pool, sizeof(anchor_t), &anchor_dispose);
+	anchor_t *const anchor = h2o_mem_alloc_shared(&req->pool, sizeof(anchor_t), &anchor_dispose);
 	anchor->should_free_shuttle = false;
-	thread_ctx_t *thread_ctx = curr_thread_ctx;
-	shuttle_t *shuttle = alloc_shuttle(thread_ctx);
+	thread_ctx_t *const thread_ctx = get_curr_thread_ctx();
+	shuttle_t *const shuttle = alloc_shuttle(thread_ctx);
 	shuttle->anchor = anchor;
 	anchor->shuttle = shuttle;
 	shuttle->never_access_this_req_from_tx_thread = req;
-	shuttle->thread_idx = thread_ctx->idx;
+	shuttle->thread_ctx = thread_ctx;
 	shuttle->disposed = false;
-
-	if (xtm_fun_dispatch(thread_ctx->queue_to_tx, (void(*)(void *))&process_req_in_tx, shuttle, 0)) {
-		/* Error */
-		free_shuttle(shuttle, thread_ctx);
-		req->res.status = 500;
-		req->res.reason = "Queue overflow";
-		h2o_send_inline(req, H2O_STRLIT("Queue overflow\n"));
-		return 0;
-	}
-
-	return 0;
+	return shuttle;
 }
 
 static void on_socketclose(void *data)
@@ -484,19 +338,30 @@ tx_fiber_func(va_list ap)
 	return 0;
 }
 
+/* Lua parameters: function_to_call, function_param */
 int init(lua_State *L)
 {
-	(void)L;
 	memset(&conf.globalconf, 0, sizeof(conf.globalconf));
 
+	if (lua_gettop(L) < 2)
+		goto Error;
+
+	if (lua_type(L, 1) != LUA_TFUNCTION)
+		goto Error;
+
+	if (lua_pcall(L, 1, 1, 0) != LUA_OK)
+		goto Error;
+
+	int is_integer;
+	const path_desc_t *const path_descs = (path_desc_t *)lua_tointegerx(L, 1, &is_integer);
+	if (!is_integer)
+		goto Error;
 	conf.tx_fiber_should_work = 1;
 	conf.max_conn_per_thread = 64; /* Stub */
 	conf.num_accepts = conf.max_conn_per_thread / 16;
 	if (conf.num_accepts < 8)
 		conf.num_accepts = 8;
 
-	if (conf.num_threads > (1ULL << (8 * sizeof(((shuttle_t *)0)->thread_idx))))
-		goto Error;
 	if ((conf.thread_ctxs = (thread_ctx_t *)malloc(conf.num_threads * sizeof(thread_ctx_t))) == NULL)
 		goto Error;
 
@@ -504,7 +369,16 @@ int init(lua_State *L)
 	h2o_hostconf_t *hostconf = h2o_config_register_host(&conf.globalconf, h2o_iovec_init(H2O_STRLIT("default")), H2O_DEFAULT_PORT_FOR_PROTOCOL_USED); //x x x: customizable
 	if (hostconf == NULL)
 		goto Error;
-	register_handler(hostconf, "/", req_handler);
+
+	{
+		const path_desc_t *path_desc = path_descs;
+		if (path_desc->path == NULL)
+			goto Error; /* Need at least one */
+
+		do {
+			register_handler(hostconf, path_desc->path, path_desc->handler);
+		} while ((++path_desc)->path != NULL);
+	}
 
 	SSL_CTX *ssl_ctx;
 	if (USE_HTTPS && (ssl_ctx = setup_ssl("cert.pem", "key.pem")) == NULL) //x x x: customizable file names
@@ -549,8 +423,13 @@ int init(lua_State *L)
 		}
 	}
 
-	if (!init_userdata_in_tx())
-		goto Error;
+	{
+		const path_desc_t *path_desc = path_descs;
+		do {
+			if (path_desc->init_userdata_in_tx != NULL && path_desc->init_userdata_in_tx(path_desc->init_userdata_in_tx_param))
+				goto Error;
+		} while ((++path_desc)->path != NULL);
+	}
 
 	/* Start processing HTTP requests and requests from TX thread */
 	{
