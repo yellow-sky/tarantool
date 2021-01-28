@@ -996,6 +996,101 @@ mem_convert_to_binary(struct Mem *mem)
 	return -1;
 }
 
+bool
+mem_is_null(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Null) != 0;
+}
+
+bool
+mem_is_undefined(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Undefined) != 0;
+}
+
+bool
+mem_is_frame(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Frame) != 0;
+}
+
+bool
+mem_is_neg_int(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Int) != 0;
+}
+
+bool
+mem_is_pos_int(const struct Mem *mem)
+{
+	return (mem->flags & MEM_UInt) != 0;
+}
+
+bool
+mem_is_integer(const struct Mem *mem)
+{
+	return mem_is_neg_int(mem) || mem_is_pos_int(mem);
+}
+
+bool
+mem_is_double(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Real) != 0;
+}
+
+bool
+mem_is_number(const struct Mem *mem)
+{
+	return mem_is_integer(mem) || mem_is_double(mem);
+}
+
+bool
+mem_is_string(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Str) != 0;
+}
+
+bool
+mem_is_binary(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Blob) != 0;
+}
+
+bool
+mem_is_varstring(const struct Mem *mem)
+{
+	return mem_is_string(mem) || mem_is_binary(mem);
+}
+
+bool
+mem_is_map(const struct Mem *mem)
+{
+	return mem_is_binary(mem) && ((mem->flags & MEM_Subtype) != 0) &&
+	       mem->subtype == SQL_SUBTYPE_MSGPACK &&
+	       mp_typeof(*mem->z) == MP_MAP;
+}
+
+bool
+mem_is_array(const struct Mem *mem)
+{
+	return mem_is_binary(mem) && ((mem->flags & MEM_Subtype) != 0) &&
+	       mem->subtype == SQL_SUBTYPE_MSGPACK &&
+	       mp_typeof(*mem->z) == MP_ARRAY;
+}
+
+bool
+mem_is_bool(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Bool) != 0;
+}
+
+bool
+mems_have_same_type(const struct Mem *mem1, const struct Mem *mem2)
+{
+	return (mem1->flags & MEM_PURE_TYPE_MASK) ==
+	       (mem2->flags & MEM_PURE_TYPE_MASK);
+}
+
 /*
  * Return true if the Mem object contains a TEXT or BLOB that is
  * too large - whose size exceeds SQL_MAX_LENGTH.
