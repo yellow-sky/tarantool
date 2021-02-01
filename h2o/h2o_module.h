@@ -1,7 +1,11 @@
 #ifndef H2O_MODULE_H_INCLUDED
 #define H2O_MODULE_H_INCLUDED
 
+#ifdef USE_LIBUV
+#define H2O_USE_LIBUV 1
+#else
 #define H2O_USE_EPOLL 1 /* FIXME */
+#endif /* USE_LIBUV */
 #include <h2o.h>
 
 #if defined(__cplusplus)
@@ -16,6 +20,9 @@ typedef struct thread_ctx {
 	struct xtm_queue *queue_to_tx;
 	struct xtm_queue *queue_from_tx;
 	h2o_socket_t *sock_from_tx;
+#ifdef USE_LIBUV
+	uv_loop_t loop;
+#endif /* USE_LIBUV */
 	unsigned num_connections;
 	unsigned idx;
 	pthread_t tid;

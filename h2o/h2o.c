@@ -8,6 +8,11 @@
 
 #include "h2o_module.h"
 
+#ifdef USE_LIBUV
+#include <uv.h>
+#include <h2o/socket/uv-binding.h>
+#endif /* USE_LIBUV */
+
 #ifdef TCP_FASTOPEN
 #define H2O_DEFAULT_LENGTH_TCP_FASTOPEN_QUEUE 4096
 #else
@@ -27,7 +32,12 @@
 struct thread_ctx;
 typedef struct listener_ctx {
 	h2o_accept_ctx_t accept_ctx;
+#ifdef USE_LIBUV
+	uv_tcp_t uv_tcp_listener;
+	uv_poll_t uv_poll_from_tx;
+#else /* USE_LIBUV */
 	h2o_socket_t *sock;
+#endif /* USE_LIBUV */
 	struct thread_ctx *thread_ctx;
 	int fd;
 } listener_ctx_t;
@@ -119,20 +129,73 @@ shuttle_t *prepare_shuttle(h2o_req_t *req)
 	return shuttle;
 }
 
+#ifdef USE_LIBUV
+
+static void on_uv_socket_free(void *data)
+{
+	thread_ctx_t *const thread_ctx = get_curr_thread_ctx();
+	--thread_ctx->num_connections;
+	free(data);
+}
+
+#else /* USE_LIBUV */
+
 static void on_socketclose(void *data)
 {
-	thread_ctx_t *const thread_ctx = (thread_ctx_t *)data;
+	(void)data;
+	thread_ctx_t *const thread_ctx = get_curr_thread_ctx();
 	--thread_ctx->num_connections;
 }
+
+#endif /* USE_LIBUV */
+
+#ifdef USE_LIBUV
+
+static void on_call_from_tx(uv_poll_t *handle, int status, int events)
+{
+	(void)handle;
+	(void)events;
+	if (status != 0)
+		return;
+	xtm_fun_invoke_all(get_curr_thread_ctx()->queue_from_tx);
+}
+
+#else /* USE_LIBUV */
 
 static void on_call_from_tx(h2o_socket_t *listener, const char *err)
 {
 	if (err != NULL)
 		return;
 
-	thread_ctx_t *const thread_ctx = (thread_ctx_t *)listener->data;
-	xtm_fun_invoke_all(thread_ctx->queue_from_tx);
+	xtm_fun_invoke_all(get_curr_thread_ctx()->queue_from_tx);
 }
+
+#endif /* USE_LIBUV */
+
+#ifdef USE_LIBUV
+
+static void on_accept(uv_stream_t *uv_listener, int status)
+{
+	if (status != 0)
+		return;
+
+	/* FIXME: Pools instead of malloc? */
+	uv_tcp_t *const conn = h2o_mem_alloc(sizeof(*conn));
+	if (uv_tcp_init(uv_listener->loop, conn)) {
+		free(conn);
+		return;
+	}
+
+	if (uv_accept(uv_listener, (uv_stream_t *)conn)) {
+		uv_close((uv_handle_t *)conn, (uv_close_cb)free);
+		return;
+	}
+
+	listener_ctx_t *const listener_ctx = (listener_ctx_t *)uv_listener->data;
+	h2o_accept(&listener_ctx->accept_ctx, h2o_uv_socket_create((uv_stream_t *)conn, (uv_close_cb)on_uv_socket_free));
+}
+
+#else /* USE_LIBUV */
 
 static void on_accept(h2o_socket_t *listener, const char *err)
 {
@@ -153,11 +216,12 @@ static void on_accept(h2o_socket_t *listener, const char *err)
 		++thread_ctx->num_connections;
 
 		sock->on_close.cb = on_socketclose;
-		sock->on_close.data = thread_ctx;
 
 		h2o_accept(&listener_ctx->accept_ctx, sock);
 	} while (--remain);
 }
+
+#endif /* USE_LIBUV */
 
 static inline void set_cloexec(int fd)
 {
@@ -182,10 +246,10 @@ static int open_listener_ipv4(const char *addr_str, uint16_t port)
 	}
 	addr.sin_port = htons(port);
 
-	if ((fd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+	/* FIXME: Do all OSes we care about support SOCK_CLOEXEC? */
+	if ((fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0)) == -1) {
 		return -1;
 	}
-	set_cloexec(fd);
 
 	int reuseaddr_flag = 1;
 	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuseaddr_flag, sizeof(reuseaddr_flag)) != 0 ||
@@ -276,7 +340,12 @@ static void *worker_func(void *param)
 	}
 
 	memset(&thread_ctx->ctx, 0, sizeof(thread_ctx->ctx));
+#ifdef USE_LIBUV
+	uv_loop_init(&thread_ctx->loop);
+	h2o_context_init(&thread_ctx->ctx, &thread_ctx->loop, &conf.globalconf);
+#else /* USE_LIBUV */
 	h2o_context_init(&thread_ctx->ctx, h2o_evloop_create(), &conf.globalconf);
+#endif /* USE_LIBUV */
 
 	listener_ctx_t *listener_ctx = &thread_ctx->listener_ctxs[0];//x x x: More than one
 	listener_cfg_t *listener_cfg = &conf.listener_cfgs[0];//x x x: More than one
@@ -296,21 +365,42 @@ static void *worker_func(void *param)
 	} else {
 		listener_ctx->fd = listener_cfg->fd;
 	}
+
+#ifdef USE_LIBUV
+	if (uv_tcp_init(thread_ctx->ctx.loop, &listener_ctx->uv_tcp_listener))
+		goto Error;
+	if (uv_tcp_open(&listener_ctx->uv_tcp_listener, listener_ctx->fd))
+		goto Error;
+	listener_ctx->uv_tcp_listener.data = listener_ctx;
+	if (uv_listen((uv_stream_t *)&listener_ctx->uv_tcp_listener, SOMAXCONN, on_accept))
+		goto Error;
+
+	if (uv_poll_init(thread_ctx->ctx.loop, &listener_ctx->uv_poll_from_tx, xtm_fd(thread_ctx->queue_from_tx)))
+		goto Error;
+	if (uv_poll_start(&listener_ctx->uv_poll_from_tx, UV_READABLE, on_call_from_tx))
+		goto Error;
+#else /* USE_LIBUV */
 	listener_ctx->sock = h2o_evloop_socket_create(thread_ctx->ctx.loop, listener_ctx->fd, H2O_SOCKET_FLAG_DONT_READ);
-        listener_ctx->sock->data = listener_ctx;
+	listener_ctx->sock->data = listener_ctx;
 
 	thread_ctx->sock_from_tx = h2o_evloop_socket_create(thread_ctx->ctx.loop, xtm_fd(thread_ctx->queue_from_tx), H2O_SOCKET_FLAG_DONT_READ);
-        thread_ctx->sock_from_tx->data = thread_ctx;
 
 	h2o_socket_read_start(thread_ctx->sock_from_tx, on_call_from_tx);
 	h2o_socket_read_start(listener_ctx->sock, on_accept);
+#endif /* USE_LIBUV */
 
 	__sync_synchronize(); /* For the fiber in TX thread to see everything we have initialized */
 
 	//x x x;//SIGTERM should terminate loop
+#ifdef USE_LIBUV
+	uv_run(&thread_ctx->loop, UV_RUN_DEFAULT);
+Error:
+	; /* FIXME: Free resources etc */
+#else /* USE_LIBUV */
 	h2o_evloop_t *loop = thread_ctx->ctx.loop;
 	while (h2o_evloop_run(loop, INT32_MAX) == 0)
 		;
+#endif /* USE_LIBUV */
 
 	//void h2o_socket_read_stop(h2o_socket_t *sock);//x x x;
 	//x x x;//should flush these queues first
