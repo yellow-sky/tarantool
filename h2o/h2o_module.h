@@ -29,8 +29,6 @@ typedef struct thread_ctx {
 } thread_ctx_t;
 
 struct anchor;
-#define SHUTTLE_SIZE 256
-#define SHUTTLE_PAYLOAD_SIZE (SHUTTLE_SIZE - 4 * sizeof(void *))
 typedef struct {
 	h2o_req_t *never_access_this_req_from_tx_thread;
 	struct anchor *anchor;
@@ -39,7 +37,7 @@ typedef struct {
 	char disposed; /* never_access_this_req_from_tx_thread can only be used if disposed is false */
 	char unused[sizeof(void *) - sizeof(char)];
 
-	char payload[SHUTTLE_PAYLOAD_SIZE];
+	char payload[];
 } shuttle_t;
 
 typedef struct anchor {
@@ -58,6 +56,13 @@ typedef struct {
 	init_userdata_in_tx_t init_userdata_in_tx;
 	void *init_userdata_in_tx_param;
 } path_desc_t;
+
+typedef struct {
+	unsigned num_threads;
+	unsigned max_conn_per_thread;
+	unsigned shuttle_size;
+	path_desc_t path_descs[];
+} site_desc_t;
 
 extern __thread thread_ctx_t *curr_thread_ctx;
 

@@ -52,6 +52,7 @@ static struct {
 	thread_ctx_t *thread_ctxs;
 	struct fiber **tx_fiber_ptrs;
 	SSL_CTX *ssl_ctx;
+	unsigned shuttle_size;
 	unsigned num_listeners;
 	unsigned num_accepts;
         unsigned max_conn_per_thread;
@@ -60,7 +61,6 @@ static struct {
 	volatile bool tx_fiber_should_work;
 } conf = {
 	.tfo_queues = H2O_DEFAULT_LENGTH_TCP_FASTOPEN_QUEUE,
-	.num_threads = 4, /* Stub */
 };
 
 __thread thread_ctx_t *curr_thread_ctx;
@@ -78,7 +78,7 @@ static inline shuttle_t *alloc_shuttle(thread_ctx_t *thread_ctx)
 {
 	/* FIXME: Use per-thread pools */
 	(void)thread_ctx;
-	shuttle_t *shuttle = (shuttle_t *)malloc(sizeof(shuttle_t));
+	shuttle_t *const shuttle = (shuttle_t *)malloc(conf.shuttle_size);
 	if (shuttle == NULL)
 		h2o_fatal("no memory");
 	return shuttle;
@@ -92,7 +92,6 @@ void free_shuttle(shuttle_t *shuttle, thread_ctx_t *thread_ctx)
 
 static void anchor_dispose(void *param)
 {
-	static_assert(sizeof(shuttle_t) == SHUTTLE_SIZE);
 	anchor_t *const anchor = param;
 	shuttle_t *const shuttle = anchor->shuttle;
 	if (anchor->should_free_shuttle)
@@ -107,13 +106,6 @@ static void anchor_dispose(void *param)
 	in very specific cases because it stalls the whole thread if such
 	request is gone */
 }
-
-#pragma pack(push, 1)
-typedef struct {
-	unsigned len;
-	char data[SHUTTLE_PAYLOAD_SIZE - sizeof(unsigned)];
-} simple_response_t;
-#pragma pack(pop)
 
 shuttle_t *prepare_shuttle(h2o_req_t *req)
 {
@@ -443,11 +435,15 @@ int init(lua_State *L)
 		goto Error;
 
 	int is_integer;
-	const path_desc_t *const path_descs = (path_desc_t *)lua_tointegerx(L, 1, &is_integer);
+	const site_desc_t *const site_desc = (site_desc_t *)lua_tointegerx(L, 1, &is_integer);
 	if (!is_integer)
 		goto Error;
+	const path_desc_t *const path_descs = site_desc->path_descs;
 	conf.tx_fiber_should_work = 1;
-	conf.max_conn_per_thread = 64; /* Stub */
+	/* FIXME: Add sanity checks, especially shuttle_size - it must >sizeof(shuttle_t) and aligned */
+	conf.num_threads = site_desc->num_threads;
+	conf.shuttle_size = site_desc->shuttle_size;
+	conf.max_conn_per_thread = site_desc->max_conn_per_thread;
 	conf.num_accepts = conf.max_conn_per_thread / 16;
 	if (conf.num_accepts < 8)
 		conf.num_accepts = 8;

@@ -9,6 +9,7 @@
 
 static const char users_path[] = "/users";
 static const char stats_path[] = "/stats";
+static unsigned response_data_size;
 
 static struct {
 	uint32_t space_id;
@@ -22,7 +23,7 @@ typedef struct {
 #pragma pack(push, 1)
 typedef struct {
 	unsigned len;
-	char data[SHUTTLE_PAYLOAD_SIZE - sizeof(unsigned)];
+	char data[];
 } simple_response_t;
 #pragma pack(pop)
 
@@ -66,7 +67,6 @@ static int init_userdata_in_tx(void *param)
 /* Launched in TX thread */
 static void process_users_req_in_tx(shuttle_t *shuttle)
 {
-	static_assert(sizeof(simple_response_t) <= SHUTTLE_PAYLOAD_SIZE);
 	simple_response_t *const response = (simple_response_t *)&shuttle->payload;
 
 	const our_request_t *const our_req = (our_request_t *)&shuttle->payload;
@@ -93,11 +93,11 @@ static void process_users_req_in_tx(shuttle_t *shuttle)
 		} else {
 			uint32_t len;
 			const char *const name = mp_decode_str(&name_msgpack, &len);
-			if (len > sizeof(response->data)) {
+			if (len > response_data_size) {
 				/* Real implementation should probably report error
 				 * or use complex response logic to allocate and pass large buffers
 				 * to send via HTTP(S) */
-				len = sizeof(response->data);
+				len = response_data_size;
 			}
 			memcpy(&response->data, name, len);
 			response->len = len;
@@ -149,7 +149,6 @@ static int users_req_handler(h2o_handler_t *self, h2o_req_t *req)
 
 	shuttle_t *const shuttle = prepare_shuttle(req);
 
-	static_assert(sizeof(shuttle->payload) >= sizeof(our_request_t));
 	our_request_t *const our_req = (our_request_t *)&shuttle->payload;
 	our_req->id = id;
 
@@ -191,28 +190,39 @@ static int stats_req_handler(h2o_handler_t *self, h2o_req_t *req)
 	return 0;
 }
 
-static const path_desc_t our_path_descs[] = {
-	{ .path = users_path, .handler = users_req_handler, .init_userdata_in_tx = init_userdata_in_tx, },
-	{ .path = stats_path, .handler = stats_req_handler, },
-	{ }, /* Terminator */
+static const site_desc_t our_site_desc = {
+	.num_threads = 4,
+	.max_conn_per_thread = 64,
+	.shuttle_size = 256,
+	.path_descs = {
+		{ .path = users_path, .handler = users_req_handler, .init_userdata_in_tx = init_userdata_in_tx, },
+		{ .path = stats_path, .handler = stats_req_handler, },
+		{ }, /* Terminator */
+	},
 };
 
-static int get_path_descs(lua_State *L)
+static int get_site_desc(lua_State *L)
 {
 	/* We are passed one Lua parameter we can use to configure descs etc */
 	lua_pop(L, 1);
 
-	lua_pushinteger(L, (uintptr_t)&our_path_descs);
+	lua_pushinteger(L, (uintptr_t)&our_site_desc);
 	return 1;
 }
 
+static void init_site(void)
+{
+	response_data_size = our_site_desc.shuttle_size - sizeof(shuttle_t) - sizeof(((simple_response_t *)0)->len);
+}
+
 static const struct luaL_Reg mylib[] = {
-	{"get_path_descs", get_path_descs},
+	{"get_site_desc", get_site_desc},
 	{NULL, NULL}
 };
 
 int luaopen_sample_site(lua_State *L)
 {
+	init_site();
 	luaL_newlib(L, mylib);
 	return 1;
 }
