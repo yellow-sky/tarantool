@@ -15,6 +15,10 @@ static struct {
 	uint32_t index_id;
 } our_userdata; /* Site/path-specific */
 
+typedef struct {
+	uint32_t id;
+} our_request_t;
+
 #pragma pack(push, 1)
 typedef struct {
 	unsigned len;
@@ -65,7 +69,8 @@ static void process_users_req_in_tx(shuttle_t *shuttle)
 	static_assert(sizeof(simple_response_t) <= SHUTTLE_PAYLOAD_SIZE);
 	simple_response_t *const response = (simple_response_t *)&shuttle->payload;
 
-	const unsigned entry_index = 2; //FIXME: extract it from HTTP request
+	const our_request_t *const our_req = (our_request_t *)&shuttle->payload;
+	const unsigned entry_index = our_req->id;
 	char entry_index_msgpack[16];
 	char *key_end = mp_encode_array(entry_index_msgpack, 1);
 	key_end = mp_encode_uint(key_end, entry_index);
@@ -116,12 +121,37 @@ static void process_stats_req_in_tx(shuttle_t *shuttle)
 static int users_req_handler(h2o_handler_t *self, h2o_req_t *req)
 {
 	(void)self;
+	/* req->path_normalized has "."/".." processed and query ("?...") stripped */
 	if (!(h2o_memis(req->method.base, req->method.len, H2O_STRLIT("GET")) &&
 	    h2o_memis(req->path_normalized.base, req->path_normalized.len, H2O_STRLIT(users_path))))
 		return -1;
 
+	/* Example of what we receive:
+	req->input.scheme->name.base="https"
+	req->input.scheme->name.default_port=443 (not related to actual port listened)
+	req->input.authority.base="localhost:7890"
+	*/
+
+	unsigned id = 1; /* Default value for simplicity */
+	if (req->query_at != SIZE_MAX) {
+		/* Expecting: "?id=3" */
+		const size_t len = req->path.len - req->query_at;
+		const char *const query = &req->path.base[req->query_at]; /* N. b.: NOT null terminated */
+
+		/* FIXME: Efficient (without memcpy) and error-prone code should be placed here */
+		char temp[32];
+		if (len <= sizeof(temp) - 1) {
+			memcpy(temp, query, len);
+			temp[len] = 0;
+			sscanf(temp, "?id=%u", &id);
+		}
+	}
+
 	shuttle_t *const shuttle = prepare_shuttle(req);
-	/* Can fill in shuttle->payload here */
+
+	static_assert(sizeof(shuttle->payload) >= sizeof(our_request_t));
+	our_request_t *const our_req = (our_request_t *)&shuttle->payload;
+	our_req->id = id;
 
 	thread_ctx_t *const thread_ctx = get_curr_thread_ctx();
 	if (xtm_fun_dispatch(thread_ctx->queue_to_tx, (void(*)(void *))&process_users_req_in_tx, shuttle, 0)) {
