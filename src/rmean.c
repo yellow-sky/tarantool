@@ -56,6 +56,17 @@ rmean_mean(struct rmean *rmean, size_t name)
 	return mean / RMEAN_WINDOW;
 }
 
+int64_t
+rmean_mean_atomic(struct rmean *rmean, size_t name)
+{
+	int64_t mean = 0;
+	for (size_t j = 1; j <= RMEAN_WINDOW; j++)
+		mean += __atomic_load_n(&rmean->stats[name].value[j], __ATOMIC_ACQUIRE);
+	/* value[0] not adds because second isn't over */
+
+	return mean / RMEAN_WINDOW;
+}
+
 void
 rmean_collect(struct rmean *rmean, size_t name, int64_t value)
 {
@@ -63,6 +74,15 @@ rmean_collect(struct rmean *rmean, size_t name, int64_t value)
 
 	rmean->stats[name].value[0] += value;
 	rmean->stats[name].total += value;
+}
+
+void
+rmean_collect_atomic(struct rmean *rmean, size_t name, int64_t value)
+{
+	assert(name < rmean->stats_n);
+
+	__atomic_add_fetch(&rmean->stats[name].value[0], value, __ATOMIC_RELEASE);
+	__atomic_add_fetch(&rmean->stats[name].total, value, __ATOMIC_RELEASE);
 }
 
 int
@@ -138,3 +158,12 @@ rmean_cleanup(struct rmean *rmean)
 	}
 }
 
+void
+rmean_cleanup_atomic(struct rmean *rmean)
+{
+	for (size_t i = 0; i < rmean->stats_n; i++) {
+		for (size_t j = 0; j < RMEAN_WINDOW + 1; j++)
+			__atomic_store_n (&rmean->stats[i].value[j], 0, __ATOMIC_RELEASE);
+		__atomic_store_n(&rmean->stats[i].total, 0, __ATOMIC_RELEASE);
+	}
+}

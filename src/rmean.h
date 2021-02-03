@@ -65,11 +65,20 @@ rmean_total(struct rmean *rmean, size_t name)
 	return rmean->stats[name].total;
 }
 
+static inline int64_t
+rmean_total_atomic(struct rmean *rmean, size_t name)
+{
+	return __atomic_load_n(&rmean->stats[name].total, __ATOMIC_ACQUIRE);
+}
+
 void
 rmean_roll(int64_t *value, double dt);
 
 int64_t
 rmean_mean(struct rmean *rmean, size_t name);
+
+int64_t
+rmean_mean_atomic(struct rmean *rmean, size_t name);
 
 struct rmean *
 rmean_new(const char **name, size_t n);
@@ -81,7 +90,13 @@ void
 rmean_cleanup(struct rmean *rmean);
 
 void
+rmean_cleanup_atomic(struct rmean *rmean);
+
+void
 rmean_collect(struct rmean *rmean, size_t name, int64_t value);
+
+void
+rmean_collect_atomic(struct rmean *rmean, size_t name, int64_t value);
 
 typedef int (*rmean_cb)(const char *name, int rps, int64_t total, void *cb_ctx);
 
