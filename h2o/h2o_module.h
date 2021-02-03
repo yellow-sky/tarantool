@@ -35,7 +35,8 @@ typedef struct {
 	thread_ctx_t *thread_ctx;
 
 	char disposed; /* never_access_this_req_from_tx_thread can only be used if disposed is false */
-	char unused[sizeof(void *) - sizeof(char)];
+	char stopped; /* For use by handlers, initialized to false for new shuttles */
+	char unused[sizeof(void *) - 2 * sizeof(char)];
 
 	char payload[];
 } shuttle_t;

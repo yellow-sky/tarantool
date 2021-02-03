@@ -27,6 +27,12 @@ local index = s:create_index('primary',
 s:insert{1, 'First'}
 s:insert{2, 'Second'}
 
+local counter
+for counter = 3, 10000
+do
+	s:insert{counter, 'Entry #'..counter}
+end
+
 local h2o_lib = require "h2o"
 local init_func = h2o_lib.init
 

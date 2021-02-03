@@ -118,6 +118,7 @@ shuttle_t *prepare_shuttle(h2o_req_t *req)
 	shuttle->never_access_this_req_from_tx_thread = req;
 	shuttle->thread_ctx = thread_ctx;
 	shuttle->disposed = false;
+	shuttle->stopped = false;
 	return shuttle;
 }
 

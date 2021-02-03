@@ -3,13 +3,15 @@
 #include <module.h>
 #include <msgpuck/msgpuck.h>
 #include <lauxlib.h>
+#include <stddef.h>
 #include "../../xtm/xtm_api.h"
 
 #include "h2o_module.h"
 
 static const char users_path[] = "/users";
 static const char stats_path[] = "/stats";
-static unsigned response_data_size;
+static unsigned users_response_data_size;
+static unsigned stats_response_data_size_minus_1;
 
 static struct {
 	uint32_t space_id;
@@ -27,8 +29,34 @@ typedef struct {
 } simple_response_t;
 #pragma pack(pop)
 
+typedef struct {
+	box_iterator_t *iterator;
+	h2o_generator_t generator;
+	unsigned len;
+	bool need_more; /* Processing in TX thread must be called again */
+	char data[];
+} response_with_state_t;
+
+static void continue_processing_stats_req_in_tx(shuttle_t *);
+static void cancel_processing_stats_req_in_tx(shuttle_t *);
+
+static inline shuttle_t *get_shuttle_from_generator(h2o_generator_t *generator)
+{
+	response_with_state_t *const response = container_of(generator, response_with_state_t, generator);
+	return (shuttle_t *)((char *)response - offsetof(shuttle_t, payload));
+}
+
+/* Called when dispatch must not fail */
+static void stubborn_dispatch(struct xtm_queue *queue, void (*func)(void *), shuttle_t *shuttle)
+{
+	while (xtm_fun_dispatch(queue, func, shuttle, 0)) {
+		/* Error; we must not fail so retry a little later */
+		fiber_sleep(0);
+	}
+}
+
 /* Launched in HTTP server thread */
-static void post_process_req(shuttle_t *shuttle)
+static void postprocess_users_req(shuttle_t *shuttle)
 {
 	if (shuttle->disposed) {
 		free_shuttle(shuttle, shuttle->thread_ctx);
@@ -47,6 +75,79 @@ static void post_process_req(shuttle_t *shuttle)
 	buf.len = response->len;
 	shuttle->anchor->should_free_shuttle = true;
 	h2o_send(req, &buf, 1, H2O_SEND_STATE_FINAL);
+}
+
+/* Launched in HTTP server thread when H2O has sent everything and asks for more */
+static void proceed_sending_stats(h2o_generator_t *self, h2o_req_t *req)
+{
+	shuttle_t *const shuttle = get_shuttle_from_generator(self);
+	thread_ctx_t *const thread_ctx = get_curr_thread_ctx();
+	stubborn_dispatch(thread_ctx->queue_to_tx, (void(*)(void *))&continue_processing_stats_req_in_tx, shuttle);
+}
+
+/* Launched in HTTP server thread when connection has been closed */
+static void stop_sending_stats(h2o_generator_t *self, h2o_req_t *req)
+{
+	shuttle_t *const shuttle = get_shuttle_from_generator(self);
+	response_with_state_t *const response = (response_with_state_t *)(&shuttle->payload);
+	if (response->need_more) {
+		shuttle->stopped = true;
+		stubborn_dispatch(get_curr_thread_ctx()->queue_to_tx, (void(*)(void *))&cancel_processing_stats_req_in_tx, shuttle);
+	}
+}
+
+/* Launched in HTTP server thread to postprocess first response */
+static void postprocess_stats_req_first(shuttle_t *shuttle)
+{
+	response_with_state_t *const response = (response_with_state_t *)(&shuttle->payload);
+	if (shuttle->disposed) {
+		if (response->need_more) {
+			if (!shuttle->stopped)
+				stubborn_dispatch(get_curr_thread_ctx()->queue_to_tx, (void(*)(void *))&cancel_processing_stats_req_in_tx, shuttle);
+		} else
+			free_shuttle(shuttle, get_curr_thread_ctx());
+		return;
+	}
+	h2o_req_t *const req = shuttle->never_access_this_req_from_tx_thread;
+	req->res.status = 200;
+	req->res.reason = "OK";
+	h2o_add_header(&req->pool, &req->res.headers, H2O_TOKEN_CONTENT_TYPE, NULL, H2O_STRLIT("text/plain; charset=utf-8"));
+	h2o_start_response(req, &response->generator);
+
+	h2o_iovec_t buf;
+	buf.base = response->data;
+	buf.len = response->len;
+	if (response->need_more) {
+		h2o_send(req, &buf, 1, H2O_SEND_STATE_IN_PROGRESS);
+	} else {
+		shuttle->anchor->should_free_shuttle = true;
+		h2o_send(req, &buf, 1, H2O_SEND_STATE_FINAL);
+	}
+}
+
+/* Launched in HTTP server thread to postprocess responses other than first */
+static void postprocess_stats_req_others(shuttle_t *shuttle)
+{
+	response_with_state_t *const response = (response_with_state_t *)(&shuttle->payload);
+	if (shuttle->disposed) {
+		if (response->need_more) {
+			if (!shuttle->stopped)
+				stubborn_dispatch(get_curr_thread_ctx()->queue_to_tx, (void(*)(void *))&cancel_processing_stats_req_in_tx, shuttle);
+		} else
+			free_shuttle(shuttle, get_curr_thread_ctx());
+		return;
+	}
+	h2o_req_t *const req = shuttle->never_access_this_req_from_tx_thread;
+
+	h2o_iovec_t buf;
+	buf.base = response->data;
+	buf.len = response->len;
+	if (response->need_more) {
+		h2o_send(req, &buf, 1, H2O_SEND_STATE_IN_PROGRESS);
+	} else {
+		shuttle->anchor->should_free_shuttle = true;
+		h2o_send(req, &buf, 1, H2O_SEND_STATE_FINAL);
+	}
 }
 
 /* Launched in TX thread; note that queue_from_tx is not created yet */
@@ -93,29 +194,139 @@ static void process_users_req_in_tx(shuttle_t *shuttle)
 		} else {
 			uint32_t len;
 			const char *const name = mp_decode_str(&name_msgpack, &len);
-			if (len > response_data_size) {
+			if (len > users_response_data_size) {
 				/* Real implementation should probably report error
 				 * or use complex response logic to allocate and pass large buffers
 				 * to send via HTTP(S) */
-				len = response_data_size;
+				len = users_response_data_size;
 			}
 			memcpy(&response->data, name, len);
 			response->len = len;
 		}
 	}
 
-	struct xtm_queue *const queue_from_tx = shuttle->thread_ctx->queue_from_tx;
-	while (xtm_fun_dispatch(queue_from_tx, (void(*)(void *))&post_process_req, shuttle, 0)) {
-		/* Error; we must not fail so retry a little later */
-		fiber_sleep(0);
-	}
+	stubborn_dispatch(shuttle->thread_ctx->queue_from_tx, (void(*)(void *))&postprocess_users_req, shuttle);
 }
 
 /* Launched in TX thread */
 static void process_stats_req_in_tx(shuttle_t *shuttle)
 {
-	return process_users_req_in_tx(shuttle); //Stopgap
+	response_with_state_t *const response = (response_with_state_t *)&shuttle->payload;
+	response->generator = (h2o_generator_t){ proceed_sending_stats, stop_sending_stats };
+
+	char entry_index_msgpack[16];
+	char *key_end = mp_encode_array(entry_index_msgpack, 1);
+	key_end = mp_encode_uint(key_end, 0);
+	assert(key_end < &entry_index_msgpack[0] + sizeof(entry_index_msgpack));
+
+#define RETURN_WITH_ERROR(err) \
+	do { \
+		response->need_more = false; \
+		static const char error_str[] = err; \
+		memcpy(&response->data, error_str, sizeof(error_str) - 1); \
+		response->len = sizeof(error_str) - 1; \
+		stubborn_dispatch(shuttle->thread_ctx->queue_from_tx, (void(*)(void *))&postprocess_stats_req_first, shuttle); \
+		return; \
+	} while (0)
+
+#define RETURN_WITH_ERROR_FREE_IT(err) \
+	do { \
+		box_iterator_free(response->iterator); \
+		RETURN_WITH_ERROR(err); \
+	} while (0)
+
+	if ((response->iterator = box_index_iterator(our_userdata.space_id, our_userdata.index_id, ITER_ALL, entry_index_msgpack, key_end)) == NULL) {
+		RETURN_WITH_ERROR("Can't init iterator");
+	}
+
+	box_tuple_t *tuple;
+	if (box_iterator_next(response->iterator, &tuple))
+		RETURN_WITH_ERROR_FREE_IT("Iteration error");
+
+	if (tuple == NULL)
+		RETURN_WITH_ERROR_FREE_IT("No entries");
+
+	const char *name_msgpack = box_tuple_field(tuple, 1);
+	if (name_msgpack == NULL)
+		RETURN_WITH_ERROR_FREE_IT("Invalid entry format");
+
+	/* More efficient implementation is possible: if entry max size is known we can write more than one entry into shuttle_t */
+	response->need_more = true;
+	uint32_t len;
+	const char *const name = mp_decode_str(&name_msgpack, &len);
+	if (len > stats_response_data_size_minus_1) {
+		/* Real implementation should probably report error
+		 * or use complex response logic to allocate and pass large buffers
+		 * to send via HTTP(S) */
+		len = stats_response_data_size_minus_1;
+	}
+	memcpy(&response->data, name, len);
+	response->data[len] = '\n';
+	response->len = len + 1;
+	stubborn_dispatch(shuttle->thread_ctx->queue_from_tx, (void(*)(void *))&postprocess_stats_req_first, shuttle);
 }
+#undef RETURN_WITH_ERROR_FREE_IT
+#undef RETURN_WITH_ERROR
+
+/* Launched in HTTP server thread */
+static void cancel_processing_stats_req_in_http_thread(shuttle_t *shuttle)
+{
+	assert(shuttle->disposed);
+	free_shuttle(shuttle, shuttle->thread_ctx);
+}
+
+/* Launched in TX thread */
+static void cancel_processing_stats_req_in_tx(shuttle_t *shuttle)
+{
+	response_with_state_t *const response = (response_with_state_t *)&shuttle->payload;
+
+	box_iterator_free(response->iterator);
+
+	/* Can't call free_shuttle() from TX thread because it [potentially] uses per-thread pools */
+	stubborn_dispatch(shuttle->thread_ctx->queue_from_tx, (void(*)(void *))&cancel_processing_stats_req_in_http_thread, shuttle);
+}
+
+/* Launched in TX thread */
+static void continue_processing_stats_req_in_tx(shuttle_t *shuttle)
+{
+	response_with_state_t *const response = (response_with_state_t *)&shuttle->payload;
+
+#define RETURN_WITH_ERROR_FREE_IT(err) \
+	do { \
+		box_iterator_free(response->iterator); \
+		response->need_more = false; \
+		static const char error_str[] = err; \
+		memcpy(&response->data, error_str, sizeof(error_str) - 1); \
+		response->len = sizeof(error_str) - 1; \
+		stubborn_dispatch(shuttle->thread_ctx->queue_from_tx, (void(*)(void *))&postprocess_stats_req_others, shuttle); \
+		return; \
+	} while (0)
+
+	box_tuple_t *tuple;
+	if (box_iterator_next(response->iterator, &tuple))
+		RETURN_WITH_ERROR_FREE_IT("Iteration error");
+
+	if (tuple == NULL)
+		RETURN_WITH_ERROR_FREE_IT("<End of list>"); /* Or we can simply set response->len=0 */
+
+	const char *name_msgpack = box_tuple_field(tuple, 1);
+	if (name_msgpack == NULL)
+		RETURN_WITH_ERROR_FREE_IT("Invalid entry format");
+
+	uint32_t len;
+	const char *const name = mp_decode_str(&name_msgpack, &len);
+	if (len > stats_response_data_size_minus_1) {
+		/* Real implementation should probably report error
+		 * or use complex response logic to allocate and pass large buffers
+		 * to send via HTTP(S) */
+		len = stats_response_data_size_minus_1;
+	}
+	memcpy(&response->data, name, len);
+	response->data[len] = '\n';
+	response->len = len + 1;
+	stubborn_dispatch(shuttle->thread_ctx->queue_from_tx, (void(*)(void *))&postprocess_stats_req_others, shuttle);
+}
+#undef RETURN_WITH_ERROR_FREE_IT
 
 /* Launched in HTTP thread */
 static int users_req_handler(h2o_handler_t *self, h2o_req_t *req)
@@ -165,7 +376,7 @@ static int users_req_handler(h2o_handler_t *self, h2o_req_t *req)
 	return 0;
 }
 
-/* Launched in HTTP thread */
+/* Launched in HTTP server thread */
 static int stats_req_handler(h2o_handler_t *self, h2o_req_t *req)
 {
 	(void)self;
@@ -212,7 +423,8 @@ static int get_site_desc(lua_State *L)
 
 static void init_site(void)
 {
-	response_data_size = our_site_desc.shuttle_size - sizeof(shuttle_t) - sizeof(((simple_response_t *)0)->len);
+	users_response_data_size = our_site_desc.shuttle_size - sizeof(shuttle_t) - offsetof(simple_response_t, data);
+	stats_response_data_size_minus_1 = our_site_desc.shuttle_size - sizeof(shuttle_t) - offsetof(response_with_state_t, data) - 1;
 }
 
 static const struct luaL_Reg mylib[] = {
