@@ -1,0 +1,67 @@
+-- test-run result file version 2
+test_run = require('test_run').new()
+ | ---
+ | ...
+
+--
+-- gh-3228: Check the error message in the case of a __serialize
+-- function generating infinite recursion.
+--
+setmetatable({}, {__serialize = function(a) return a end})
+ | ---
+ | - []
+ | ...
+setmetatable({}, {__serialize = function(a) return {a} end})
+ | ---
+ | - - []
+ | ...
+setmetatable({}, {__serialize = function(a) return {a, a} end})
+ | ---
+ | - - &0 []
+ |   - *0
+ | ...
+setmetatable({}, {__serialize = function(a) return {a, a, a} end})
+ | ---
+ | - - &0 []
+ |   - *0
+ |   - *0
+ | ...
+setmetatable({}, {__serialize = function(a) return {{a, a}, a} end})
+ | ---
+ | - - - &0 []
+ |     - *0
+ |   - *0
+ | ...
+setmetatable({}, {__serialize = function(a) return {a, 1} end})
+ | ---
+ | - - []
+ |   - 1
+ | ...
+setmetatable({}, {__serialize = function(a) return {{{{a}}}} end})
+ | ---
+ | - - - - - []
+ | ...
+setmetatable({}, {__serialize = function(a) return {{{{1}}}} end})
+ | ---
+ | - - - - - 1
+ | ...
+b = {}
+ | ---
+ | ...
+setmetatable({b}, {__serialize = function(a) return {a_1 = a, a_2 = a, b_1 = b, b_2 = b} end})
+ | ---
+ | - b_2: &0 []
+ |   a_2: &1
+ |   - *0
+ |   a_1: *1
+ |   b_1: *0
+ | ...
+setmetatable({b}, {__serialize = function(a) return {a_1 = a, a_2 = {a, b}, b = b} end})
+ | ---
+ | - b: &0 []
+ |   a_2:
+ |   - &1
+ |     - *0
+ |   - *0
+ |   a_1: *1
+ | ...

@@ -215,7 +215,7 @@ trace_node(struct lua_dumper *d)
 	struct luaL_field field;
 
 	memset(&field, 0, sizeof(field));
-	luaL_checkfield(d->L, d->cfg, lua_gettop(d->L), &field);
+	luaL_checkfield(d->L, d->cfg, 0, lua_gettop(d->L), &field);
 
 	if (field.type < lengthof(mp_type_names)) {
 		if (field.type == MP_EXT) {
@@ -234,7 +234,7 @@ trace_node(struct lua_dumper *d)
 
 	memset(&field, 0, sizeof(field));
 
-	luaL_checkfield(d->L, d->cfg, top, &field);
+	luaL_checkfield(d->L, d->cfg, 0, top, &field);
 	say_info("serializer-trace: node    :\tfield type %s (%d)",
 		 type_str, field.type);
 }
@@ -340,28 +340,47 @@ static const char *
 get_lua_anchor(struct lua_dumper *d)
 {
 	const char *s = "";
-
 	lua_pushvalue(d->L, -1);
 	lua_rawget(d->L, d->anchortable_index);
-	if (!lua_toboolean(d->L, -1)) {
+	if (lua_isnil(d->L, -1) == 1) {
 		lua_pop(d->L, 1);
 		return NULL;
 	}
+	lua_pushstring(d->L, "before");
+	lua_rawget(d->L, -2);
+	const char *str = NULL;
+	if (lua_type(d->L, -1) == LUA_TSTRING) {
+	str = lua_tostring(d->L, -1);
+	}
+	lua_Integer number_before = lua_tointeger(d->L, -1);
+	lua_pop(d->L, 1);
 
-	if (lua_isboolean(d->L, -1)) {
-		/*
-		 * This element is referenced more
-		 * than once but has not been named.
-		 */
+	lua_pushstring(d->L, "after");
+	lua_rawget(d->L, -2);
+	if (lua_type(d->L, -1) == LUA_TSTRING)
+		str = lua_tostring(d->L, -1);
+	lua_Integer number_after = lua_tointeger(d->L, -1);
+	lua_pop(d->L, 1);
+
+	if ((number_before > 1 || number_after > 1) && str == NULL) {
+		/* this element is referenced more than once but has not been named */
 		char buf[32];
 		snprintf(buf, sizeof(buf), "%u", d->anchor_number++);
 		lua_pop(d->L, 1);
 		lua_pushvalue(d->L, -1);
+
+		lua_pushvalue(d->L, -1);
+		lua_rawget(d->L, d->anchortable_index);
+		if (number_before > 1)
+			lua_pushstring(d->L, "before");
+		else
+			lua_pushstring(d->L, "after");
 		lua_pushstring(d->L, buf);
 		s = lua_tostring(d->L, -1);
+		lua_rawset(d->L, -3);
 		lua_rawset(d->L, d->anchortable_index);
 		trace_anchor(s, false);
-	} else {
+	} else if (str != NULL) {
 		/*
 		 * An aliased element.
 		 *
@@ -372,6 +391,9 @@ get_lua_anchor(struct lua_dumper *d)
 		const char *str = lua_tostring(d->L, -1);
 		trace_anchor(str, true);
 		lua_pop(d->L, 1);
+	} else {
+		lua_pop(d->L, 1);
+		return NULL;
 	}
 	return s;
 }
@@ -783,7 +805,7 @@ dump_node(struct lua_dumper *d, struct node *nd, int indent)
 		return -1;
 
 	memset(field, 0, sizeof(*field));
-	luaL_checkfield(d->L, d->cfg, lua_gettop(d->L), field);
+	luaL_checkfield(d->L, d->cfg, 0, lua_gettop(d->L), field);
 
 	switch (field->type) {
 	case MP_NIL:
@@ -882,49 +904,6 @@ dump_node(struct lua_dumper *d, struct node *nd, int indent)
 }
 
 /**
- * Find references to tables, we use it
- * to find self references in tables.
- */
-static void
-find_references(struct lua_dumper *d)
-{
-	int newval;
-
-	if (lua_type(d->L, -1) != LUA_TTABLE)
-		return;
-
-	/* Copy of a table for self refs */
-	lua_pushvalue(d->L, -1);
-	lua_rawget(d->L, d->anchortable_index);
-	if (lua_isnil(d->L, -1))
-		newval = 0;
-	else if (!lua_toboolean(d->L, -1))
-		newval = 1;
-	else
-		newval = -1;
-	lua_pop(d->L, 1);
-
-	if (newval != -1) {
-		lua_pushvalue(d->L, -1);
-		lua_pushboolean(d->L, newval);
-		lua_rawset(d->L, d->anchortable_index);
-	}
-
-	if (newval != 0)
-		return;
-
-	/*
-	 * Other values and keys in the table
-	 */
-	lua_pushnil(d->L);
-	while (lua_next(d->L, -2) != 0) {
-		find_references(d);
-		lua_pop(d->L, 1);
-		find_references(d);
-	}
-}
-
-/**
  * Dump recursively from the root node.
  */
 static int
@@ -935,7 +914,7 @@ dump_root(struct lua_dumper *d)
 	};
 	int ret;
 
-	luaL_checkfield(d->L, d->cfg, lua_gettop(d->L), &nd.field);
+	luaL_checkfield(d->L, d->cfg, 0, lua_gettop(d->L), &nd.field);
 
 	if (nd.field.type != MP_ARRAY || nd.field.size != 1) {
 		d->err = EINVAL;
@@ -984,7 +963,7 @@ lua_encode(lua_State *L, struct luaL_serializer *serializer,
 
 	/* Push copy of arg we're processing */
 	lua_pushvalue(L, 1);
-	find_references(&dumper);
+	find_references(dumper.L, dumper.anchortable_index, "before");
 
 	if (dump_root(&dumper) != 0)
 		goto out;
