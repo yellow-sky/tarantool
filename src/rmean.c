@@ -35,14 +35,18 @@
 void
 rmean_roll(int64_t *value, double dt)
 {
-	value[0] /= dt;
+	int64_t tmp = __atomic_load_n(&value[0], __ATOMIC_ACQUIRE);
+	__atomic_store_n(&value[0], tmp / dt, __ATOMIC_RELEASE);
 	int j = RMEAN_WINDOW;
 	/* in case when dt >= 2. we update not only last counter */
-	for (; j > (int)(dt + 0.1); j--)
-		value[j] = value[j - 1];
+	for (; j > (int)(dt + 0.1); j--) {
+		tmp = __atomic_load_n(&value[j - 1], __ATOMIC_ACQUIRE);
+		__atomic_store_n(&value[j], tmp, __ATOMIC_RELEASE);
+	}
+	tmp = __atomic_load_n(&value[0], __ATOMIC_ACQUIRE);
 	for (; j > 0; j--)
-		value[j] = value[0];
-	value[0] = 0;
+		__atomic_store_n(&value[j], tmp, __ATOMIC_RELEASE);
+	__atomic_store_n(&value[0], 0, __ATOMIC_RELEASE);
 }
 
 int64_t
@@ -50,7 +54,7 @@ rmean_mean(struct rmean *rmean, size_t name)
 {
 	int64_t mean = 0;
 	for (size_t j = 1; j <= RMEAN_WINDOW; j++)
-		mean += rmean->stats[name].value[j];
+		mean += __atomic_load_n(&rmean->stats[name].value[j], __ATOMIC_ACQUIRE);
 	/* value[0] not adds because second isn't over */
 
 	return mean / RMEAN_WINDOW;
@@ -61,8 +65,8 @@ rmean_collect(struct rmean *rmean, size_t name, int64_t value)
 {
 	assert(name < rmean->stats_n);
 
-	rmean->stats[name].value[0] += value;
-	rmean->stats[name].total += value;
+	__atomic_add_fetch(&rmean->stats[name].value[0], value, __ATOMIC_RELEASE);
+	__atomic_add_fetch(&rmean->stats[name].total, value, __ATOMIC_RELEASE);
 }
 
 int
@@ -125,7 +129,6 @@ rmean_delete(struct rmean *rmean)
 {
 	ev_timer_stop(loop(), &rmean->timer);
 	free(rmean);
-	rmean = 0;
 }
 
 void
@@ -133,8 +136,7 @@ rmean_cleanup(struct rmean *rmean)
 {
 	for (size_t i = 0; i < rmean->stats_n; i++) {
 		for (size_t j = 0; j < RMEAN_WINDOW + 1; j++)
-			rmean->stats[i].value[j] = 0;
-		rmean->stats[i].total = 0;
+			__atomic_store_n(&rmean->stats[i].value[j], 0, __ATOMIC_RELEASE);
+		__atomic_store_n(&rmean->stats[i].total, 0, __ATOMIC_RELEASE);
 	}
 }
-

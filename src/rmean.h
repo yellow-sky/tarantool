@@ -62,7 +62,7 @@ struct rmean {
 static inline int64_t
 rmean_total(struct rmean *rmean, size_t name)
 {
-	return rmean->stats[name].total;
+	return __atomic_load_n(&rmean->stats[name].total, __ATOMIC_ACQUIRE);
 }
 
 void
