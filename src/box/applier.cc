@@ -967,6 +967,14 @@ applier_apply_tx(struct applier *applier, struct stailq *rows)
 		goto success;
 	}
 
+	/*
+	 * Do not spam WAL with excess write requests, let it process what's
+	 * piled up first.
+	 * This is done before opening the transaction to avoid problems with
+	 * yielding inside it.
+	 */
+	journal_queue_wait();
+
 	/**
 	 * Explicitly begin the transaction so that we can
 	 * control fiber->gc life cycle and, in case of apply

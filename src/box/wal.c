@@ -274,6 +274,8 @@ tx_schedule_queue(struct stailq *queue)
 	struct journal_entry *req, *tmp;
 	stailq_foreach_entry_safe(req, tmp, queue, fifo)
 		journal_async_complete(req);
+
+	journal_queue_wakeup();
 }
 
 /**
@@ -763,6 +765,18 @@ wal_set_checkpoint_threshold(int64_t threshold)
 		  &msg.base, wal_set_checkpoint_threshold_f, NULL,
 		  TIMEOUT_INFINITY);
 	fiber_set_cancellable(cancellable);
+}
+
+void
+wal_set_queue_max_size(int64_t size)
+{
+	journal_queue_set_max_size(size);
+}
+
+void
+wal_set_queue_max_len(int64_t len)
+{
+	journal_queue_set_max_len(len);
 }
 
 struct wal_gc_msg
