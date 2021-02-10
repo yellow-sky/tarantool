@@ -118,6 +118,7 @@ box_error_new(const char *file, unsigned line, uint32_t code,
 	va_start(ap, fmt);
 	struct error *e = box_error_new_va(file, line, code, custom_type,
 					   fmt, ap);
+	fprintf(stderr, "BOX ERROR NEW %p\n", e);
 	va_end(ap);
 	return e;
 }

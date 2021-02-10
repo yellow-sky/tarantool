@@ -136,9 +136,13 @@ raise:
 	return box_error_new(file, line, code, custom_type, "%s", reason);
 }
 
+#include <pthread.h>
+
 static int
 luaT_error_call(lua_State *L)
 {
+	fprintf(stderr, "luaT_error_call\n");
+	static int kkk = 0;
 	if (lua_gettop(L) <= 1) {
 		/* Re-throw saved exceptions if any. */
 		if (box_error_last())
@@ -149,12 +153,30 @@ luaT_error_call(lua_State *L)
 	if (lua_gettop(L) == 2) {
 		e = luaL_iserror(L, 2);
 		if (e != NULL) {
+			if (e->effect) {
+				fprintf(stderr, "ASSERT %p %p\n", e, (void *)pthread_self());
+				print_error(e);
+				kkk = 1;
+				goto gggg;
+			} else {
+				fprintf(stderr, "GOOD %p %p\n", e, (void *)pthread_self());
+				print_error(e);
+			}
 			/* Re-set error to diag area. */
 			diag_set_error(&fiber()->diag, e);
 			return lua_error(L);
 		}
 	}
+gggg:
 	e = luaT_error_create(L, 2);
+	if (kkk) {
+		fprintf(stderr, "KKK !!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+		if (e) {
+			fprintf(stderr, "EEEE\n");
+			print_error(e);
+		} else
+			fprintf(stderr, "NOT EEEE\n");
+	}
 	if (e == NULL)
 		return luaL_error(L, "box.error(): bad arguments");
 	diag_set_error(&fiber()->diag, e);
@@ -185,6 +207,7 @@ luaT_error_new(lua_State *L)
 		return luaL_error(L, "Usage: box.error.new(code, args) or "\
 				  "box.error.new(type, args)");
 	}
+	fprintf(stderr, "ERROR NEW %p\n", e);
 	lua_settop(L, 0);
 	luaT_pusherror(L, e);
 	return 1;

@@ -1016,11 +1016,15 @@ luaT_toerror(lua_State *L)
 	return 1;
 }
 
+#include <pthread.h>
+
 int
 luaT_call(struct lua_State *L, int nargs, int nreturns)
 {
+	fprintf(stderr, "%s %p\n", "luaT_call START", (void *)pthread_self());
 	if (lua_pcall(L, nargs, nreturns, 0))
 		return luaT_toerror(L);
+	fprintf(stderr, "%s %p\n", "luaT_call FINISH", (void *)pthread_self());
 	return 0;
 }
 

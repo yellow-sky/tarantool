@@ -147,17 +147,22 @@ local method_decoder = {
 }
 
 local function decode_error(raw_data)
+    print("DECODE ERROR")
     local ptr = buffer_reg.acucp
     ptr[0] = raw_data
     local err = ffi.C.error_unpack_unsafe(ptr)
+    print("DECODE ERROR", err)
     if err ~= nil then
+        print("DECODE ERROR NOT NULL", err, err._refs)
         err._refs = err._refs + 1
+        print("DECODE ERROR NOT NULL", err, err._refs)
         err = ffi.gc(err, ffi.C.error_unref)
         -- From FFI it is returned as 'struct error *', which is
         -- not considered equal to 'const struct error &', and is
         -- is not accepted by functions like box.error(). Need to
         -- cast explicitly.
         err = ffi.cast('const struct error &', err)
+        print("DECODE ERROR NOT NULL FINISH ", err, err._refs)
     else
         -- Error unpacker installs fail reason into diag.
         box.error()
@@ -260,6 +265,7 @@ local function on_push_sync_default() end
 --
 local function create_transport(host, port, user, password, callback,
                                 connection, greeting)
+    print ("create_transport 1")
     -- check / normalize credentials
     if user == nil and password ~= nil then
         box.error(E_PROC_LUA, 'net.box: user is not defined')
@@ -287,6 +293,8 @@ local function create_transport(host, port, user, password, callback,
     local send_buf         = buffer.ibuf(buffer.READAHEAD)
     local recv_buf         = buffer.ibuf(buffer.READAHEAD)
 
+    print ("create_transport 2")
+
     --
     -- Async request metamethods.
     --
@@ -306,6 +314,7 @@ local function create_transport(host, port, user, password, callback,
     -- @retval nil, error Error occured.
     --
     function request_index:result()
+        print ("RESULT 1")
         if self.errno then
             if type(self.response) ~= 'cdata' then
                 -- Error could be set by the connection state
@@ -313,16 +322,22 @@ local function create_transport(host, port, user, password, callback,
                 -- a reason.
                 self.response = box.error.new({code = self.errno,
                                                reason = self.response})
+                print ("RESULT 2")
             end
+            print ("RESULT 11111111111111111111111111111111111111", self, self.response)
             return nil, self.response
         elseif not self.id then
+            print ("RESULT 3")
             return self.response
         elseif not worker_fiber then
+                print ("RESULT 4")
             return nil, box.error.new(E_NO_CONNECTION)
         else
+                print ("RESULT 5")
             return nil, box.error.new(box.error.PROC_LUA,
                                       'Response is not ready')
         end
+        print ("RESULT 6")
     end
     --
     -- Get the next message or the final result.
@@ -361,6 +376,7 @@ local function create_transport(host, port, user, password, callback,
             end
             local response, err = request:result()
             if err then
+                    print ("create_transport NULL")
                 return box.NULL, err
             end
             return i, response
@@ -375,8 +391,11 @@ local function create_transport(host, port, user, password, callback,
                 goto retry
             end
         until timeout <= 0
+            print ("create_transport NULL")
         return box.NULL, box.error.new(E_TIMEOUT)
     end
+
+        print ("create_transport 10")
     --
     -- Iterate over all messages, received by a request. @Sa
     -- request_iterator_next for details what to expect in `for`
@@ -385,16 +404,20 @@ local function create_transport(host, port, user, password, callback,
     -- @retval next() callback, iterator, zero key.
     --
     function request_index:pairs(timeout)
+        print ("create_transport 10 1")
         if timeout then
             if type(timeout) ~= 'number' or timeout < 0 then
                 error('Usage: future:pairs(timeout)')
             end
+        print ("create_transport 10 2")
         else
             timeout = TIMEOUT_INFINITY
         end
+        print ("create_transport 10 3")
         local iterator = {request = self, timeout = timeout}
         return request_iterator_next, iterator, 0
     end
+        print ("create_transport 11")
     --
     -- Wait for a response or error max timeout seconds.
     -- @param timeout Max seconds to wait.
@@ -402,14 +425,18 @@ local function create_transport(host, port, user, password, callback,
     -- @retval nil, error Error occured.
     --
     function request_index:wait_result(timeout)
+        print("WAIT RESULT 1 ", self)
         if timeout then
             if type(timeout) ~= 'number' or timeout < 0 then
+                print("WAIT RESULT 2")
                 error('Usage: future:wait_result(timeout)')
             end
         else
+            print("WAIT RESULT 1 TIMEOUT_INFINITY ", self)
             timeout = TIMEOUT_INFINITY
         end
         if not self:is_ready() then
+            print("WAIT RESULT 3")
             -- When a response is ready before timeout, the
             -- waiting client is waked up prematurely.
             while timeout > 0 and not self:is_ready() do
@@ -418,17 +445,22 @@ local function create_transport(host, port, user, password, callback,
                 timeout = timeout - (fiber.clock() - ts)
             end
             if not self:is_ready() then
-                return nil, box.error.new(E_TIMEOUT)
+                a, b = nil, box.error.new(E_TIMEOUT)
+                print("WAIT RESULT ERROR ", b)
+                return a, b
             end
         end
+        print("WAIT RESULT 4 ", self)
         return self:result()
     end
+        print ("create_transport 12")
     --
     -- Make a connection forget about the response. When it will
     -- be received, it will be ignored. It reduces size of
     -- requests table speeding up other requests.
     --
     function request_index:discard()
+        print("request_index:discard")
         if self.id then
             requests[self.id] = nil
             self.id = nil
@@ -441,17 +473,21 @@ local function create_transport(host, port, user, password, callback,
 
     -- STATE SWITCHING --
     local function set_state(new_state, new_errno, new_error)
+        print("request_index:set_state !!!!")
         state = new_state
         last_errno = new_errno
         last_error = new_error
         callback('state_changed', new_state, new_error)
+        print("request_index:set_state !!!! AFTER CALLBACK")
         state_cond:broadcast()
         if state == 'error' or state == 'error_reconnect' or
            state == 'closed' then
             for _, request in pairs(requests) do
+                print("request_index:set_state !!!! ", request)
                 request.id = nil
                 request.errno = new_errno
                 request.response = new_error
+                print("request_index:set_state !!WW ", request, request.response)
                 request.cond:broadcast()
             end
             requests = {}
@@ -535,13 +571,19 @@ local function create_transport(host, port, user, password, callback,
     --
     local function perform_async_request(buffer, skip_header, method, on_push,
                                          on_push_ctx, request_ctx, ...)
+        print("REUQEST ASYNC")
         if state ~= 'active' and state ~= 'fetch_schema' then
             local code = last_errno or E_NO_CONNECTION
             local msg = last_error or
                 string.format('Connection is not established, state is "%s"',
                               state)
-            return nil, box.error.new({code = code, reason = msg})
+            print("REUQEST ASYNC 1 ", code, msg)
+            fiber.sleep(1)
+            a, b = nil, box.error.new({code = code, reason = msg})
+            print("REUQEST ASYNC WOW ", b)
+            return a, b
         end
+        print("REUQEST ASYNC 2")
         -- alert worker to notify it of the queued outgoing data;
         -- if the buffer wasn't empty, assume the worker was already alerted
         if send_buf:size() == 0 then
@@ -563,6 +605,7 @@ local function create_transport(host, port, user, password, callback,
         request.on_push = on_push
         request.on_push_ctx = on_push_ctx
         request.ctx = request_ctx
+        print("REUQEST ASYNC 3 ", request)
         return request
     end
 
@@ -573,26 +616,34 @@ local function create_transport(host, port, user, password, callback,
     --
     local function perform_request(timeout, buffer, skip_header, method,
                                    on_push, on_push_ctx, request_ctx, ...)
+        print("PERFORM SIMPLE REQUEST")
         local request, err =
             perform_async_request(buffer, skip_header, method, on_push,
                                   on_push_ctx, request_ctx, ...)
         if not request then
+            print("PERFORM SIMPLE REQUEST ERROR WOW ", err)
             return nil, err
         end
         return request:wait_result(timeout)
     end
 
     local function dispatch_response_iproto(hdr, body_rpos, body_end)
+        print("dispatch_response_iproto")
         local id = hdr[IPROTO_SYNC_KEY]
         local request = requests[id]
         if request == nil then -- nobody is waiting for the response
+            print("dispatch_response_iproto NULL")
             return
         end
+        print("dispatch_response_iproto ", request, id)
         local status = hdr[IPROTO_STATUS_KEY]
         local body
         local body_len = body_end - body_rpos
 
+        print("dispatch_response_iproto 1 ", request)
+
         if status > IPROTO_CHUNK_KEY then
+            print("dispatch_response_iproto 2 ", request)
             -- Handle errors
             requests[id] = nil
             request.id = nil
@@ -601,9 +652,11 @@ local function create_transport(host, port, user, password, callback,
             -- Reserve for 2 keys and 2 array indexes. Because no
             -- any guarantees how Lua will decide to save the
             -- sparse table.
+            print("dispatch_response_iproto 3 ", request)
             body = table_new(2, 2)
             for _ = 1, map_len do
                 key, body_rpos = decode(body_rpos)
+                print("dispatch_response_iproto 333 ", request, key)
                 local rdec = response_decoder[key]
                 if rdec then
                     body[key], body_rpos = rdec(body_rpos)
@@ -613,21 +666,29 @@ local function create_transport(host, port, user, password, callback,
             end
             assert(body_end == body_rpos, "invalid xrow length")
             request.errno = band(status, IPROTO_ERRNO_MASK)
+            print("dispatch_response_iproto 4 ", request, request.errno)
             -- IPROTO_ERROR comprises error encoded with
             -- IPROTO_ERROR_24, so we may ignore content of that
             -- key.
             if body[IPROTO_ERROR] ~= nil then
+                print("dispatch_response_iproto 5 ", request, IPROTO_ERROR)
                 request.response = body[IPROTO_ERROR]
+                print("dispatch_response_iproto 5 ", request, request.response)
                 assert(type(request.response) == 'cdata')
             else
+                print("dispatch_response_iproto 6 ", request)
                 request.response = box.error.new({
                     code = request.errno,
                     reason = body[IPROTO_ERROR_24]
                 })
+                print("dispatch_response_iproto 7 ", request.response)
             end
             request.cond:broadcast()
+            print("dispatch_response_iproto 8 BROADCAST", request, request.response)
             return
         end
+
+        print("dispatch_response_iproto 9 ", request)
 
         local buffer = request.buffer
         if buffer ~= nil then
@@ -805,6 +866,7 @@ local function create_transport(host, port, user, password, callback,
     end
 
     iproto_schema_sm = function(schema_version)
+        print("iproto_schema_sm")
         if not callback('will_fetch_schema') then
             set_state('active')
             return iproto_sm(schema_version)
@@ -871,17 +933,21 @@ local function create_transport(host, port, user, password, callback,
     end
 
     iproto_sm = function(schema_version)
+        print("iproto_sm")
         local err, hdr, body_rpos, body_end = send_and_recv_iproto()
         if err then return error_sm(err, hdr) end
         dispatch_response_iproto(hdr, body_rpos, body_end)
+        print("iproto_sm 1")
         local response_schema_version = hdr[IPROTO_SCHEMA_VERSION_KEY]
         if response_schema_version > 0 and
            response_schema_version ~= schema_version then
+            print("iproto_sm 2")
             -- schema_version has been changed - start to load a new version.
             -- Sic: self.schema_version will be updated only after reload.
             set_state('fetch_schema')
             return iproto_schema_sm(schema_version)
         end
+        print("iproto_sm 3")
         return iproto_sm(schema_version)
     end
 
@@ -1157,30 +1223,41 @@ function remote_methods:wait_connected(timeout)
 end
 
 function remote_methods:_request(method, opts, request_ctx, ...)
+    print("_request 1")
     local transport = self._transport
     local on_push, on_push_ctx, buffer, skip_header, deadline
     -- Extract options, set defaults, check if the request is
     -- async.
+    print("_request 2")
     if opts then
+        print("_request 3")
         buffer = opts.buffer
         skip_header = opts.skip_header
         if opts.is_async then
+            print("_request 4")
             if opts.on_push or opts.on_push_ctx then
+                print("_request 5")
                 error('To handle pushes in an async request use future:pairs()')
             end
+            print("_request 6")
             local res, err =
                 transport.perform_async_request(buffer, skip_header, method,
                                                 table.insert, {}, request_ctx,
                                                 ...)
+            print("_request 7")
             if err then
+                print("ERR 8")
                 box.error(err)
             end
+            print("_request 9")
             return res
         end
         if opts.timeout then
+            print("_request 10")
             -- conn.space:request(, { timeout = timeout })
             deadline = fiber_clock() + opts.timeout
         else
+            print("_request 11")
             -- conn:timeout(timeout).space:request()
             -- @deprecated since 1.7.4
             deadline = self._deadlines[fiber_self()]
@@ -1188,6 +1265,7 @@ function remote_methods:_request(method, opts, request_ctx, ...)
         on_push = opts.on_push or on_push_sync_default
         on_push_ctx = opts.on_push_ctx
     else
+        print("_request 12")
         deadline = self._deadlines[fiber_self()]
         on_push = on_push_sync_default
     end
@@ -1200,6 +1278,7 @@ function remote_methods:_request(method, opts, request_ctx, ...)
     local res, err = transport.perform_request(timeout, buffer, skip_header,
                                                method, on_push, on_push_ctx,
                                                request_ctx, ...)
+    print("_request 13", err)
     if err then
         box.error(err)
     end
@@ -1210,6 +1289,7 @@ function remote_methods:_request(method, opts, request_ctx, ...)
         timeout = deadline and max(0, deadline - fiber_clock())
         transport.wait_state('active', timeout)
     end
+    print("_request 14")
     return res
 end
 
@@ -1230,6 +1310,7 @@ function remote_methods:call_16(func_name, ...)
 end
 
 function remote_methods:call(func_name, args, opts)
+    print("REMOTE call")
     check_remote_arg(self, 'call')
     check_call_args(args)
     args = args or {}
@@ -1258,6 +1339,7 @@ function remote_methods:eval(code, args, opts)
 end
 
 function remote_methods:execute(query, parameters, sql_opts, netbox_opts)
+    print("REMOTE Execute")
     check_remote_arg(self, "execute")
     if sql_opts ~= nil then
         box.error(box.error.UNSUPPORTED, "execute", "options")
@@ -1636,19 +1718,26 @@ this_module.self = {
     wait_connected = function(self) return true end,
     is_connected = function(self) return true end,
     call = function(_box, proc_name, args)
+        print("CALL 1")
         check_remote_arg(_box, 'call')
+        print("CALL 2")
         check_call_args(args)
+        print("CALL 3")
         args = args or {}
         proc_name = tostring(proc_name)
         local status, proc, obj = pcall(package.loaded['box.internal'].
             call_loadproc, proc_name)
+        print("CALL 4 ", status)
         if not status then
             rollback()
+            print("CALL BOX ERROR()")
             return box.error() -- re-throw
         end
         if obj ~= nil then
+            print("CALL !")
             return handle_eval_result(pcall(proc, obj, unpack(args)))
         else
+            print("CALL !!")
             return handle_eval_result(pcall(proc, unpack(args)))
         end
     end,

@@ -31,6 +31,8 @@
 #include "diag.h"
 #include "fiber.h"
 
+#include <stdio.h>
+
 void
 error_ref(struct error *e)
 {
@@ -43,6 +45,7 @@ error_ref(struct error *e)
 void
 error_unref(struct error *e)
 {
+	fprintf(stderr, "UNREF %p\n", e);
 	assert(e->refs > 0);
 	struct error *to_delete = e;
 	while (--to_delete->refs == 0) {

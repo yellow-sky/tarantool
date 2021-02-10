@@ -112,6 +112,21 @@ struct error {
 	struct error *effect;
 };
 
+static inline void
+print_error(struct error *e)
+{
+	fprintf(stderr, "destroy %p %p\n", e->destroy, e);
+	fprintf(stderr, "raise %p %p\n", e->raise, e);
+	fprintf(stderr, "log %p %p\n", e->log, e);
+	fprintf(stderr, "refs %ld %p\n", e->refs, e);
+	fprintf(stderr, "saved_errno %d %p\n", e->saved_errno, e);
+	fprintf(stderr, "line %u %p\n", e->line, e);
+	fprintf(stderr, "file %s %p\n", e->file, e);
+	fprintf(stderr, "errmsg %s %p\n", e->errmsg, e);
+	fprintf(stderr, "cause %p %p\n", e->cause, e);
+	fprintf(stderr, "effect %p %p\n", e->effect, e);
+}
+
 void
 error_ref(struct error *e);
 

@@ -7,3 +7,6 @@ box.cfg({
     memtx_memory = 2 * 1024 * 1024 * 1024,
     iproto_threads = tonumber(arg[1])
 })
+
+function ping() return "pong" end
+

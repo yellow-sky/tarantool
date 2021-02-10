@@ -147,6 +147,7 @@ box_lua_find(lua_State *L, const char *name, const char *name_end)
 static int
 lbox_call_loadproc(struct lua_State *L)
 {
+	fprintf(stderr, "LBOX CALL PROC\n");
 	const char *name;
 	size_t name_len;
 	name = lua_tolstring(L, 1, &name_len);
