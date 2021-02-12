@@ -119,7 +119,7 @@ before_script:
   <<: *docker_test_definition
   script:
     - ${GITLAB_MAKE} test_jepsen
-  stage: long_tests
+  stage: static_analysis
   tags:
     - mcs_jepsen_docker
   artifacts:
