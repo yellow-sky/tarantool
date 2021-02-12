@@ -21,6 +21,10 @@ resource "openstack_compute_instance_v2" "instance" {
     "allow-tarantool"
   ]
 
+  tags = {
+    Name = "testing"
+  }
+
   network {
     name = "ext-net"
   }
