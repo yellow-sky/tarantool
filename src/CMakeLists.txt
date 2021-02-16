@@ -98,6 +98,8 @@ add_library(crc32 STATIC
 )
 target_link_libraries(crc32 cpu_feature)
 
+add_library(shutdown STATIC on_shutdown.c)
+
 set (server_sources
      find_path.c
      curl.c
@@ -141,6 +143,7 @@ set (server_sources
 set(api_headers
     ${CMAKE_BINARY_DIR}/src/trivia/config.h
     ${CMAKE_SOURCE_DIR}/src/trivia/util.h
+    ${CMAKE_SOURCE_DIR}/src/on_shutdown.h
     ${CMAKE_SOURCE_DIR}/src/lib/core/say.h
     ${CMAKE_SOURCE_DIR}/src/lib/core/fiber.h
     ${CMAKE_SOURCE_DIR}/src/lib/core/fiber_cond.h
@@ -274,7 +277,12 @@ add_executable(
     ${LIBUTIL_FREEBSD_SRC}/pidfile.c)
 
 add_dependencies(tarantool build_bundled_libs)
-target_link_libraries(tarantool box ${common_libraries})
+if (TARGET_OS_DARWIN)
+    set_target_properties(tarantool PROPERTIES LINK_FLAGS "-u _on_shutdown_trigger_replace")
+    target_link_libraries(tarantool box ${common_libraries} shutdown)
+else()
+    target_link_libraries(tarantool box ${common_libraries} -Wl,--whole-archive shutdown -Wl,--no-whole-archive)
+endif()
 
 if (TARGET_OS_FREEBSD AND NOT TARGET_OS_DEBIAN_FREEBSD)
     # Without rdynamic FreeBSD does not export some symbols even

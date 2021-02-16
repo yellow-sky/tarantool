@@ -135,7 +135,9 @@ static int
 on_shutdown_f(va_list ap)
 {
 	(void) ap;
-	trigger_run(&box_on_shutdown, NULL);
+	/** Time to wait for shutdown trigger finished */
+	const double shutdown_trigger_wait_time = 3.0;
+	trigger_fiber_run(&box_on_shutdown, NULL, shutdown_trigger_wait_time);
 	return 0;
 }
 
