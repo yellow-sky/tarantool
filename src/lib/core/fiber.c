@@ -1714,7 +1714,8 @@ cord_costart_thread_func(void *arg)
 		return NULL;
 
 	struct trigger break_ev_loop = {
-		RLIST_LINK_INITIALIZER, break_ev_loop_f, NULL, NULL
+		RLIST_LINK_INITIALIZER, break_ev_loop_f,
+		NULL, NULL, false, NULL
 	};
 	/*
 	 * Got to be in a trigger, to break the loop even
