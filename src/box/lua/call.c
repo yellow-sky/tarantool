@@ -840,7 +840,7 @@ static int
 lbox_module_reload(lua_State *L)
 {
 	const char *name = luaL_checkstring(L, 1);
-	if (box_module_reload(name) != 0)
+	if (box_process_module_reload(name) != 0)
 		return luaT_error(L);
 	return 0;
 }

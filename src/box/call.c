@@ -116,7 +116,7 @@ static const struct port_vtab port_msgpack_vtab = {
 };
 
 int
-box_module_reload(const char *name)
+box_process_module_reload(const char *name)
 {
 	struct credentials *credentials = effective_user();
 	if ((credentials->universal_access & (PRIV_X | PRIV_U)) !=
@@ -128,7 +128,7 @@ box_module_reload(const char *name)
 				 user->def->name);
 		return -1;
 	}
-	return module_reload(name, name + strlen(name));
+	return box_module_reload(name, name + strlen(name));
 }
 
 int

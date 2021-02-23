@@ -46,7 +46,7 @@ struct call_request;
  * @retval 0 on success.
  */
 int
-box_module_reload(const char *name);
+box_process_module_reload(const char *name);
 
 int
 box_process_call(struct call_request *request, struct port *port);

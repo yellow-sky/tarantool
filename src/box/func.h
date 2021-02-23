@@ -47,7 +47,7 @@ struct func;
 /**
  * Dynamic shared module.
  */
-struct module {
+struct box_module {
 	/** Module dlhandle. */
 	void *handle;
 	/** List of imported functions. */
@@ -88,13 +88,13 @@ struct func {
  * Initialize modules subsystem.
  */
 int
-module_init(void);
+box_module_init(void);
 
 /**
  * Cleanup modules subsystem.
  */
 void
-module_free(void);
+box_module_free(void);
 
 struct func *
 func_new(struct func_def *def);
@@ -117,7 +117,7 @@ func_call(struct func *func, struct port *args, struct port *ret);
  * @retval 0 on success.
  */
 int
-module_reload(const char *package, const char *package_end);
+box_module_reload(const char *package, const char *package_end);
 
 #if defined(__cplusplus)
 } /* extern "C" */

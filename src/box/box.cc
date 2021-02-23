@@ -2512,7 +2512,7 @@ box_free(void)
 		session_free();
 		user_cache_free();
 		schema_free();
-		module_free();
+		box_module_free();
 		tuple_free();
 		port_free();
 #endif
@@ -2915,7 +2915,7 @@ box_init(void)
 	 */
 	session_init();
 
-	if (module_init() != 0)
+	if (box_module_init() != 0)
 		diag_raise();
 
 	if (tuple_init(lua_hash) != 0)
