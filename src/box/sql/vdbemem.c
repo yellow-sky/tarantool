@@ -825,21 +825,6 @@ mem_apply_integer_type(Mem *pMem)
 }
 
 /*
- * Convert pMem so that it is of type MEM_Real.
- * Invalidate any prior representations.
- */
-int
-sqlVdbeMemRealify(Mem * pMem)
-{
-	assert(EIGHT_BYTE_ALIGNMENT(pMem));
-	double v;
-	if (sqlVdbeRealValue(pMem, &v))
-		return -1;
-	mem_set_double(pMem, v);
-	return 0;
-}
-
-/*
  * Delete any previous value and set the value to be a BLOB of length
  * n containing all zeros.
  */

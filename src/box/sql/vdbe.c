@@ -357,11 +357,11 @@ mem_apply_type(struct Mem *record, enum field_type type)
 	case FIELD_TYPE_NUMBER:
 		if (mem_is_number(record))
 			return 0;
-		return sqlVdbeMemRealify(record);
+		return mem_explicit_cast(record, FIELD_TYPE_DOUBLE);
 	case FIELD_TYPE_DOUBLE:
 		if (mem_is_double(record))
 			return 0;
-		return sqlVdbeMemRealify(record);
+		return mem_explicit_cast(record, FIELD_TYPE_DOUBLE);
 	case FIELD_TYPE_STRING:
 		/*
 		 * Only attempt the conversion to TEXT if there is
@@ -2070,7 +2070,7 @@ case OP_MustBeInt: {            /* jump, in1 */
 case OP_Realify: {                  /* in1 */
 	pIn1 = &aMem[pOp->p1];
 	if (mem_is_integer(pIn1)) {
-		sqlVdbeMemRealify(pIn1);
+		mem_explicit_cast(pIn1, FIELD_TYPE_DOUBLE);
 	}
 	break;
 }
