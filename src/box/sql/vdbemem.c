@@ -92,6 +92,248 @@ sqlVdbeCheckMemInvariants(Mem * p)
 }
 #endif
 
+static inline int
+mem_convert_varstring_to_unsigned(struct Mem *mem)
+{
+	bool is_neg;
+	int64_t i;
+	if (sql_atoi64(mem->z, &i, &is_neg, mem->n) != 0)
+		return -1;
+	if (is_neg)
+		return -1;
+	mem_set_int(mem, i, false);
+	return 0;
+}
+
+static inline int
+mem_convert_double_to_unsigned(struct Mem *mem)
+{
+	double d = mem->u.r;
+	if (d >= 0 && d < (double)UINT64_MAX) {
+		mem_set_int(mem, (int64_t)(uint64_t)d, false);
+		return 0;
+	}
+	return -1;
+}
+
+static inline int
+mem_convert_bool_to_unsigned(struct Mem *mem)
+{
+	mem_set_int(mem, (int64_t)mem->u.b, false);
+	return 0;
+}
+
+static inline int
+mem_convert_integer_to_string(struct Mem *mem)
+{
+	const char *str;
+	if (mem_is_pos_int(mem))
+		str = tt_sprintf("%llu", mem->u.u);
+	else
+		str = tt_sprintf("%lld", mem->u.i);
+	return mem_copy_str(mem, str, strlen(str), false);
+}
+
+static inline int
+mem_convert_array_to_string(struct Mem *mem)
+{
+	const char *str = mp_str(mem->z);
+	return mem_copy_str(mem, str, strlen(str), false);
+}
+
+static inline int
+mem_convert_map_to_string(struct Mem *mem)
+{
+	const char *str = mp_str(mem->z);
+	return mem_copy_str(mem, str, strlen(str), false);
+}
+
+static inline int
+mem_convert_boolean_to_string(struct Mem *mem)
+{
+	const char *str = mem->u.b ? "TRUE" : "FALSE";
+	return mem_copy_str(mem, str, strlen(str), false);
+}
+
+static inline int
+mem_convert_binary_to_string(struct Mem *mem)
+{
+	mem->flags = (mem->flags & (MEM_Dyn | MEM_Static | MEM_Ephem)) |
+		      MEM_Str;
+	return 0;
+}
+
+static inline int
+mem_convert_double_to_string(struct Mem *mem)
+{
+	uint32_t size = 32;
+	if (sqlVdbeMemClearAndResize(mem, size) != 0)
+		return -1;
+	sql_snprintf(size, mem->z, "%!.15g", mem->u.r);
+	mem->flags = MEM_Str;
+	mem->field_type = FIELD_TYPE_STRING;
+	return -1;
+}
+
+static inline int
+mem_convert_integer_to_double(struct Mem *mem)
+{
+	double d;
+	if (mem_is_pos_int(mem))
+		d = (double)mem->u.u;
+	else
+		d = (double)mem->u.i;
+	mem_set_double(mem, d);
+	return 0;
+}
+
+static inline int
+mem_convert_string_to_double(struct Mem *mem)
+{
+	double d;
+	if (sqlAtoF(mem->z, &d, mem->n) == 0)
+		return -1;
+	mem_set_double(mem, d);
+	return 0;
+}
+
+static inline int
+mem_convert_varstring_to_integer(struct Mem *mem)
+{
+	bool is_neg;
+	int64_t i;
+	if (sql_atoi64(mem->z, &i, &is_neg, mem->n) != 0)
+		return -1;
+	mem_set_int(mem, i, is_neg);
+	return 0;
+}
+
+static inline int
+mem_convert_double_to_integer(struct Mem *mem)
+{
+	double d = mem->u.r;
+	if (d < 0 && d >= (double)INT64_MIN) {
+		mem_set_int(mem, d, true);
+		return 0;
+	}
+	if (d >= 0 && d < (double)UINT64_MAX) {
+		mem_set_int(mem, d, false);
+		return 0;
+	}
+	return -1;
+}
+
+static inline int
+mem_convert_string_to_boolean(struct Mem *mem)
+{
+	char *str = mem->z;
+	bool b;
+	const char *str_true = "TRUE";
+	const char *str_false = "FALSE";
+	uint32_t len_true = strlen(str_true);
+	uint32_t len_false = strlen(str_false);
+
+	for (; str[0] == ' '; str++);
+	if (strncasecmp(str, str_true, len_true) == 0) {
+		b = true;
+		str += len_true;
+	} else if (strncasecmp(str, str_false, len_false) == 0) {
+		b = false;
+		str += len_false;
+	} else {
+		return -1;
+	}
+	for (; str[0] == ' '; str++);
+	if (str[0] != '\0')
+		return -1;
+	mem_set_bool(mem, b);
+	return 0;
+}
+
+static inline int
+mem_convert_integer_to_boolean(struct Mem *mem)
+{
+	mem_set_bool(mem, mem->u.u != 0);
+	return 0;
+}
+
+static inline int
+mem_convert_double_to_boolean(struct Mem *mem)
+{
+	mem_set_bool(mem, mem->u.r != 0);
+	return 0;
+}
+
+int
+mem_explicit_cast(struct Mem *mem, enum field_type type)
+{
+	if (mem_is_null(mem))
+		return 0;
+	switch (type) {
+	case FIELD_TYPE_UNSIGNED:
+		if (mem_is_pos_int(mem))
+			return 0;
+		if (mem_is_integer(mem) || mem_is_array(mem) || mem_is_map(mem))
+			return -1;
+		if (mem_is_varstring(mem))
+			return mem_convert_varstring_to_unsigned(mem);
+		if (mem_is_double(mem))
+			return mem_convert_double_to_unsigned(mem);
+		if (mem_is_bool(mem))
+			return mem_convert_bool_to_unsigned(mem);
+		return -1;
+	case FIELD_TYPE_STRING:
+		if (mem_is_string(mem))
+			return 0;
+		if (mem_is_integer(mem))
+			return mem_convert_integer_to_string(mem);
+		if (mem_is_array(mem))
+			return mem_convert_array_to_string(mem);
+		if (mem_is_map(mem))
+			return mem_convert_map_to_string(mem);
+		if (mem_is_binary(mem))
+			return mem_convert_binary_to_string(mem);
+		if (mem_is_double(mem))
+			return mem_convert_double_to_string(mem);
+		if (mem_is_bool(mem))
+			return mem_convert_boolean_to_string(mem);
+		return -1;
+	case FIELD_TYPE_DOUBLE:
+		if (mem_is_double(mem))
+			return 0;
+		if (mem_is_integer(mem))
+			return mem_convert_integer_to_double(mem);
+		if (mem_is_string(mem))
+			return mem_convert_string_to_double(mem);
+		return -1;
+	case FIELD_TYPE_INTEGER:
+		if (mem_is_integer(mem))
+			return 0;
+		if (mem_is_array(mem) || mem_is_map(mem))
+			return -1;
+		if (mem_is_varstring(mem))
+			return mem_convert_varstring_to_integer(mem);
+		if (mem_is_double(mem))
+			return mem_convert_double_to_integer(mem);
+		if (mem_is_bool(mem))
+			return mem_convert_bool_to_unsigned(mem);
+		return -1;
+	case FIELD_TYPE_BOOLEAN:
+		if (mem_is_bool(mem))
+			return 0;
+		if (mem_is_integer(mem))
+			return mem_convert_integer_to_boolean(mem);
+		if (mem_is_string(mem))
+			return mem_convert_string_to_boolean(mem);
+		if (mem_is_double(mem))
+			return mem_convert_double_to_boolean(mem);
+		return -1;
+	default:
+		return -1;
+	}
+	return -1;
+}
+
 /*
  * Make sure pMem->z points to a writable allocation of at least
  * min(n,32) bytes.
