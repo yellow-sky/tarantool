@@ -946,17 +946,6 @@ mem_value_bool(const struct Mem *mem, bool *b);
 int mem_apply_integer_type(Mem *);
 int sqlVdbeMemRealify(Mem *);
 
-/**
- * Convert @a mem to NUMBER type, so that after conversion it has
- * one of types MEM_Real, MEM_Int or MEM_UInt. If conversion is
- * not possible, function returns -1.
- *
- * Beware - this function changes value and type of @a mem
- * argument.
- */
-int
-vdbe_mem_numerify(struct Mem *mem);
-
 int mem_explicit_cast(struct Mem *, enum field_type type);
 int sqlVdbeMemFromBtree(BtCursor *, u32, u32, Mem *);
 void sqlVdbeMemRelease(Mem * p);

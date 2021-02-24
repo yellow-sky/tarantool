@@ -839,30 +839,6 @@ sqlVdbeMemRealify(Mem * pMem)
 	return 0;
 }
 
-int
-vdbe_mem_numerify(struct Mem *mem)
-{
-	if ((mem->flags & (MEM_Int | MEM_UInt | MEM_Real | MEM_Null)) != 0)
-		return 0;
-	if ((mem->flags & MEM_Bool) != 0) {
-		mem->u.u = mem->u.b;
-		MemSetTypeFlag(mem, MEM_UInt);
-		return 0;
-	}
-	assert((mem->flags & (MEM_Blob | MEM_Str)) != 0);
-	bool is_neg;
-	int64_t i;
-	if (sql_atoi64(mem->z, &i, &is_neg, mem->n) == 0) {
-		mem_set_int(mem, i, is_neg);
-	} else {
-		double d;
-		if (sqlAtoF(mem->z, &d, mem->n) == 0)
-			return -1;
-		mem_set_double(mem, d);
-	}
-	return 0;
-}
-
 /*
  * Delete any previous value and set the value to be a BLOB of length
  * n containing all zeros.
@@ -1464,8 +1440,8 @@ valueFromExpr(sql * db,	/* The database connection */
 		if (0 ==
 		    sqlValueFromExpr(db, pExpr->pLeft, type, &pVal)
 		    && pVal != 0) {
-			if ((rc = vdbe_mem_numerify(pVal)) != 0)
-				return rc;
+			if (mem_explicit_cast(pVal, FIELD_TYPE_NUMBER) != 0)
+				return -1;
 			if (pVal->flags & MEM_Real) {
 				pVal->u.r = -pVal->u.r;
 			} else if ((pVal->flags & MEM_Int) != 0) {
@@ -1491,8 +1467,8 @@ valueFromExpr(sql * db,	/* The database connection */
 		pVal = valueNew(db, pCtx);
 		if (pVal == 0)
 			goto no_mem;
-		if ((rc = vdbe_mem_numerify(pVal)) != 0)
-			return rc;
+		if (mem_explicit_cast(pVal, FIELD_TYPE_NUMBER) != 0)
+			return -1;
 	}
 #ifndef SQL_OMIT_BLOB_LITERAL
 	else if (op == TK_BLOB) {
