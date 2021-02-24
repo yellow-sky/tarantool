@@ -106,17 +106,6 @@ mem_convert_varstring_to_unsigned(struct Mem *mem)
 }
 
 static inline int
-mem_convert_double_to_unsigned(struct Mem *mem)
-{
-	double d = mem->u.r;
-	if (d >= 0 && d < (double)UINT64_MAX) {
-		mem_set_int(mem, (int64_t)(uint64_t)d, false);
-		return 0;
-	}
-	return -1;
-}
-
-static inline int
 mem_convert_bool_to_unsigned(struct Mem *mem)
 {
 	mem_set_int(mem, (int64_t)mem->u.b, false);
@@ -172,7 +161,8 @@ mem_convert_double_to_string(struct Mem *mem)
 	sql_snprintf(size, mem->z, "%!.15g", mem->u.r);
 	mem->flags = MEM_Str;
 	mem->field_type = FIELD_TYPE_STRING;
-	return -1;
+	mem->n = strlen(mem->z);
+	return 0;
 }
 
 static inline int
@@ -188,7 +178,7 @@ mem_convert_integer_to_double(struct Mem *mem)
 }
 
 static inline int
-mem_convert_string_to_double(struct Mem *mem)
+mem_convert_varstring_to_double(struct Mem *mem)
 {
 	double d;
 	if (sqlAtoF(mem->z, &d, mem->n) == 0)
@@ -217,7 +207,7 @@ mem_convert_double_to_integer(struct Mem *mem)
 		return 0;
 	}
 	if (d >= 0 && d < (double)UINT64_MAX) {
-		mem_set_int(mem, d, false);
+		mem_set_int(mem, (int64_t)(uint64_t)d, false);
 		return 0;
 	}
 	return -1;
@@ -264,6 +254,24 @@ mem_convert_double_to_boolean(struct Mem *mem)
 	return 0;
 }
 
+static inline int
+mem_convert_string_to_varbinary(struct Mem *mem)
+{
+	mem->flags = (mem->flags & (MEM_Dyn | MEM_Static | MEM_Ephem)) |
+		     MEM_Blob;
+	return 0;
+}
+
+static inline int
+mem_convert_varstring_to_number(struct Mem *mem)
+{
+	if (mem_convert_varstring_to_integer(mem) == 0)
+		return 0;
+	if (mem_convert_varstring_to_double(mem) == 0)
+		return 0;
+	return -1;
+}
+
 int
 mem_explicit_cast(struct Mem *mem, enum field_type type)
 {
@@ -278,7 +286,7 @@ mem_explicit_cast(struct Mem *mem, enum field_type type)
 		if (mem_is_varstring(mem))
 			return mem_convert_varstring_to_unsigned(mem);
 		if (mem_is_double(mem))
-			return mem_convert_double_to_unsigned(mem);
+			return mem_convert_double_to_integer(mem);
 		if (mem_is_bool(mem))
 			return mem_convert_bool_to_unsigned(mem);
 		return -1;
@@ -304,7 +312,7 @@ mem_explicit_cast(struct Mem *mem, enum field_type type)
 		if (mem_is_integer(mem))
 			return mem_convert_integer_to_double(mem);
 		if (mem_is_string(mem))
-			return mem_convert_string_to_double(mem);
+			return mem_convert_varstring_to_double(mem);
 		return -1;
 	case FIELD_TYPE_INTEGER:
 		if (mem_is_integer(mem))
@@ -328,8 +336,26 @@ mem_explicit_cast(struct Mem *mem, enum field_type type)
 		if (mem_is_double(mem))
 			return mem_convert_double_to_boolean(mem);
 		return -1;
-	default:
+	case FIELD_TYPE_VARBINARY:
+		if (mem_is_binary(mem))
+			return 0;
+		if (mem_is_string(mem))
+			return mem_convert_string_to_varbinary(mem);
 		return -1;
+	case FIELD_TYPE_NUMBER:
+		if (mem_is_number(mem))
+			return 0;
+		if (mem_is_bool(mem))
+			return mem_convert_bool_to_unsigned(mem);
+		if (mem_is_varstring(mem))
+			return mem_convert_varstring_to_number(mem);
+		return -1;
+	case FIELD_TYPE_SCALAR:
+		if (mem_is_array(mem) || mem_is_map(mem))
+			return -1;
+		return 0;
+	default:
+		break;
 	}
 	return -1;
 }
@@ -884,6 +910,7 @@ int
 sqlVdbeMemCast(Mem * pMem, enum field_type type)
 {
 	assert(type < field_type_MAX);
+	return mem_explicit_cast(pMem, type);
 	if (pMem->flags & MEM_Null)
 		return 0;
 	switch (type) {
