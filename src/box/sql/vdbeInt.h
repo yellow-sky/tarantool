@@ -957,7 +957,7 @@ int sqlVdbeMemRealify(Mem *);
 int
 vdbe_mem_numerify(struct Mem *mem);
 
-int sqlVdbeMemCast(Mem *, enum field_type type);
+int mem_explicit_cast(struct Mem *, enum field_type type);
 int sqlVdbeMemFromBtree(BtCursor *, u32, u32, Mem *);
 void sqlVdbeMemRelease(Mem * p);
 

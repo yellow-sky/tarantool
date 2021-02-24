@@ -2094,7 +2094,7 @@ case OP_Cast: {                  /* in1 */
 	pIn1 = &aMem[pOp->p1];
 	if (ExpandBlob(pIn1) != 0)
 		goto abort_due_to_error;
-	rc = sqlVdbeMemCast(pIn1, pOp->p2);
+	rc = mem_explicit_cast(pIn1, pOp->p2);
 	/*
 	 * SCALAR is not type itself, but rather an aggregation
 	 * of types. Hence, cast to this type shouldn't change
