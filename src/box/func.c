@@ -30,19 +30,12 @@
  */
 #include "func.h"
 #include "fiber.h"
-#include "trivia/config.h"
 #include "assoc.h"
-#include "lua/utils.h"
 #include "lua/call.h"
-#include "error.h"
 #include "errinj.h"
 #include "diag.h"
-#include "port.h"
 #include "schema.h"
 #include "session.h"
-#include "libeio/eio.h"
-#include <fcntl.h>
-#include <dlfcn.h>
 
 /**
  * Parsed symbol and package names.
@@ -56,6 +49,18 @@ struct func_name {
 	const char *package_end;
 };
 
+/**
+ * Dynamic shared module.
+ */
+struct box_module {
+	/** Low level module instance. */
+	struct module *module;
+	/** List of imported functions. */
+	struct rlist funcs;
+	/** Number of active references. */
+	int64_t refs;
+};
+
 struct func_c {
 	/** Function object base class. */
 	struct func base;
@@ -64,15 +69,17 @@ struct func_c {
 	 */
 	struct rlist item;
 	/**
-	 * For C functions, the body of the function.
-	 */
-	box_function_f func;
-	/**
-	 * Each stored function keeps a handle to the
-	 * dynamic library for the C callback.
+	 * Back reference to a cached module.
 	 */
 	struct box_module *bxmod;
+	/**
+	 * C function to call.
+	 */
+	struct module_func mf;
 };
+
+/** Hash from module name to its box_module instance. */
+static struct mh_strnptr_t *box_module_hash = NULL;
 
 /***
  * Split function name to symbol and package names.
@@ -95,82 +102,7 @@ func_split_name(const char *str, struct func_name *name)
 	}
 }
 
-/**
- * Arguments for luaT_module_find used by lua_cpcall()
- */
-struct module_find_ctx {
-	const char *package;
-	const char *package_end;
-	char *path;
-	size_t path_len;
-};
-
-/**
- * A cpcall() helper for module_find()
- */
-static int
-luaT_module_find(lua_State *L)
-{
-	struct module_find_ctx *ctx = (struct module_find_ctx *)
-		lua_topointer(L, 1);
-
-	/*
-	 * Call package.searchpath(name, package.cpath) and use
-	 * the path to the function in dlopen().
-	 */
-	lua_getglobal(L, "package");
-
-	lua_getfield(L, -1, "search");
-
-	/* Argument of search: name */
-	lua_pushlstring(L, ctx->package, ctx->package_end - ctx->package);
-
-	lua_call(L, 1, 1);
-	if (lua_isnil(L, -1))
-		return luaL_error(L, "module not found");
-	/* Convert path to absolute */
-	char resolved[PATH_MAX];
-	if (realpath(lua_tostring(L, -1), resolved) == NULL) {
-		diag_set(SystemError, "realpath");
-		return luaT_error(L);
-	}
-
-	snprintf(ctx->path, ctx->path_len, "%s", resolved);
-	return 0;
-}
-
-/**
- * Find path to module using Lua's package.cpath
- * @param package package name
- * @param package_end a pointer to the last byte in @a package + 1
- * @param[out] path path to shared library
- * @param path_len size of @a path buffer
- * @retval 0 on success
- * @retval -1 on error, diag is set
- */
-static int
-module_find(const char *package, const char *package_end, char *path,
-	    size_t path_len)
-{
-	struct module_find_ctx ctx = { package, package_end, path, path_len };
-	lua_State *L = tarantool_L;
-	int top = lua_gettop(L);
-	if (luaT_cpcall(L, luaT_module_find, &ctx) != 0) {
-		int package_len = (int) (package_end - package);
-		diag_set(ClientError, ER_LOAD_MODULE, package_len, package,
-			 lua_tostring(L, -1));
-		lua_settop(L, top);
-		return -1;
-	}
-	assert(top == lua_gettop(L)); /* cpcall discard results */
-	return 0;
-}
-
-static struct mh_strnptr_t *box_module_hash = NULL;
-
-static void
-box_module_gc(struct box_module *bxmod);
-
+/** Initialize box module subsystem. */
 int
 box_module_init(void)
 {
@@ -181,20 +113,6 @@ box_module_init(void)
 		return -1;
 	}
 	return 0;
-}
-
-void
-box_module_free(void)
-{
-	while (mh_size(box_module_hash) > 0) {
-		struct box_module *bxmod;
-
-		mh_int_t i = mh_first(box_module_hash);
-		bxmod = mh_strnptr_node(box_module_hash, i)->val;
-		/* Can't delete modules if they have active calls */
-		box_module_gc(bxmod);
-	}
-	mh_strnptr_delete(box_module_hash);
 }
 
 /**
@@ -216,10 +134,15 @@ cache_find(const char *name, const char *name_end)
 static int
 cache_put(struct box_module *bxmod)
 {
-	size_t package_len = strlen(bxmod->package);
-	uint32_t name_hash = mh_strn_hash(bxmod->package, package_len);
+	const char *package = bxmod->module->package;
+	size_t package_len = bxmod->module->package_len;
+
 	const struct mh_strnptr_node_t strnode = {
-		bxmod->package, package_len, name_hash, bxmod};
+		.str = package,
+		.len = package_len,
+		.hash = mh_strn_hash(package, package_len),
+		.val = bxmod
+	};
 
 	mh_int_t i = mh_strnptr_put(box_module_hash, &strnode, NULL, NULL);
 	if (i == mh_end(box_module_hash)) {
@@ -231,150 +154,175 @@ cache_put(struct box_module *bxmod)
 }
 
 /**
+ * Update module in module cache.
+ */
+static void
+cache_update(struct box_module *bxmod)
+{
+	const char *str = bxmod->module->package;
+	size_t len = bxmod->module->package_len;
+
+	mh_int_t e = mh_strnptr_find_inp(box_module_hash, str, len);
+	if (e == mh_end(box_module_hash))
+		panic("func: failed to update cache: %s", str);
+
+	mh_strnptr_node(box_module_hash, e)->str = str;
+	mh_strnptr_node(box_module_hash, e)->val = bxmod;
+}
+
+/**
  * Delete a module from the module cache
  */
 static void
-cache_del(const char *name, const char *name_end)
+cache_del(struct box_module *bxmod)
 {
-	mh_int_t i = mh_strnptr_find_inp(box_module_hash, name,
-					 name_end - name);
-	if (i == mh_end(box_module_hash))
-		return;
-	mh_strnptr_del(box_module_hash, i, NULL);
+	const char *str = bxmod->module->package;
+	size_t len = bxmod->module->package_len;
+
+	mh_int_t e = mh_strnptr_find_inp(box_module_hash, str, len);
+	if (e != mh_end(box_module_hash)) {
+		struct box_module *v;
+		v = mh_strnptr_node(box_module_hash, e)->val;
+		if (v == bxmod)
+			mh_strnptr_del(box_module_hash, e, NULL);
+	}
 }
 
-/*
- * Load a dso.
- * Create a new symlink based on temporary directory and try to
- * load via this symink to load a dso twice for cases of a function
- * reload.
- */
-static struct box_module *
-box_module_load(const char *package, const char *package_end)
+/** Increment reference to a module. */
+static inline void
+box_module_ref(struct box_module *bxmod)
 {
-	char path[PATH_MAX];
-	if (module_find(package, package_end, path, sizeof(path)) != 0)
+	assert(bxmod->refs >= 0);
+	++bxmod->refs;
+}
+
+/** Low-level module loader. */
+static struct box_module *
+box_module_ld(const char *package, size_t package_len,
+	      struct module *(ld)(const char *package,
+				  size_t package_len))
+{
+	struct module *m = ld(package, package_len);
+	if (m == NULL)
 		return NULL;
 
-	int package_len = package_end - package;
-	struct box_module *bxmod = malloc(sizeof(*bxmod) + package_len + 1);
+	struct box_module *bxmod = malloc(sizeof(*bxmod));
 	if (bxmod == NULL) {
+		module_unload(m);
 		diag_set(OutOfMemory, sizeof(*bxmod) + package_len + 1,
 			 "malloc", "struct box_module");
 		return NULL;
 	}
-	memcpy(bxmod->package, package, package_len);
-	bxmod->package[package_len] = 0;
+
+	bxmod->refs = 0;
+	bxmod->module = m;
 	rlist_create(&bxmod->funcs);
-	bxmod->calls = 0;
 
-	const char *tmpdir = getenv("TMPDIR");
-	if (tmpdir == NULL)
-		tmpdir = "/tmp";
-	char dir_name[PATH_MAX];
-	int rc = snprintf(dir_name, sizeof(dir_name), "%s/tntXXXXXX", tmpdir);
-	if (rc < 0 || (size_t) rc >= sizeof(dir_name)) {
-		diag_set(SystemError, "failed to generate path to tmp dir");
-		goto error;
-	}
-
-	if (mkdtemp(dir_name) == NULL) {
-		diag_set(SystemError, "failed to create unique dir name: %s",
-			 dir_name);
-		goto error;
-	}
-	char load_name[PATH_MAX];
-	rc = snprintf(load_name, sizeof(load_name), "%s/%.*s." TARANTOOL_LIBEXT,
-		      dir_name, package_len, package);
-	if (rc < 0 || (size_t) rc >= sizeof(dir_name)) {
-		diag_set(SystemError, "failed to generate path to DSO");
-		goto error;
-	}
-
-	struct stat st;
-	if (stat(path, &st) < 0) {
-		diag_set(SystemError, "failed to stat() module %s", path);
-		goto error;
-	}
-
-	int source_fd = open(path, O_RDONLY);
-	if (source_fd < 0) {
-		diag_set(SystemError, "failed to open module %s file for" \
-			 " reading", path);
-		goto error;
-	}
-	int dest_fd = open(load_name, O_WRONLY|O_CREAT|O_TRUNC,
-			   st.st_mode & 0777);
-	if (dest_fd < 0) {
-		diag_set(SystemError, "failed to open file %s for writing ",
-			 load_name);
-		close(source_fd);
-		goto error;
-	}
-
-	off_t ret = eio_sendfile_sync(dest_fd, source_fd, 0, st.st_size);
-	close(source_fd);
-	close(dest_fd);
-	if (ret != st.st_size) {
-		diag_set(SystemError, "failed to copy DSO %s to %s",
-			 path, load_name);
-		goto error;
-	}
-
-	bxmod->handle = dlopen(load_name, RTLD_NOW | RTLD_LOCAL);
-	if (unlink(load_name) != 0)
-		say_warn("failed to unlink dso link %s", load_name);
-	if (rmdir(dir_name) != 0)
-		say_warn("failed to delete temporary dir %s", dir_name);
-	if (bxmod->handle == NULL) {
-		diag_set(ClientError, ER_LOAD_MODULE, package_len,
-			  package, dlerror());
-		goto error;
-	}
-	struct errinj *e = errinj(ERRINJ_DYN_MODULE_COUNT, ERRINJ_INT);
-	if (e != NULL)
-		++e->iparam;
+	box_module_ref(bxmod);
 	return bxmod;
-error:
-	free(bxmod);
-	return NULL;
 }
 
+/** Load a new module. */
+static struct box_module *
+box_module_load(const char *package, size_t package_len)
+{
+	return box_module_ld(package, package_len,
+			     module_load);
+}
+
+/** Load a new module with force cache invalidation. */
+static struct box_module *
+box_module_load_force(const char *package, size_t package_len)
+{
+	return box_module_ld(package, package_len,
+			     module_load_force);
+}
+
+/** Delete a module. */
 static void
 box_module_delete(struct box_module *bxmod)
 {
 	struct errinj *e = errinj(ERRINJ_DYN_MODULE_COUNT, ERRINJ_INT);
 	if (e != NULL)
 		--e->iparam;
-	dlclose(bxmod->handle);
+	module_unload(bxmod->module);
 	TRASH(bxmod);
 	free(bxmod);
 }
 
-/*
- * Check if a dso is unused and can be closed.
- */
-static void
-box_module_gc(struct box_module *bxmod)
+/** Decrement reference to a module and delete it if last one. */
+static inline void
+box_module_unref(struct box_module *bxmod)
 {
-	if (rlist_empty(&bxmod->funcs) && bxmod->calls == 0)
+	assert(bxmod->refs > 0);
+	if (--bxmod->refs == 0) {
+		cache_del(bxmod);
 		box_module_delete(bxmod);
-}
-
-/*
- * Import a function from the module.
- */
-static box_function_f
-box_module_sym(struct box_module *bxmod, const char *name)
-{
-	box_function_f f = (box_function_f)dlsym(bxmod->handle, name);
-	if (f == NULL) {
-		diag_set(ClientError, ER_LOAD_FUNCTION, name, dlerror());
-		return NULL;
 	}
-	return f;
 }
 
+/** Free box modules subsystem. */
+void
+box_module_free(void)
+{
+	while (mh_size(box_module_hash) > 0) {
+		struct box_module *bxmod;
+
+		mh_int_t i = mh_first(box_module_hash);
+		bxmod = mh_strnptr_node(box_module_hash, i)->val;
+		/*
+		 * Module won't be deleted if it has
+		 * active functions bound.
+		 */
+		box_module_unref(bxmod);
+	}
+	mh_strnptr_delete(box_module_hash);
+}
+
+static struct func_vtab func_c_vtab;
+
+/** Create new box function. */
+static inline void
+func_c_create(struct func_c *func_c)
+{
+	func_c->bxmod = NULL;
+	func_c->base.vtab = &func_c_vtab;
+	rlist_create(&func_c->item);
+	module_func_create(&func_c->mf);
+}
+
+/** Test if function is not resolved. */
+static inline bool
+is_func_c_emtpy(struct func_c *func_c)
+{
+	return is_module_func_empty(&func_c->mf);
+}
+
+/** Load a new function. */
+static inline int
+func_c_load(struct box_module *bxmod, const char *func_name,
+	      struct func_c *func_c)
+{
+	int rc = module_func_load(bxmod->module, func_name, &func_c->mf);
+	if (rc == 0) {
+		rlist_move(&bxmod->funcs, &func_c->item);
+		func_c->bxmod = bxmod;
+		box_module_ref(bxmod);
+	}
+	return rc;
+}
+
+/** Unload a function. */
+static inline void
+func_c_unload(struct func_c *func_c)
+{
+	module_func_unload(&func_c->mf);
+	rlist_del(&func_c->item);
+	box_module_unref(func_c->bxmod);
+	func_c_create(func_c);
+}
+
+/** Reload module in a force way. */
 int
 box_module_reload(const char *package, const char *package_end)
 {
@@ -385,25 +333,24 @@ box_module_reload(const char *package, const char *package_end)
 		return -1;
 	}
 
-	struct box_module *bxmod = box_module_load(package, package_end);
+	size_t len = package_end - package;
+	struct box_module *bxmod = box_module_load_force(package, len);
 	if (bxmod == NULL)
 		return -1;
 
-	struct func_c *func, *tmp_func;
-	rlist_foreach_entry_safe(func, &bxmod_old->funcs, item, tmp_func) {
+	struct func_c *func, *tmp;
+	rlist_foreach_entry_safe(func, &bxmod_old->funcs, item, tmp) {
 		struct func_name name;
 		func_split_name(func->base.def->name, &name);
-		func->func = box_module_sym(bxmod, name.sym);
-		if (func->func == NULL)
+		func_c_unload(func);
+		if (func_c_load(bxmod, name.sym, func) != 0)
 			goto restore;
-		func->bxmod = bxmod;
-		rlist_move(&bxmod->funcs, &func->item);
 	}
-	cache_del(package, package_end);
-	if (cache_put(bxmod) != 0)
-		goto restore;
-	box_module_gc(bxmod_old);
+
+	cache_update(bxmod);
+	box_module_unref(bxmod_old);
 	return 0;
+
 restore:
 	/*
 	 * Some old-dso func can't be load from new module, restore old
@@ -412,8 +359,8 @@ restore:
 	do {
 		struct func_name name;
 		func_split_name(func->base.def->name, &name);
-		func->func = box_module_sym(bxmod_old, name.sym);
-		if (func->func == NULL) {
+
+		if (func_c_load(bxmod_old, name.sym, func) != 0) {
 			/*
 			 * Something strange was happen, an early loaden
 			 * function was not found in an old dso.
@@ -421,12 +368,10 @@ restore:
 			panic("Can't restore module function, "
 			      "server state is inconsistent");
 		}
-		func->bxmod = bxmod_old;
-		rlist_move(&bxmod_old->funcs, &func->item);
 	} while (func != rlist_first_entry(&bxmod_old->funcs,
 					   struct func_c, item));
 	assert(rlist_empty(&bxmod->funcs));
-	box_module_delete(bxmod);
+	box_module_unref(bxmod);
 	return -1;
 }
 
@@ -437,6 +382,7 @@ func_c_new(struct func_def *def);
 extern struct func *
 func_sql_builtin_new(struct func_def *def);
 
+/** Allocate a new function. */
 struct func *
 func_new(struct func_def *def)
 {
@@ -474,67 +420,51 @@ func_new(struct func_def *def)
 	return func;
 }
 
-static struct func_vtab func_c_vtab;
-
+/** Create new C function. */
 static struct func *
 func_c_new(MAYBE_UNUSED struct func_def *def)
 {
 	assert(def->language == FUNC_LANGUAGE_C);
 	assert(def->body == NULL && !def->is_sandboxed);
-	struct func_c *func = (struct func_c *) malloc(sizeof(struct func_c));
-	if (func == NULL) {
-		diag_set(OutOfMemory, sizeof(*func), "malloc", "func");
+	struct func_c *func_c = malloc(sizeof(struct func_c));
+	if (func_c == NULL) {
+		diag_set(OutOfMemory, sizeof(*func_c), "malloc", "func_c");
 		return NULL;
 	}
-	func->base.vtab = &func_c_vtab;
-	func->func = NULL;
-	func->bxmod = NULL;
-	return &func->base;
+	func_c_create(func_c);
+	return &func_c->base;
 }
 
-static void
-func_c_unload(struct func_c *func)
-{
-	if (func->bxmod) {
-		rlist_del(&func->item);
-		if (rlist_empty(&func->bxmod->funcs)) {
-			struct func_name name;
-			func_split_name(func->base.def->name, &name);
-			cache_del(name.package, name.package_end);
-		}
-		box_module_gc(func->bxmod);
-	}
-	func->bxmod = NULL;
-	func->func = NULL;
-}
-
+/** Destroy C function. */
 static void
 func_c_destroy(struct func *base)
 {
 	assert(base->vtab == &func_c_vtab);
 	assert(base != NULL && base->def->language == FUNC_LANGUAGE_C);
-	struct func_c *func = (struct func_c *) base;
-	func_c_unload(func);
+	struct func_c *func_c = (struct func_c *) base;
+	box_module_unref(func_c->bxmod);
+	func_c_unload(func_c);
 	TRASH(base);
-	free(func);
+	free(func_c);
 }
 
 /**
- * Resolve func->func (find the respective DLL and fetch the
+ * Resolve func->func (find the respective share library and fetch the
  * symbol from it).
  */
 static int
-func_c_load(struct func_c *func)
+func_c_resolve(struct func_c *func_c)
 {
-	assert(func->func == NULL);
+	assert(is_func_c_emtpy(func_c));
 
 	struct func_name name;
-	func_split_name(func->base.def->name, &name);
+	func_split_name(func_c->base.def->name, &name);
 
 	struct box_module *cached, *bxmod;
 	cached = cache_find(name.package, name.package_end);
 	if (cached == NULL) {
-		bxmod = box_module_load(name.package, name.package_end);
+		size_t len = name.package_end - name.package;
+		bxmod = box_module_load(name.package, len);
 		if (bxmod == NULL)
 			return -1;
 		if (cache_put(bxmod) != 0) {
@@ -545,8 +475,7 @@ func_c_load(struct func_c *func)
 		bxmod = cached;
 	}
 
-	func->func = box_module_sym(bxmod, name.sym);
-	if (func->func == NULL) {
+	if (func_c_load(bxmod, name.sym, func_c) != 0) {
 		if (cached == NULL) {
 			/*
 			 * In case if it was a first load we should
@@ -557,54 +486,27 @@ func_c_load(struct func_c *func)
 			 * Note the box_module_sym set an error thus be
 			 * careful to not wipe it.
 			 */
-			cache_del(name.package, name.package_end);
+			cache_del(bxmod);
 			box_module_delete(bxmod);
 		}
 		return -1;
 	}
-	func->bxmod = bxmod;
-	rlist_add(&bxmod->funcs, &func->item);
 	return 0;
 }
 
-int
+/** Execute C function. */
+static int
 func_c_call(struct func *base, struct port *args, struct port *ret)
 {
 	assert(base->vtab == &func_c_vtab);
 	assert(base != NULL && base->def->language == FUNC_LANGUAGE_C);
-	struct func_c *func = (struct func_c *) base;
-	if (func->func == NULL) {
-		if (func_c_load(func) != 0)
+	struct func_c *func_c = (struct func_c *) base;
+	if (is_func_c_emtpy(func_c)) {
+		if (func_c_resolve(func_c) != 0)
 			return -1;
 	}
 
-	struct region *region = &fiber()->gc;
-	size_t region_svp = region_used(region);
-	uint32_t data_sz;
-	const char *data = port_get_msgpack(args, &data_sz);
-	if (data == NULL)
-		return -1;
-
-	port_c_create(ret);
-	box_function_ctx_t ctx = { ret };
-
-	/* Module can be changed after function reload. */
-	struct box_module *bxmod = func->bxmod;
-	assert(bxmod != NULL);
-	++bxmod->calls;
-	int rc = func->func(&ctx, data, data + data_sz);
-	--bxmod->calls;
-	box_module_gc(bxmod);
-	region_truncate(region, region_svp);
-	if (rc != 0) {
-		if (diag_last_error(&fiber()->diag) == NULL) {
-			/* Stored procedure forget to set diag  */
-			diag_set(ClientError, ER_PROC_C, "unknown error");
-		}
-		port_destroy(ret);
-		return -1;
-	}
-	return rc;
+	return module_func_call(&func_c->mf, args, ret);
 }
 
 static struct func_vtab func_c_vtab = {
