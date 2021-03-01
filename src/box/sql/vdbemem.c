@@ -214,6 +214,21 @@ mem_convert_double_to_integer(struct Mem *mem)
 }
 
 static inline int
+mem_convert_double_to_integer_lossless(struct Mem *mem)
+{
+	double d = mem->u.r;
+	if (d < 0 && d >= (double)INT64_MIN && (double)(int64_t)d == d) {
+		mem_set_int(mem, d, true);
+		return 0;
+	}
+	if (d >= 0 && d < (double)UINT64_MAX && (double)(uint64_t)d == d) {
+		mem_set_int(mem, (int64_t)(uint64_t)d, false);
+		return 0;
+	}
+	return -1;
+}
+
+static inline int
 mem_convert_string_to_boolean(struct Mem *mem)
 {
 	char *str = mem->z;
@@ -429,28 +444,18 @@ mem_implicit_cast_old(struct Mem *mem, enum field_type type)
 	case FIELD_TYPE_UNSIGNED:
 		if (mem_is_pos_int(mem))
 			return 0;
-		if (mem_is_integer(mem) || mem_is_array(mem) || mem_is_map(mem))
-			return -1;
 		if (mem_is_string(mem))
 			return mem_convert_varstring_to_unsigned(mem);
 		if (mem_is_double(mem))
-			return mem_convert_double_to_integer(mem);
+			return mem_convert_double_to_integer_lossless(mem);
 		return -1;
 	case FIELD_TYPE_STRING:
-		if (mem_is_string(mem))
+		if (mem_is_varstring(mem))
 			return 0;
 		if (mem_is_integer(mem))
 			return mem_convert_integer_to_string(mem);
-		if (mem_is_array(mem))
-			return mem_convert_array_to_string(mem);
-		if (mem_is_map(mem))
-			return mem_convert_map_to_string(mem);
-		if (mem_is_binary(mem))
-			return mem_convert_binary_to_string(mem);
 		if (mem_is_double(mem))
 			return mem_convert_double_to_string(mem);
-		if (mem_is_bool(mem))
-			return mem_convert_boolean_to_string(mem);
 		return -1;
 	case FIELD_TYPE_DOUBLE:
 		if (mem_is_double(mem))
@@ -463,36 +468,32 @@ mem_implicit_cast_old(struct Mem *mem, enum field_type type)
 	case FIELD_TYPE_INTEGER:
 		if (mem_is_integer(mem))
 			return 0;
-		if (mem_is_array(mem) || mem_is_map(mem))
-			return -1;
-		if (mem_is_varstring(mem))
+		if (mem_is_string(mem))
 			return mem_convert_varstring_to_integer(mem);
 		if (mem_is_double(mem))
-			return mem_convert_double_to_integer(mem);
-		if (mem_is_bool(mem))
-			return mem_convert_bool_to_unsigned(mem);
+			return mem_convert_double_to_integer_lossless(mem);
 		return -1;
 	case FIELD_TYPE_BOOLEAN:
 		if (mem_is_bool(mem))
 			return 0;
-		if (mem_is_integer(mem))
-			return mem_convert_integer_to_boolean(mem);
-		if (mem_is_string(mem))
-			return mem_convert_string_to_boolean(mem);
-		if (mem_is_double(mem))
-			return mem_convert_double_to_boolean(mem);
 		return -1;
 	case FIELD_TYPE_VARBINARY:
 		if (mem_is_binary(mem))
 			return 0;
-		if (mem_is_string(mem))
-			return mem_convert_string_to_varbinary(mem);
 		return -1;
 	case FIELD_TYPE_NUMBER:
 		if (mem_is_number(mem))
 			return 0;
 		if (mem_is_string(mem))
 			return mem_convert_varstring_to_number(mem);
+		return -1;
+	case FIELD_TYPE_MAP:
+		if (mem_is_map(mem))
+			return 0;
+		return -1;
+	case FIELD_TYPE_ARRAY:
+		if (mem_is_array(mem))
+			return 0;
 		return -1;
 	case FIELD_TYPE_SCALAR:
 		if (mem_is_array(mem) || mem_is_map(mem))
@@ -1466,7 +1467,7 @@ valueFromFunction(sql * db,	/* The database connection */
 	ctx.func = func;
 	((struct func_sql_builtin *)func)->call(&ctx, nVal, apVal);
 	assert(!ctx.is_aborted);
-	sql_value_apply_type(pVal, type);
+	mem_implicit_cast_old(pVal, type);
 	assert(rc == 0);
 
  value_from_function_out:
@@ -1526,7 +1527,7 @@ valueFromExpr(sql * db,	/* The database connection */
 		testcase(rc != 0);
 		if (*ppVal) {
 			mem_explicit_cast(*ppVal, pExpr->type);
-			sql_value_apply_type(*ppVal, type);
+			mem_implicit_cast_old(*ppVal, type);
 		}
 		return rc;
 	}
@@ -1558,9 +1559,9 @@ valueFromExpr(sql * db,	/* The database connection */
 		}
 		if ((op == TK_INTEGER || op == TK_FLOAT) &&
 		    type == FIELD_TYPE_SCALAR) {
-			sql_value_apply_type(pVal, FIELD_TYPE_NUMBER);
+			mem_implicit_cast_old(pVal, FIELD_TYPE_NUMBER);
 		} else {
-			sql_value_apply_type(pVal, type);
+			mem_implicit_cast_old(pVal, type);
 		}
 		if (pVal->flags & (MEM_Int | MEM_Real))
 			pVal->flags &= ~MEM_Str;
@@ -1590,7 +1591,7 @@ valueFromExpr(sql * db,	/* The database connection */
 					mem_set_i64(pVal, (int64_t)(-pVal->u.u));
 				}
 			}
-			sql_value_apply_type(pVal, type);
+			mem_implicit_cast_old(pVal, type);
 		}
 	} else if (op == TK_NULL) {
 		pVal = valueNew(db, pCtx);
@@ -1702,7 +1703,7 @@ stat4ValueFromExpr(Parse * pParse,	/* Parse context */
 				rc = sqlVdbeMemCopy((Mem *) pVal,
 							&v->aVar[iBindVar - 1]);
 				if (rc == 0)
-					sql_value_apply_type(pVal, type);
+					mem_implicit_cast_old(pVal, type);
 				pVal->db = pParse->db;
 			}
 		}

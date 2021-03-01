@@ -290,7 +290,7 @@ allocateCursor(
  * @param record The value to apply type to.
  * @param type The type to be applied.
  */
-static int
+int
 mem_apply_type(struct Mem *record, enum field_type type)
 {
 	if (mem_is_null(record))
@@ -375,18 +375,6 @@ mem_apply_type(struct Mem *record, enum field_type type)
 	default:
 		return -1;
 	}
-}
-
-/*
- * Exported version of mem_apply_type(). This one works on sql_value*,
- * not the internal Mem* type.
- */
-void
-sql_value_apply_type(
-	sql_value *pVal,
-	enum field_type type)
-{
-	mem_apply_type((Mem *) pVal, type);
 }
 
 /**
@@ -2026,7 +2014,7 @@ case OP_AddImm: {            /* in1 */
 case OP_MustBeInt: {            /* jump, in1 */
 	pIn1 = &aMem[pOp->p1];
 	if (!mem_is_integer(pIn1)) {
-		mem_apply_type(pIn1, FIELD_TYPE_INTEGER);
+		mem_implicit_cast_old(pIn1, FIELD_TYPE_INTEGER);
 		if (!mem_is_integer(pIn1)) {
 			if (pOp->p2==0) {
 				diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
@@ -2860,7 +2848,7 @@ case OP_MakeRecord: {
 	if (types != NULL) {
 		pRec = pData0;
 		do {
-			mem_apply_type(pRec++, *(types++));
+			mem_implicit_cast_old(pRec++, *(types++));
 		} while(types[0] != field_type_MAX);
 	}
 

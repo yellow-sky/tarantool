@@ -4008,7 +4008,6 @@ void sqlValueFree(sql_value *);
 sql_value *sqlValueNew(sql *);
 int sqlValueFromExpr(sql *, Expr *, enum field_type type,
 			 sql_value **);
-void sql_value_apply_type(sql_value *val, enum field_type type);
 
 extern const unsigned char sqlOpcodeProperty[];
 extern const unsigned char sqlUpperToLower[];
