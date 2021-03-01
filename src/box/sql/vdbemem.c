@@ -113,6 +113,28 @@ mem_convert_bool_to_unsigned(struct Mem *mem)
 }
 
 static inline int
+mem_convert_double_to_unsigned(struct Mem *mem)
+{
+	double d = mem->u.r;
+	if (d >= 0 && d < (double)UINT64_MAX) {
+		mem_set_int(mem, (int64_t)(uint64_t)d, false);
+		return 0;
+	}
+	return -1;
+}
+
+static inline int
+mem_convert_double_to_unsigned_lossless(struct Mem *mem)
+{
+	double d = mem->u.r;
+	if (d >= 0 && d < (double)UINT64_MAX && (double)(uint64_t)d == d) {
+		mem_set_int(mem, (int64_t)(uint64_t)d, false);
+		return 0;
+	}
+	return -1;
+}
+
+static inline int
 mem_convert_integer_to_string(struct Mem *mem)
 {
 	const char *str;
@@ -385,7 +407,7 @@ mem_implicit_cast(struct Mem *mem, enum field_type type)
 		if (mem_is_pos_int(mem))
 			return 0;
 		if (mem_is_double(mem))
-			return mem_convert_double_to_integer(mem);
+			return mem_convert_double_to_unsigned(mem);
 		return -1;
 	case FIELD_TYPE_STRING:
 		if (mem_is_string(mem))
@@ -447,7 +469,7 @@ mem_implicit_cast_old(struct Mem *mem, enum field_type type)
 		if (mem_is_string(mem))
 			return mem_convert_varstring_to_unsigned(mem);
 		if (mem_is_double(mem))
-			return mem_convert_double_to_integer_lossless(mem);
+			return mem_convert_double_to_unsigned_lossless(mem);
 		return -1;
 	case FIELD_TYPE_STRING:
 		if (mem_is_varstring(mem))
