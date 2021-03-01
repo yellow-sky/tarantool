@@ -185,7 +185,7 @@ vdbeTakeBranch(int iSrcLine, u8 I, u8 M)
  * already. Return non-zero if a malloc() fails.
  */
 #define Stringify(P)						\
-	if(!mem_is_varstring(P) && sqlVdbeMemStringify(P)) \
+	if(!mem_is_varstring(P) && mem_explicit_cast(P, FIELD_TYPE_STRING)) \
 	{ goto no_mem; }
 
 /*
@@ -2070,14 +2070,14 @@ case OP_Ge: {             /* same as TK_GE, jump, in1, in3 */
 				mem_init(&tmp_mem1);
 				memcpy(&tmp_mem1, mem1, sizeof(*mem1));
 				mem1 = &tmp_mem1;
-				sqlVdbeMemStringify(mem1);
+				mem_explicit_cast(mem1, FIELD_TYPE_STRING);
 				assert(mem1!=mem2);
 			}
 			if (mem_is_number(mem2)) {
 				mem_init(&tmp_mem2);
 				memcpy(&tmp_mem2, mem2, sizeof(*mem2));
 				mem2 = &tmp_mem2;
-				sqlVdbeMemStringify(mem2);
+				mem_explicit_cast(mem2, FIELD_TYPE_STRING);
 			}
 		}
 		assert(pOp->p4type==P4_COLLSEQ || pOp->p4.pColl==0);

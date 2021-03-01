@@ -935,15 +935,12 @@ mem_convert_to_binary(struct Mem *mem)
 
 void sqlVdbeMemSetZeroBlob(Mem *, int);
 int sqlVdbeMemMakeWriteable(Mem *);
-int sqlVdbeMemStringify(Mem *);
 int sqlVdbeIntValue(Mem *, int64_t *, bool *is_neg);
 
 int sqlVdbeRealValue(Mem *, double *);
 
 int
 mem_value_bool(const struct Mem *mem, bool *b);
-
-int mem_apply_integer_type(Mem *);
 
 int
 mem_explicit_cast(struct Mem *mem, enum field_type type);

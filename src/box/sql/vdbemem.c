@@ -693,74 +693,6 @@ mem_has_msgpack_subtype(struct Mem *mem)
 	       mem->subtype == SQL_SUBTYPE_MSGPACK;
 }
 
-/*
- * Add MEM_Str to the set of representations for the given Mem.  Numbers
- * are converted using sql_snprintf().  Converting a BLOB to a string
- * is a no-op.
- *
- * Existing representations MEM_Int and MEM_Real are invalidated if
- * bForce is true but are retained if bForce is false.
- *
- * A MEM_Null value will never be passed to this function. This function is
- * used for converting values to text for returning to the user (i.e. via
- * sql_value_text()), or for ensuring that values to be used as btree
- * keys are strings. In the former case a NULL pointer is returned the
- * user and the latter is an internal programming error.
- */
-int
-sqlVdbeMemStringify(Mem * pMem)
-{
-	int fg = pMem->flags;
-	int nByte = 32;
-
-	if ((fg & (MEM_Null | MEM_Str | MEM_Blob)) != 0 &&
-	    !mem_has_msgpack_subtype(pMem))
-		return 0;
-
-	assert(!(fg & MEM_Zero));
-	assert((fg & (MEM_Int | MEM_UInt | MEM_Real | MEM_Bool |
-		      MEM_Blob)) != 0);
-	assert(EIGHT_BYTE_ALIGNMENT(pMem));
-
-	/*
-	 * In case we have ARRAY/MAP we should save decoded value
-	 * before clearing pMem->z.
-	 */
-	char *value = NULL;
-	if (mem_has_msgpack_subtype(pMem)) {
-		const char *value_str = mp_str(pMem->z);
-		nByte = strlen(value_str) + 1;
-		value = region_alloc(&fiber()->gc, nByte);
-		memcpy(value, value_str, nByte);
-	}
-
-	if (sqlVdbeMemClearAndResize(pMem, nByte)) {
-		return -1;
-	}
-	if (fg & MEM_Int) {
-		sql_snprintf(nByte, pMem->z, "%lld", pMem->u.i);
-		pMem->flags &= ~MEM_Int;
-	} else if ((fg & MEM_UInt) != 0) {
-		sql_snprintf(nByte, pMem->z, "%llu", pMem->u.u);
-		pMem->flags &= ~MEM_UInt;
-	} else if ((fg & MEM_Bool) != 0) {
-		sql_snprintf(nByte, pMem->z, "%s",
-			     SQL_TOKEN_BOOLEAN(pMem->u.b));
-		pMem->flags &= ~MEM_Bool;
-	} else if (mem_has_msgpack_subtype(pMem)) {
-		sql_snprintf(nByte, pMem->z, "%s", value);
-		pMem->flags &= ~MEM_Subtype;
-		pMem->subtype = SQL_SUBTYPE_NO;
-	} else {
-		assert(fg & MEM_Real);
-		sql_snprintf(nByte, pMem->z, "%!.15g", pMem->u.r);
-		pMem->flags &= ~MEM_Real;
-	}
-	pMem->n = sqlStrlen30(pMem->z);
-	pMem->flags |= MEM_Str | MEM_Term;
-	return 0;
-}
-
 int
 sql_vdbemem_finalize(struct Mem *mem, struct func *func)
 {
@@ -972,23 +904,6 @@ mem_value_bool(const struct Mem *mem, bool *b)
 		return 0;
 	}
 	return -1;
-}
-
-/*
- * The MEM structure is already a MEM_Real.  Try to also make it a
- * MEM_Int if we can.
- */
-int
-mem_apply_integer_type(Mem *pMem)
-{
-	int rc;
-	i64 ix;
-	assert(pMem->flags & MEM_Real);
-	assert(EIGHT_BYTE_ALIGNMENT(pMem));
-
-	if ((rc = doubleToInt64(pMem->u.r, (int64_t *) &ix)) == 0)
-		mem_set_int(pMem, ix, pMem->u.r <= -1);
-	return rc;
 }
 
 /*
@@ -1297,7 +1212,8 @@ valueToText(sql_value * pVal)
 		pVal->flags |= MEM_Str;
 		sqlVdbeMemNulTerminate(pVal);	/* IMP: R-31275-44060 */
 	} else {
-		sqlVdbeMemStringify(pVal);
+		mem_explicit_cast(pVal, FIELD_TYPE_STRING);
+		sqlVdbeMemNulTerminate(pVal);
 		assert(0 == (1 & SQL_PTR_TO_INT(pVal->z)));
 	}
 	return pVal->z;
