@@ -40,6 +40,17 @@ set(LUAJIT_TEST_BINARY $<TARGET_FILE:tarantool> CACHE STRING
 set(LUAJIT_USE_TEST OFF CACHE BOOL
     "Generate <test> target" FORCE)
 
+# Tarantool doesn't support LUA_INIT and most likely it
+# never will.
+# See https://github.com/tarantool/tarantool/issues/5744
+# for more info.
+set(LUAJIT_PRERUN_SCRIPT ${PROJECT_SOURCE_DIR}/test/luajit_suites_prerun_script.lua)
+
+set(LUAJIT_TEST_PRERUN "-e dofile[[${LUAJIT_PRERUN_SCRIPT}]]")
+separate_arguments(LUAJIT_TEST_PRERUN)
+set(LUAJIT_TEST_COMMAND "${LUAJIT_TEST_BINARY}" ${LUAJIT_TEST_PRERUN} CACHE STRING
+    "Lua implementation to be used for tests (tarantool)" FORCE)
+
 # Enable internal LuaJIT assertions for Tarantool Debug build.
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(LUAJIT_USE_APICHECK ON CACHE BOOL
