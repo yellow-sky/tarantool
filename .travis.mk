@@ -170,10 +170,6 @@ build_asan_debian:
 	make -j
 
 test_asan_debian_no_deps: build_asan_debian
-	ASAN=ON \
-		LSAN_OPTIONS=suppressions=${PWD}/asan/lsan.supp \
-		ASAN_OPTIONS=heap_profile=0:unmap_shadow_on_exit=1:detect_invalid_pointer_pairs=1:symbolize=1:detect_leaks=1:dump_instruction_bytes=1:print_suppressions=0 \
-		make LuaJIT-test
 	# Temporary excluded some tests by issue #4360:
 	#  - To exclude tests from ASAN checks the asan/asan.supp file
 	#    was set at the build time in cmake/profile.cmake file.
