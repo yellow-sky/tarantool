@@ -1951,7 +1951,7 @@ sum_step(struct sql_context *context, int argc, sql_value **argv)
 	if (type == MP_NIL || p == NULL)
 		return;
 	if (type != MP_DOUBLE && type != MP_INT && type != MP_UINT) {
-		if (mem_apply_numeric_type(argv[0]) != 0) {
+		if (mem_implicit_cast_old(argv[0], FIELD_TYPE_NUMBER) != 0) {
 			diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
 				 sql_value_to_diag_str(argv[0]), "number");
 			context->is_aborted = true;

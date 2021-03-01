@@ -257,24 +257,6 @@ allocateCursor(
 	return pCx;
 }
 
-int
-mem_apply_numeric_type(struct Mem *record)
-{
-	if (!mem_is_string(record))
-		return -1;
-	int64_t integer_value;
-	bool is_neg;
-	if (sql_atoi64(record->z, &integer_value, &is_neg, record->n) == 0) {
-		mem_set_int(record, integer_value, is_neg);
-		return 0;
-	}
-	double float_value;
-	if (sqlAtoF(record->z, &float_value, record->n) == 0)
-		return -1;
-	mem_set_double(record, float_value);
-	return 0;
-}
-
 /**
  * Processing is determined by the field type parameter:
  *
@@ -2270,13 +2252,15 @@ case OP_Ge: {             /* same as TK_GE, jump, in1, in3 */
 					mem_init(&tmp_mem1);
 					memcpy(&tmp_mem1, mem1, sizeof(*mem1));
 					mem1 = &tmp_mem1;
-					mem_apply_numeric_type(mem1);
+					mem_implicit_cast_old(mem1,
+							      FIELD_TYPE_NUMBER);
 				}
 				if (mem_is_string(mem2)) {
 					mem_init(&tmp_mem2);
 					memcpy(&tmp_mem2, mem2, sizeof(*mem2));
 					mem2 = &tmp_mem2;
-					if (mem_apply_numeric_type(mem2) != 0) {
+					if (mem_implicit_cast_old(mem2,
+								  FIELD_TYPE_NUMBER) != 0) {
 						diag_set(ClientError,
 							 ER_SQL_TYPE_MISMATCH,
 							 sql_value_to_diag_str(mem2),
@@ -3420,7 +3404,7 @@ case OP_SeekGT: {       /* jump, in3 */
 		if (mem_is_null(pIn3))
 			goto skip_truncate;
 		if (mem_is_string(pIn3))
-			mem_apply_numeric_type(pIn3);
+			mem_implicit_cast_old(pIn3, FIELD_TYPE_NUMBER);
 		int64_t i;
 		if (mem_is_neg_int(pIn3)) {
 			i = pIn3->u.i;

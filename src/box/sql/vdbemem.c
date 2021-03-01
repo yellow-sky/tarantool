@@ -431,12 +431,10 @@ mem_implicit_cast_old(struct Mem *mem, enum field_type type)
 			return 0;
 		if (mem_is_integer(mem) || mem_is_array(mem) || mem_is_map(mem))
 			return -1;
-		if (mem_is_varstring(mem))
+		if (mem_is_string(mem))
 			return mem_convert_varstring_to_unsigned(mem);
 		if (mem_is_double(mem))
 			return mem_convert_double_to_integer(mem);
-		if (mem_is_bool(mem))
-			return mem_convert_bool_to_unsigned(mem);
 		return -1;
 	case FIELD_TYPE_STRING:
 		if (mem_is_string(mem))
@@ -493,9 +491,7 @@ mem_implicit_cast_old(struct Mem *mem, enum field_type type)
 	case FIELD_TYPE_NUMBER:
 		if (mem_is_number(mem))
 			return 0;
-		if (mem_is_bool(mem))
-			return mem_convert_bool_to_unsigned(mem);
-		if (mem_is_varstring(mem))
+		if (mem_is_string(mem))
 			return mem_convert_varstring_to_number(mem);
 		return -1;
 	case FIELD_TYPE_SCALAR:
