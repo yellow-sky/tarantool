@@ -415,7 +415,7 @@ sql_value_apply_type(
  * @retval TRUE if the MEM_type of the value and the given type
  *         are compatible, FALSE otherwise.
  */
-static bool
+bool
 mem_is_type_compatible(struct Mem *mem, enum field_type type)
 {
 	enum mp_type mp_type = mem_mp_type(mem);
@@ -498,7 +498,7 @@ mem_convert_to_integer(struct Mem *mem)
  * @param type The type to convert to.
  * @retval 0 if the conversion was successful, -1 otherwise.
  */
-static int
+int
 mem_convert_to_numeric(struct Mem *mem, enum field_type type)
 {
 	assert(mp_type_is_numeric(mem_mp_type(mem)) &&
@@ -2811,23 +2811,13 @@ case OP_ApplyType: {
 	while((type = *(types++)) != field_type_MAX) {
 		assert(pIn1 <= &p->aMem[(p->nMem+1 - p->nCursor)]);
 		assert(memIsValid(pIn1));
-		if (!mem_is_type_compatible(pIn1, type)) {
-			/* Implicit cast is allowed only to numeric type. */
-			if (!sql_type_is_numeric(type))
-				goto type_mismatch;
-			/* Implicit cast is allowed only from numeric type. */
-			if (!mp_type_is_numeric(mem_mp_type(pIn1)))
-				goto type_mismatch;
-			/* Try to convert numeric-to-numeric. */
-			if (mem_convert_to_numeric(pIn1, type) != 0)
-				goto type_mismatch;
+		if (mem_implicit_cast(pIn1, type) != 0) {
+			diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
+				 sql_value_to_diag_str(pIn1),
+				 field_type_strs[type]);
+			goto abort_due_to_error;
 		}
 		pIn1++;
-		continue;
-type_mismatch:
-		diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
-			 sql_value_to_diag_str(pIn1), field_type_strs[type]);
-		goto abort_due_to_error;
 	}
 	break;
 }

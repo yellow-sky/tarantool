@@ -360,6 +360,154 @@ mem_explicit_cast(struct Mem *mem, enum field_type type)
 	return -1;
 }
 
+int
+mem_implicit_cast(struct Mem *mem, enum field_type type)
+{
+	if (mem_is_null(mem))
+		return 0;
+	switch (type) {
+	case FIELD_TYPE_UNSIGNED:
+		if (mem_is_pos_int(mem))
+			return 0;
+		if (mem_is_double(mem))
+			return mem_convert_double_to_integer(mem);
+		return -1;
+	case FIELD_TYPE_STRING:
+		if (mem_is_string(mem))
+			return 0;
+		return -1;
+	case FIELD_TYPE_DOUBLE:
+		if (mem_is_double(mem))
+			return 0;
+		if (mem_is_integer(mem))
+			return mem_convert_integer_to_double(mem);
+		return -1;
+	case FIELD_TYPE_INTEGER:
+		if (mem_is_integer(mem))
+			return 0;
+		if (mem_is_double(mem))
+			return mem_convert_double_to_integer(mem);
+		return -1;
+	case FIELD_TYPE_BOOLEAN:
+		if (mem_is_bool(mem))
+			return 0;
+		return -1;
+	case FIELD_TYPE_VARBINARY:
+		if (mem_is_binary(mem))
+			return 0;
+		return -1;
+	case FIELD_TYPE_NUMBER:
+		if (mem_is_number(mem))
+			return 0;
+		return -1;
+	case FIELD_TYPE_MAP:
+		if (mem_is_map(mem))
+			return 0;
+		return -1;
+	case FIELD_TYPE_ARRAY:
+		if (mem_is_array(mem))
+			return 0;
+		return -1;
+	case FIELD_TYPE_SCALAR:
+		if (mem_is_array(mem) || mem_is_map(mem))
+			return -1;
+		return 0;
+	case FIELD_TYPE_ANY:
+		return 0;
+	default:
+		break;
+	}
+	return -1;
+}
+
+int
+mem_implicit_cast_old(struct Mem *mem, enum field_type type)
+{
+	if (mem_is_null(mem))
+		return 0;
+	switch (type) {
+	case FIELD_TYPE_UNSIGNED:
+		if (mem_is_pos_int(mem))
+			return 0;
+		if (mem_is_integer(mem) || mem_is_array(mem) || mem_is_map(mem))
+			return -1;
+		if (mem_is_varstring(mem))
+			return mem_convert_varstring_to_unsigned(mem);
+		if (mem_is_double(mem))
+			return mem_convert_double_to_integer(mem);
+		if (mem_is_bool(mem))
+			return mem_convert_bool_to_unsigned(mem);
+		return -1;
+	case FIELD_TYPE_STRING:
+		if (mem_is_string(mem))
+			return 0;
+		if (mem_is_integer(mem))
+			return mem_convert_integer_to_string(mem);
+		if (mem_is_array(mem))
+			return mem_convert_array_to_string(mem);
+		if (mem_is_map(mem))
+			return mem_convert_map_to_string(mem);
+		if (mem_is_binary(mem))
+			return mem_convert_binary_to_string(mem);
+		if (mem_is_double(mem))
+			return mem_convert_double_to_string(mem);
+		if (mem_is_bool(mem))
+			return mem_convert_boolean_to_string(mem);
+		return -1;
+	case FIELD_TYPE_DOUBLE:
+		if (mem_is_double(mem))
+			return 0;
+		if (mem_is_integer(mem))
+			return mem_convert_integer_to_double(mem);
+		if (mem_is_string(mem))
+			return mem_convert_varstring_to_double(mem);
+		return -1;
+	case FIELD_TYPE_INTEGER:
+		if (mem_is_integer(mem))
+			return 0;
+		if (mem_is_array(mem) || mem_is_map(mem))
+			return -1;
+		if (mem_is_varstring(mem))
+			return mem_convert_varstring_to_integer(mem);
+		if (mem_is_double(mem))
+			return mem_convert_double_to_integer(mem);
+		if (mem_is_bool(mem))
+			return mem_convert_bool_to_unsigned(mem);
+		return -1;
+	case FIELD_TYPE_BOOLEAN:
+		if (mem_is_bool(mem))
+			return 0;
+		if (mem_is_integer(mem))
+			return mem_convert_integer_to_boolean(mem);
+		if (mem_is_string(mem))
+			return mem_convert_string_to_boolean(mem);
+		if (mem_is_double(mem))
+			return mem_convert_double_to_boolean(mem);
+		return -1;
+	case FIELD_TYPE_VARBINARY:
+		if (mem_is_binary(mem))
+			return 0;
+		if (mem_is_string(mem))
+			return mem_convert_string_to_varbinary(mem);
+		return -1;
+	case FIELD_TYPE_NUMBER:
+		if (mem_is_number(mem))
+			return 0;
+		if (mem_is_bool(mem))
+			return mem_convert_bool_to_unsigned(mem);
+		if (mem_is_varstring(mem))
+			return mem_convert_varstring_to_number(mem);
+		return -1;
+	case FIELD_TYPE_SCALAR:
+		if (mem_is_array(mem) || mem_is_map(mem))
+			return -1;
+		return 0;
+	default:
+		break;
+	}
+	return -1;
+}
+
 /*
  * Make sure pMem->z points to a writable allocation of at least
  * min(n,32) bytes.

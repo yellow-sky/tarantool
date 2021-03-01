@@ -945,7 +945,12 @@ mem_value_bool(const struct Mem *mem, bool *b);
 
 int mem_apply_integer_type(Mem *);
 
-int mem_explicit_cast(struct Mem *, enum field_type type);
+int
+mem_explicit_cast(struct Mem *mem, enum field_type type);
+int
+mem_implicit_cast(struct Mem *mem, enum field_type type);
+int
+mem_implicit_cast_old(struct Mem *mem, enum field_type type);
 int sqlVdbeMemFromBtree(BtCursor *, u32, u32, Mem *);
 void sqlVdbeMemRelease(Mem * p);
 
