@@ -35,6 +35,7 @@
  * time functions, are implemented separately.)
  */
 #include "sqlInt.h"
+#include "mem.h"
 #include "vdbeInt.h"
 #include "version.h"
 #include "coll/coll.h"
