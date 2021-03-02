@@ -87,6 +87,13 @@ struct Mem {
  */
 #define MEMCELLSIZE offsetof(Mem,zMalloc)
 
+/**
+ * Return a string that represent content of MEM. String is either allocated
+ * using static_alloc() of just a static variable.
+ */
+const char *
+mem_str(const struct Mem *mem);
+
 /* One or more of the following flags are set to indicate the validOK
  * representations of the value stored in the Mem struct.
  *

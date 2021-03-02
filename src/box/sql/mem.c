@@ -37,6 +37,33 @@
 #include "box/tuple.h"
 #include "mpstream/mpstream.h"
 
+const char *
+mem_str(const struct Mem *mem)
+{
+	switch (mem->flags & MEM_PURE_TYPE_MASK) {
+	case MEM_Null:
+		return "NULL";
+	case MEM_Str:
+		return tt_sprintf("%.*s", mem->n, mem->z);
+	case MEM_Int:
+		return tt_sprintf("%lld", mem->u.i);
+	case MEM_UInt:
+		return tt_sprintf("%llu", mem->u.u);
+	case MEM_Real:
+		return tt_sprintf("%.16g", mem->u.r);
+	case MEM_Blob:
+		if ((mem->flags & MEM_Subtype) != 0 &&
+		    mem->subtype == SQL_SUBTYPE_MSGPACK)
+			return mp_str(mem->z);
+		return "varbinary";
+	case MEM_Bool:
+		return mem->u.b ? "TRUE" : "FALSE";
+	default:
+		break;
+	}
+	return "unknown";
+}
+
 static inline bool
 mem_has_msgpack_subtype(struct Mem *mem)
 {
