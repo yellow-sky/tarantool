@@ -253,12 +253,9 @@ journal_write(struct journal_entry *entry)
  * @return 0 if write was queued to a backend or -1 in case of an error.
  */
 static inline int
-journal_write_async(struct journal_entry *entry)
+journal_write_try_async(struct journal_entry *entry)
 {
-	/*
-	 * It's the job of the caller to check whether the queue is full prior
-	 * to submitting the request.
-	 */
+	journal_queue_wait();
 	journal_queue_on_append(entry);
 
 	return current_journal->write_async(current_journal, entry);

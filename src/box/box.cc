@@ -246,12 +246,12 @@ box_process_rw(struct request *request, struct space *space,
 		 * synchronous tx it meets until confirm timeout
 		 * is reached and the tx is rolled back, yielding
 		 * an error.
-		 * Moreover, txn_commit_async() doesn't hurt at
+		 * Moreover, txn_commit_try_async() doesn't hurt at
 		 * all during local recovery, since journal_write
 		 * is faked at this stage and returns immediately.
 		 */
 		if (is_local_recovery) {
-			res = txn_commit_async(txn);
+			res = txn_commit_try_async(txn);
 		} else {
 			res = txn_commit(txn);
 		}
