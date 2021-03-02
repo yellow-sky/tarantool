@@ -87,6 +87,69 @@ struct Mem {
  */
 #define MEMCELLSIZE offsetof(Mem,zMalloc)
 
+bool
+mem_is_null(const struct Mem *mem);
+
+bool
+mem_is_unsigned(const struct Mem *mem);
+
+bool
+mem_is_string(const struct Mem *mem);
+
+bool
+mem_is_number(const struct Mem *mem);
+
+bool
+mem_is_double(const struct Mem *mem);
+
+bool
+mem_is_integer(const struct Mem *mem);
+
+bool
+mem_is_boolean(const struct Mem *mem);
+
+bool
+mem_is_binary(const struct Mem *mem);
+
+bool
+mem_is_map(const struct Mem *mem);
+
+bool
+mem_is_array(const struct Mem *mem);
+
+bool
+mem_is_aggregate(const struct Mem *mem);
+
+bool
+mem_is_varstring(const struct Mem *mem);
+
+bool
+mem_is_frame(const struct Mem *mem);
+
+bool
+mem_is_undefined(const struct Mem *mem);
+
+bool
+mem_is_static(const struct Mem *mem);
+
+bool
+mem_is_ephemeral(const struct Mem *mem);
+
+bool
+mem_is_dynamic(const struct Mem *mem);
+
+bool
+mem_is_allocated(const struct Mem *mem);
+
+bool
+mem_is_cleared(const struct Mem *mem);
+
+bool
+mem_is_zeroblob(const struct Mem *mem);
+
+bool
+mem_is_same_type(const struct Mem *mem1, const struct Mem *mem2);
+
 /**
  * Return a string that represent content of MEM. String is either allocated
  * using static_alloc() of just a static variable.

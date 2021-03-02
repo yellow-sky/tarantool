@@ -396,7 +396,7 @@ static SQL_NOINLINE void *
 createAggContext(sql_context * p, int nByte)
 {
 	Mem *pMem = p->pMem;
-	assert((pMem->flags & MEM_Agg) == 0);
+	assert(!mem_is_aggregate(pMem));
 	if (nByte <= 0) {
 		sqlVdbeMemSetNull(pMem);
 		pMem->z = 0;
@@ -423,7 +423,7 @@ sql_aggregate_context(sql_context * p, int nByte)
 	assert(p->func->def->language == FUNC_LANGUAGE_SQL_BUILTIN);
 	assert(p->func->def->aggregate == FUNC_AGGREGATE_GROUP);
 	testcase(nByte < 0);
-	if ((p->pMem->flags & MEM_Agg) == 0) {
+	if (!mem_is_aggregate(p->pMem)) {
 		return createAggContext(p, nByte);
 	} else {
 		return (void *)p->pMem->z;
@@ -535,7 +535,7 @@ sql_value *
 sql_column_value(sql_stmt * pStmt, int i)
 {
 	Mem *pOut = columnMem(pStmt, i);
-	if (pOut->flags & MEM_Static) {
+	if (mem_is_static(pOut)) {
 		pOut->flags &= ~MEM_Static;
 		pOut->flags |= MEM_Ephem;
 	}

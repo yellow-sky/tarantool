@@ -846,8 +846,7 @@ roundFunc(sql_context * context, int argc, sql_value ** argv)
 	}
 	if (sql_value_is_null(argv[0]))
 		return;
-	enum mp_type mp_type = sql_value_type(argv[0]);
-	if (mp_type_is_bloblike(mp_type)) {
+	if (mem_is_binary(argv[0])) {
 		diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
 			 sql_value_to_diag_str(argv[0]), "numeric");
 		context->is_aborted = true;
@@ -907,8 +906,7 @@ case_type##ICUFunc(sql_context *context, int argc, sql_value **argv)   \
 	const char *z2;                                                        \
 	int n;                                                                 \
 	UNUSED_PARAMETER(argc);                                                \
-	int arg_type = sql_value_type(argv[0]);                                \
-	if (mp_type_is_bloblike(arg_type)) {                                   \
+	if (mem_is_binary(argv[0])) {                                          \
 		diag_set(ClientError, ER_INCONSISTENT_TYPES, "text",           \
 			 "varbinary");                                         \
 		context->is_aborted = true;                                    \
@@ -989,7 +987,7 @@ randomBlob(sql_context * context, int argc, sql_value ** argv)
 	unsigned char *p;
 	assert(argc == 1);
 	UNUSED_PARAMETER(argc);
-	if (mp_type_is_bloblike(sql_value_type(argv[0]))) {
+	if (mem_is_binary(argv[0])) {
 		diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
 			 sql_value_to_diag_str(argv[0]), "numeric");
 		context->is_aborted = true;
@@ -1748,10 +1746,9 @@ trim_func_one_arg(struct sql_context *context, sql_value *arg)
 {
 	/* In case of VARBINARY type default trim octet is X'00'. */
 	const unsigned char *default_trim;
-	enum mp_type val_type = sql_value_type(arg);
-	if (val_type == MP_NIL)
+	if (mem_is_null(arg))
 		return;
-	if (mp_type_is_bloblike(val_type))
+	if (mem_is_binary(arg))
 		default_trim = (const unsigned char *) "\0";
 	else
 		default_trim = (const unsigned char *) " ";
@@ -1880,8 +1877,7 @@ soundexFunc(sql_context * context, int argc, sql_value ** argv)
 		1, 2, 6, 2, 3, 0, 1, 0, 2, 0, 2, 0, 0, 0, 0, 0,
 	};
 	assert(argc == 1);
-	enum mp_type mp_type = sql_value_type(argv[0]);
-	if (mp_type_is_bloblike(mp_type)) {
+	if (mem_is_binary(argv[0])) {
 		diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
 			 sql_value_to_diag_str(argv[0]), "text");
 		context->is_aborted = true;

@@ -37,6 +37,142 @@
 #include "box/tuple.h"
 #include "mpstream/mpstream.h"
 
+bool
+mem_is_null(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Null) != 0;
+}
+
+bool
+mem_is_unsigned(const struct Mem *mem)
+{
+	return (mem->flags & MEM_UInt) != 0;
+}
+
+bool
+mem_is_string(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Str) != 0;
+}
+
+bool
+mem_is_number(const struct Mem *mem)
+{
+	return (mem->flags & (MEM_Real | MEM_Int |MEM_UInt)) != 0;
+}
+
+bool
+mem_is_double(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Real) != 0;
+}
+
+bool
+mem_is_integer(const struct Mem *mem)
+{
+	return (mem->flags & (MEM_Int | MEM_UInt)) != 0;
+}
+
+bool
+mem_is_boolean(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Bool) != 0;
+}
+
+bool
+mem_is_binary(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Blob) != 0;
+}
+
+bool
+mem_is_map(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Blob) != 0 &&
+	       (mem->flags & MEM_Subtype) != 0 &&
+	       mem->subtype == SQL_SUBTYPE_MSGPACK &&
+	       mp_typeof(*mem->z) == MP_MAP;
+}
+
+bool
+mem_is_array(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Blob) != 0 &&
+	       (mem->flags & MEM_Subtype) != 0 &&
+	       mem->subtype == SQL_SUBTYPE_MSGPACK &&
+	       mp_typeof(*mem->z) == MP_ARRAY;
+}
+
+bool
+mem_is_aggregate(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Agg) != 0;
+}
+
+bool
+mem_is_varstring(const struct Mem *mem)
+{
+	return (mem->flags & (MEM_Blob | MEM_Str)) != 0;
+}
+
+bool
+mem_is_frame(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Frame) != 0;
+}
+
+bool
+mem_is_undefined(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Undefined) != 0;
+}
+
+bool
+mem_is_static(const struct Mem *mem)
+{
+	return (mem->flags & (MEM_Str | MEM_Blob)) != 0 &&
+	       (mem->flags & MEM_Static) != 0;
+}
+
+bool
+mem_is_ephemeral(const struct Mem *mem)
+{
+	return (mem->flags & (MEM_Str | MEM_Blob)) != 0 &&
+	       (mem->flags & MEM_Ephem) != 0;
+}
+
+bool
+mem_is_dynamic(const struct Mem *mem)
+{
+	return (mem->flags & (MEM_Str | MEM_Blob)) != 0 &&
+	       (mem->flags & MEM_Dyn) != 0;
+}
+
+bool
+mem_is_allocated(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Blob) != 0 && mem->z == mem->zMalloc;
+}
+
+bool
+mem_is_cleared(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Null) != 0 && (mem->flags & MEM_Cleared) != 0;
+}
+
+bool
+mem_is_zeroblob(const struct Mem *mem)
+{
+	return (mem->flags & MEM_Blob) != 0 && (mem->flags & MEM_Zero) != 0;
+}
+
+bool
+mem_is_same_type(const struct Mem *mem1, const struct Mem *mem2)
+{
+	return (mem1->flags & MEM_PURE_TYPE_MASK) ==
+	       (mem2->flags & MEM_PURE_TYPE_MASK);
+}
+
 const char *
 mem_str(const struct Mem *mem)
 {
@@ -1076,8 +1212,7 @@ mem_convert_to_integer(struct Mem *mem)
 int
 mem_convert_to_numeric(struct Mem *mem, enum field_type type)
 {
-	assert(mp_type_is_numeric(mem_mp_type(mem)) &&
-	       sql_type_is_numeric(type));
+	assert(mem_is_number(mem) && sql_type_is_numeric(type));
 	assert(type != FIELD_TYPE_NUMBER);
 	if (type == FIELD_TYPE_DOUBLE)
 		return mem_convert_to_double(mem);
@@ -1662,8 +1797,7 @@ sqlValueText(sql_value * pVal)
 const char *
 sql_value_to_diag_str(sql_value *value)
 {
-	enum mp_type mp_type = sql_value_type(value);
-	if (mp_type_is_bloblike(mp_type)) {
+	if (mem_is_binary(value)) {
 		if (mem_has_msgpack_subtype(value))
 			return sqlValueText(value);
 		return "varbinary";
