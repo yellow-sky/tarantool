@@ -63,8 +63,11 @@ jobs:
         if: failure()
       - name: artifacts
         uses: actions/upload-artifact@v2
-        if: failure()
+        if: always()
         with:
-          name: centos-8
+          name: centos-7
           retention-days: 21
-          path: build/usr/src/*/tarantool-*/test/var/artifacts
+          path: |
+            build/usr/src/*/tarantool-*/test/var/artifacts
+            strace.log
+            packpack/strace.log
