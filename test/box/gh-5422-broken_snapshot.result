@@ -65,6 +65,10 @@ test_run:cmd("switch default")
 ---
 - true
 ...
+test_run:cmd('stop server test')
+---
+- true
+...
 snapfile = get_snap_file()
 ---
 ...
@@ -97,11 +101,14 @@ io.close(file)
 ---
 - true
 ...
+test_run:cmd("start server test")
+---
+- true
+...
 test_run:cmd("switch test")
 ---
 - true
 ...
-test_run:cmd("restart server test with script='box/gh-5422-broken_snapshot.lua'")
 test_run:cmd("setopt delimiter ';'")
 ---
 - true
@@ -121,6 +128,10 @@ test_run:cmd("switch default")
 ---
 - true
 ...
+test_run:cmd('stop server test')
+---
+- true
+...
 -- restore snapshot
 os.execute(string.format('cp %s.save %s', snapfile, snapfile))
 ---
@@ -131,11 +142,14 @@ os.execute(string.format('dd if=%s.save of=%s bs=%d count=1', snapfile, snapfile
 ---
 - 0
 ...
+test_run:cmd("start server test")
+---
+- true
+...
 test_run:cmd("switch test")
 ---
 - true
 ...
-test_run:cmd("restart server test with script='box/gh-5422-broken_snapshot.lua'")
 -- check than some data valid
 test_run:cmd("setopt delimiter ';'")
 ---
@@ -154,6 +168,10 @@ test_run:cmd("setopt delimiter ''");
 - true
 ...
 test_run:cmd("switch default")
+---
+- true
+...
+test_run:cmd('stop server test')
 ---
 - true
 ...
@@ -177,11 +195,14 @@ io.close(file)
 ---
 - true
 ...
+test_run:cmd("start server test")
+---
+- true
+...
 test_run:cmd("switch test")
 ---
 - true
 ...
-test_run:cmd("restart server test with script='box/gh-5422-broken_snapshot.lua'")
 test_run:cmd("setopt delimiter ';'")
 ---
 - true
@@ -200,6 +221,10 @@ test_run:cmd("setopt delimiter ''");
 - true
 ...
 test_run:cmd("switch default")
+---
+- true
+...
+test_run:cmd('stop server test')
 ---
 - true
 ...
@@ -223,11 +248,14 @@ io.close(file)
 ---
 - true
 ...
+test_run:cmd("start server test")
+---
+- true
+...
 test_run:cmd("switch test")
 ---
 - true
 ...
-test_run:cmd("restart server test with script='box/gh-5422-broken_snapshot.lua'")
 test_run:cmd("setopt delimiter ';'")
 ---
 - true
