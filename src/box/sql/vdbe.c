@@ -166,14 +166,6 @@ vdbeTakeBranch(int iSrcLine, u8 I, u8 M)
 }
 #endif
 
-/*
- * Convert the given register into a string if it isn't one
- * already. Return non-zero if a malloc() fails.
- */
-#define Stringify(P)						\
-	if(((P)->flags&(MEM_Str|MEM_Blob))==0 && sqlVdbeMemStringify(P)) \
-	{ goto no_mem; }
-
 /* Return true if the cursor was opened using the OP_OpenSorter opcode. */
 #define isSorter(x) ((x)->eCurType==CURTYPE_SORTER)
 
