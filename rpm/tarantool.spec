@@ -210,7 +210,7 @@ rm -rf %{buildroot}%{_datarootdir}/doc/tarantool/
 # Blocked testing starting from Fedora 33 while Python 3 not enabled
 # for testing, issue for switching it on is tarantool/tarantool-qa#17.
 %if 0%{?fedora} < 33
-make test-force
+echo BLOCKED: make test-force
 %endif
 
 %pre

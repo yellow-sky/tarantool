@@ -1,4 +1,4 @@
-name: centos_7
+name: fedora_31_7
 
 on:
   push:
@@ -10,7 +10,7 @@ env:
   CI_MAKE: make -f .gitlab.mk
 
 jobs:
-  centos_7:
+  fedora_31:
     # We want to run on external PRs, but not on our own internal PRs
     # as they'll be run by the push to the branch.
     if: ( github.event_name == 'push' ||
@@ -51,9 +51,9 @@ jobs:
             sudo apt-get install -y procmail createrepo awscli reprepro
             mkdir -p ~/.gnupg
             echo 'digest-algo sha256' >> ~/.gnupg/gpg.conf
-            OS=el DIST=7 ${CI_MAKE} deploy
+            OS=fedora DIST=31 ${CI_MAKE} deploy
           else
-            OS=el DIST=7 ${CI_MAKE} package
+            OS=fedora DIST=31 ${CI_MAKE} package
           fi
       - name: call action to send Telegram message on failure
         env:
@@ -69,5 +69,5 @@ jobs:
           retention-days: 21
           path: |
             build/usr/src/*/tarantool-*/test/var/artifacts
-            /source/strace.log
+            strace.log
             packpack/strace.log
