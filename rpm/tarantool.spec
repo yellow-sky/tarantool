@@ -99,7 +99,9 @@ BuildRequires: python3-six
 BuildRequires: python3-yaml
 %endif
 %if (0%{?rhel} == 7)
-BuildRequires: python36-six
+BuildRequires: python3-six
+BuildRequires: python3-gevent
+BuildRequires: python3-pyyaml
 %endif
 %if (0%{?sle_version} >= 1500)
 BuildRequires: python3-gevent

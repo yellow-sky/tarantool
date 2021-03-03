@@ -18,8 +18,9 @@ if type dnf; then
     sudo dnf install -y python3
     set_python3
     if [[ $VER == 7 ]]; then
-        python3 -m pip install --user -r test-run/requirements.txt
-        sudo dnf install -y gcc python3-devel python3-six python3-gevent python3-pyyaml
+        echo
+        #python3 -m pip install --user -r test-run/requirements.txt
+        #sudo dnf install -y gcc python3-devel python3-six python3-gevent python3-pyyaml
     fi
 elif type yum; then
     VER=$(rpm -E %{rhel})
@@ -28,8 +29,9 @@ elif type yum; then
     sudo yum install -y python3
     set_python3
     if [[ $VER == 7 ]]; then
-        python3 -m pip install --user -r test-run/requirements.txt
-        sudo yum install -y gcc python3-devel python3-six python3-gevent python3-pyyaml
+        echo
+        #python3 -m pip install --user -r test-run/requirements.txt
+        #sudo yum install -y gcc python3-devel python3-six python3-gevent python3-pyyaml
     fi
 else
     echo "No suitable package manager found"
