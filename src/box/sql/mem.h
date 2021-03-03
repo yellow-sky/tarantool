@@ -81,6 +81,58 @@ struct Mem {
 #endif
 };
 
+/* One or more of the following flags are set to indicate the validOK
+ * representations of the value stored in the Mem struct.
+ *
+ * If the MEM_Null flag is set, then the value is an SQL NULL value.
+ * No other flags may be set in this case.
+ *
+ * If the MEM_Str flag is set then Mem.z points at a string representation.
+ * Usually this is encoded in the same unicode encoding as the main
+ * database (see below for exceptions). If the MEM_Term flag is also
+ * set, then the string is nul terminated. The MEM_Int and MEM_Real
+ * flags may coexist with the MEM_Str flag.
+ */
+#define MEM_Null      0x0001	/* Value is NULL */
+#define MEM_Str       0x0002	/* Value is a string */
+#define MEM_Int       0x0004	/* Value is an integer */
+#define MEM_Real      0x0008	/* Value is a real number */
+#define MEM_Blob      0x0010	/* Value is a BLOB */
+#define MEM_Bool      0x0020    /* Value is a bool */
+#define MEM_UInt      0x0040	/* Value is an unsigned integer */
+#define MEM_Frame     0x0080	/* Value is a VdbeFrame object */
+#define MEM_Undefined 0x0100	/* Value is undefined */
+#define MEM_Cleared   0x0200	/* NULL set by OP_Null, not from data */
+#define MEM_TypeMask  0x83ff	/* Mask of type bits */
+
+/* Whenever Mem contains a valid string or blob representation, one of
+ * the following flags must be set to determine the memory management
+ * policy for Mem.z.  The MEM_Term flag tells us whether or not the
+ * string is \000 or \u0000 terminated
+ */
+#define MEM_Term      0x0400	/* String rep is nul terminated */
+#define MEM_Dyn       0x0800	/* Need to call Mem.xDel() on Mem.z */
+#define MEM_Static    0x1000	/* Mem.z points to a static string */
+#define MEM_Ephem     0x2000	/* Mem.z points to an ephemeral string */
+#define MEM_Agg       0x4000	/* Mem.z points to an agg function context */
+#define MEM_Zero      0x8000	/* Mem.i contains count of 0s appended to blob */
+#define MEM_Subtype   0x10000	/* Mem.eSubtype is valid */
+#define MEM_Ptr       0x20000	/* Value is a generic pointer */
+
+/**
+ * In contrast to Mem_TypeMask, this one allows to get
+ * pure type of memory cell, i.e. without _Dyn/_Zero and other
+ * auxiliary flags.
+ */
+enum {
+	MEM_PURE_TYPE_MASK = 0x7f
+};
+
+static_assert(MEM_PURE_TYPE_MASK == (MEM_Null | MEM_Str | MEM_Int | MEM_Real |
+				     MEM_Blob | MEM_Bool | MEM_UInt),
+	      "value of type mask must consist of corresponding to memory "\
+	      "type bits");
+
 /*
  * Size of struct Mem not including the Mem.zMalloc member or anything that
  * follows.
@@ -229,58 +281,6 @@ mem_is_same_type(const struct Mem *mem1, const struct Mem *mem2)
  */
 const char *
 mem_str(const struct Mem *mem);
-
-/* One or more of the following flags are set to indicate the validOK
- * representations of the value stored in the Mem struct.
- *
- * If the MEM_Null flag is set, then the value is an SQL NULL value.
- * No other flags may be set in this case.
- *
- * If the MEM_Str flag is set then Mem.z points at a string representation.
- * Usually this is encoded in the same unicode encoding as the main
- * database (see below for exceptions). If the MEM_Term flag is also
- * set, then the string is nul terminated. The MEM_Int and MEM_Real
- * flags may coexist with the MEM_Str flag.
- */
-#define MEM_Null      0x0001	/* Value is NULL */
-#define MEM_Str       0x0002	/* Value is a string */
-#define MEM_Int       0x0004	/* Value is an integer */
-#define MEM_Real      0x0008	/* Value is a real number */
-#define MEM_Blob      0x0010	/* Value is a BLOB */
-#define MEM_Bool      0x0020    /* Value is a bool */
-#define MEM_UInt      0x0040	/* Value is an unsigned integer */
-#define MEM_Frame     0x0080	/* Value is a VdbeFrame object */
-#define MEM_Undefined 0x0100	/* Value is undefined */
-#define MEM_Cleared   0x0200	/* NULL set by OP_Null, not from data */
-#define MEM_TypeMask  0x83ff	/* Mask of type bits */
-
-/* Whenever Mem contains a valid string or blob representation, one of
- * the following flags must be set to determine the memory management
- * policy for Mem.z.  The MEM_Term flag tells us whether or not the
- * string is \000 or \u0000 terminated
- */
-#define MEM_Term      0x0400	/* String rep is nul terminated */
-#define MEM_Dyn       0x0800	/* Need to call Mem.xDel() on Mem.z */
-#define MEM_Static    0x1000	/* Mem.z points to a static string */
-#define MEM_Ephem     0x2000	/* Mem.z points to an ephemeral string */
-#define MEM_Agg       0x4000	/* Mem.z points to an agg function context */
-#define MEM_Zero      0x8000	/* Mem.i contains count of 0s appended to blob */
-#define MEM_Subtype   0x10000	/* Mem.eSubtype is valid */
-#define MEM_Ptr       0x20000	/* Value is a generic pointer */
-
-/**
- * In contrast to Mem_TypeMask, this one allows to get
- * pure type of memory cell, i.e. without _Dyn/_Zero and other
- * auxiliary flags.
- */
-enum {
-	MEM_PURE_TYPE_MASK = 0x7f
-};
-
-static_assert(MEM_PURE_TYPE_MASK == (MEM_Null | MEM_Str | MEM_Int | MEM_Real |
-				     MEM_Blob | MEM_Bool | MEM_UInt),
-	      "value of type mask must consist of corresponding to memory "\
-	      "type bits");
 
 /**
  * Simple type to str convertor. It is used to simplify
