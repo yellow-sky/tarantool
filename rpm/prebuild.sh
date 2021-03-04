@@ -15,8 +15,8 @@ if type dnf; then
     VER=$(rpm -E %{rhel})
     # No testing on CentOS 6
     [[ $VER == 6 ]] && exit 0
-    sudo dnf install -y python3
-    set_python3
+    #sudo dnf install -y python3
+    #set_python3
     if [[ $VER == 7 ]]; then
         echo
         #python3 -m pip install --user -r test-run/requirements.txt
@@ -26,8 +26,8 @@ elif type yum; then
     VER=$(rpm -E %{rhel})
     # No testing on CentOS 6
     [[ $VER == 6 ]] && exit 0
-    sudo yum install -y python3
-    set_python3
+    #sudo yum install -y python3
+    #set_python3
     if [[ $VER == 7 ]]; then
         echo
         #python3 -m pip install --user -r test-run/requirements.txt
